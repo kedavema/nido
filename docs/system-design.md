@@ -1,6 +1,6 @@
 # System Design — Aplicación de control de gastos compartidos
 
-**Estado:** system design y baseline UI v0.2 aprobados para iniciar desarrollo  
+**Estado:** system design y baseline UI v0.3 aprobados para iniciar desarrollo
 **Fecha:** 15 de julio de 2026  
 **Nombre de trabajo:** `Nido` (reemplazable)  
 **Mercado inicial:** Paraguay  
@@ -53,7 +53,7 @@ Aunque al comienzo exista un solo hogar con dos usuarios, el modelo de datos ser
 | Auditoría | Sin historial completo de cambios |
 | Crecimiento | Multi-hogar preparado; comercialización no inmediata |
 | Infraestructura | USD 0 de costo fijo mensual |
-| Baseline UI | Nido v0.2, diseñado y revisado en Claude Design |
+| Baseline UI | Nido v0.3, diseñado y revisado en Claude Design |
 
 ## 3. Objetivos
 
@@ -271,9 +271,9 @@ Una pantalla separada de informes contiene:
 - evolución mensual;
 - desglose por medio de pago.
 
-### 6.9 Baseline UI aprobado — Nido v0.2
+### 6.9 Baseline UI aprobado — Nido v0.3
 
-El diseño aprobado se originó en Claude Design y reemplaza los prompts de diseño anteriores. Las capturas finales y sus anotaciones deben guardarse en `docs/design/nido-v0.2/`; este documento conserva las reglas funcionales que la implementación no puede inferir solo desde imágenes.
+El diseño aprobado se originó en Claude Design y reemplaza los prompts de diseño anteriores. La referencia vigente vive en `design/nido-v0.3/`; este documento conserva las reglas funcionales que la implementación no puede inferir solo desde imágenes.
 
 #### Sistema visual
 
@@ -804,7 +804,7 @@ Sin cambiar contratos de dominio:
 - CI: lint, typecheck y tests.
 - ADRs de dinero, multi-tenancy, offline y despliegue cero.
 - `AGENTS.md` con comandos, convenciones, límites y definición de terminado.
-- Shell mínimo de navegación con tokens base de Nido v0.2, sin lógica financiera.
+- Shell mínimo de navegación con tokens base de Nido v0.3, sin lógica financiera.
 
 **Aceptación:** instalación reproducible y pipeline verde.
 
@@ -871,13 +871,13 @@ Sin cambiar contratos de dominio:
 - APK interno y PWA instalable.
 - Pruebas físicas y documentación de operación.
 
-## 18. Handoff de diseño aprobado — Claude Design Nido v0.2
+## 18. Handoff de diseño aprobado — Claude Design Nido v0.3
 
-La v0.2 es el baseline visual para desarrollo. La v0.1 queda preservada como historial, no como fuente activa. La prioridad de fuentes es:
+La sección estructural `t3` de Nido v0.3 es el baseline visual para desarrollo. Las menciones v0.1 y v0.2 quedan preservadas únicamente como historial dentro del documento generado, no como fuentes activas. La prioridad de fuentes es:
 
 1. este system design para dominio, seguridad, cálculos y alcance;
-2. la especificación v0.2 de la sección 6.9 para vocabulario y comportamiento;
-3. las capturas v0.2 para composición visual;
+2. la especificación v0.3 de la sección 6.9 para vocabulario y comportamiento;
+3. la sección `t3` de Nido v0.3 para composición visual;
 4. las anotaciones de diseño para scroll, sticky CTA, teclado, offline y responsive.
 
 Si una captura contradice una invariante financiera o una regla de accesibilidad, prevalece este documento y se registra la diferencia. No se deben deducir reglas de negocio a partir de valores aislados en una imagen.
@@ -887,15 +887,14 @@ Antes de M3, guardar en el repositorio:
 ```text
 docs/
   system-design.md
-  design/
-    nido-v0.2/
-      README.md
-      screens/
-      annotations.md
-      qa-checklist.md
+design/
+  nido-v0.3/
+    README.md
+    Nido - Sistema y pantallas.dc.html
+    support.js
 ```
 
-## 19. Backlog de diseño posterior a v0.2
+## 19. Backlog de diseño posterior a v0.3
 
 El desarrollo puede comenzar con M0. Antes de implementar cada módulo todavía no cubierto por las capturas, completar su lote de diseño y consistencia:
 
@@ -905,14 +904,14 @@ El desarrollo puede comenzar con M0. Antes de implementar cada módulo todavía 
 - configuración: hogar, miembros, categorías, medios, notificaciones y cierre de sesión;
 - detalle/edición de movimiento, confirmaciones destructivas y estados de permisos de push.
 
-Cada lote debe reutilizar los tokens, vocabulario, navegación, fixture canónica y reglas responsive de la v0.2. No debe ampliar el alcance del MVP.
+Cada lote debe reutilizar los tokens, vocabulario, navegación, fixture canónica y reglas responsive de la v0.3. No debe ampliar el alcance del MVP.
 
 ## 20. Goal y primer task para Codex
 
 ### Goal persistente recomendado
 
 ```text
-Construir el MVP de Nido de M0 a M9 siguiendo docs/system-design.md y el baseline UI Claude Design Nido v0.2, con hitos revisables, pruebas automatizadas, aislamiento multi-hogar y costo fijo mensual de infraestructura igual a USD 0. Continuar un hito por vez y no avanzar al siguiente hasta cumplir y reportar sus criterios de aceptación.
+Construir el MVP de Nido de M0 a M9 siguiendo docs/system-design.md y el baseline UI Claude Design Nido v0.3, con hitos revisables, pruebas automatizadas, aislamiento multi-hogar y costo fijo mensual de infraestructura igual a USD 0. Continuar un hito por vez y no avanzar al siguiente hasta cumplir y reportar sus criterios de aceptación.
 ```
 
 El goal mantiene el objetivo de largo plazo. El siguiente prompt es el primer task y debe ejecutar **solo M0**.
@@ -927,7 +926,7 @@ Dejar una base reproducible, estricta y verificada para desarrollar Nido desde M
 
 CONTEXTO OBLIGATORIO
 1. Leé docs/system-design.md completo.
-2. Inspeccioná docs/design/nido-v0.2/ si existe. Es el baseline visual aprobado de Claude Design.
+2. Inspeccioná design/nido-v0.3/. La sección estructural t3 es el baseline visual aprobado de Claude Design.
 3. El system design prevalece para dominio, cálculos, seguridad, arquitectura y alcance. El baseline UI prevalece para presentación y comportamiento visual, salvo que contradiga una invariante, accesibilidad o seguridad.
 4. Si el repositorio está vacío, inicializalo. Si ya contiene cambios, preservá todo lo ajeno al task.
 5. Usá versiones estables, actuales y compatibles entre sí; documentá y fijá las versiones elegidas.
@@ -943,7 +942,7 @@ ALCANCE M0
 - CI con instalación reproducible, lint, typecheck y tests;
 - docs/adr con decisiones de representación de dinero, aislamiento por household_id, idempotencia offline y perfil de despliegue de costo fijo USD 0;
 - endpoint mínimo de health en la API;
-- shell mínimo de navegación mobile con Inicio, Movimientos, Presupuesto, Fijos y Más, usando tokens básicos de Nido v0.2 y sin pantallas financieras;
+- shell mínimo de navegación mobile con Inicio, Movimientos, Presupuesto, Fijos y Más, usando tokens básicos de Nido v0.3 y sin pantallas financieras;
 - README con requisitos, instalación, comandos y troubleshooting básico;
 - AGENTS.md breve con layout del repo, comandos válidos, convenciones, límites de alcance y definición de done.
 
@@ -983,7 +982,7 @@ Hacé un self-review de nivel staff. Informá archivos cambiados, decisiones, co
 | Cambio mal cargado | Reportes incorrectos | Confirmación visible y edición antes de guardar |
 | Pérdida de mutación offline | Gasto no registrado | Cola durable y advertencia al cerrar sesión |
 | Fuga entre hogares | Riesgo crítico | Autorización server-side e integración negativa |
-| Diseño UI incompleto | Implementación inconsistente | Baseline Nido v0.2 + lotes restantes antes de cada módulo |
+| Diseño UI incompleto | Implementación inconsistente | Baseline Nido v0.3 + lotes restantes antes de cada módulo |
 | Evolución a producto | Reescritura | `household_id`, adapters y monolito modular desde M0 |
 
 ## 22. Criterio de salida del MVP

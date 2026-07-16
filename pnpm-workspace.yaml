@@ -1,0 +1,23 @@
+packages:
+  - apps/*
+  - packages/*
+
+engineStrict: true
+minimumReleaseAge: 1440
+minimumReleaseAgeIgnoreMissingTime: false
+minimumReleaseAgeStrict: true
+nodeVersion: 24.16.0
+preferWorkspacePackages: true
+saveExact: true
+sharedWorkspaceLockfile: true
+
+overrides:
+  '@expo-google-fonts/material-symbols': 0.4.38
+  '@sinclair/typebox': 0.27.10
+  caniuse-lite: 1.0.30001805
+  esbuild: 0.28.1
+  uuid: 11.1.1
+  vite: 8.1.4
+
+allowBuilds:
+  esbuild: true

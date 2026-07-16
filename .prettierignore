@@ -1,0 +1,12 @@
+.agents/
+.expo/
+.turbo/
+coverage/
+design/nido-v0.3/*.html
+design/nido-v0.3/support.js
+dist/
+dist-android/
+node_modules/
+pnpm-lock.yaml
+docs/system-design.md
+skills-lock.json

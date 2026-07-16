@@ -1,0 +1,23 @@
+name: nido
+
+services:
+  postgres:
+    image: postgres:18.4-alpine3.24
+    environment:
+      POSTGRES_DB: nido
+      POSTGRES_PASSWORD: nido
+      POSTGRES_USER: nido
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - nido-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready --username=nido --dbname=nido']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  nido-postgres-data:

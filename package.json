@@ -1,0 +1,33 @@
+{
+  "name": "nido",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=11.13.1 <12"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "build:android": "turbo run build:android --filter=@nido/mobile",
+    "build:web": "turbo run build --filter=@nido/mobile",
+    "compose:config": "docker compose config --quiet",
+    "compose:down": "docker compose down",
+    "compose:up": "docker compose up --detach --wait --wait-timeout 60",
+    "config:mobile": "turbo run config --filter=@nido/mobile",
+    "dev:api": "turbo run dev --filter=@nido/api",
+    "dev:mobile": "turbo run dev --filter=@nido/mobile",
+    "doctor:mobile": "turbo run doctor --filter=@nido/mobile",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "eslint": "9.39.5",
+    "prettier": "3.9.5",
+    "turbo": "2.10.5",
+    "typescript": "6.0.3"
+  }
+}
