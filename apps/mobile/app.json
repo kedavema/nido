@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Nido",
+    "slug": "nido",
+    "version": "0.0.0",
+    "platforms": ["android", "web"],
+    "orientation": "portrait",
+    "scheme": "nido",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F4EF",
+    "android": {
+      "package": "com.nido.mobile",
+      "predictiveBackGestureEnabled": true,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "name": "Nido",
+      "shortName": "Nido",
+      "lang": "es-PY",
+      "themeColor": "#F6F4EF",
+      "description": "Finanzas del hogar para dos"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F6F4EF"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

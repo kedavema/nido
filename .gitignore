@@ -1,0 +1,30 @@
+# Dependencies and task caches
+node_modules/
+.pnpm-store/
+.turbo/
+
+# Build and test output
+dist/
+dist-android/
+coverage/
+*.tsbuildinfo
+
+# Expo local/generated state
+.expo/
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
+
+# Local environment files (examples remain versioned)
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
