@@ -25,6 +25,13 @@
     "plugins": [
       "expo-router",
       [
+        "react-native-nitro-google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.nido-android-only"
+        }
+      ],
+      "expo-secure-store",
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#F6F4EF"

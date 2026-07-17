@@ -10,15 +10,19 @@ describe('health endpoints', () => {
     vi.stubEnv('NODE_ENV', 'test');
     vi.stubEnv('PORT', '3000');
     vi.stubEnv('DATABASE_URL', 'postgresql://localhost:5432/nido_test');
+    vi.stubEnv('FIREBASE_PROJECT_ID', 'nido-test');
+    vi.stubEnv('CORS_ORIGINS', 'http://localhost:8081');
 
     const { AppModule } = await import('../src/app.module.js');
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    const { DATABASE_READINESS } = await import('../src/health/health.controller.js');
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(DATABASE_READINESS)
+      .useValue({ assertReady: vi.fn() })
+      .compile();
 
     app = moduleRef.createNestApplication<NestExpressApplication>();
     const { configureApplication } = await import('../src/configure-application.js');
-    configureApplication(app);
+    configureApplication(app, { corsOrigins: ['http://localhost:8081'] });
     await app.listen(0, '127.0.0.1');
     baseUrl = await app.getUrl();
   });

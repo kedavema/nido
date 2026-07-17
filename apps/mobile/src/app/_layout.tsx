@@ -15,6 +15,8 @@ import { IBMPlexSans_600SemiBold } from '@expo-google-fonts/ibm-plex-sans/600Sem
 import { IBMPlexSans_700Bold } from '@expo-google-fonts/ibm-plex-sans/700Bold';
 
 import { themeTokens } from '@/theme/tokens';
+import { SessionProvider, useSession } from '@/auth/session-provider';
+import { destinationForSession } from '@/auth/session-machine';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -51,14 +53,42 @@ export default function RootLayout() {
         <meta content="Finanzas del hogar para dos" name="description" />
       </Head>
       <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          contentStyle: { backgroundColor: themeTokens.colors.background },
-          headerShown: false,
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-      </Stack>
+      <SessionProvider>
+        <SessionStack />
+      </SessionProvider>
     </SafeAreaProvider>
+  );
+}
+
+function SessionStack() {
+  const { state } = useSession();
+  const destination = destinationForSession(state);
+
+  return (
+    <Stack
+      screenOptions={{
+        contentStyle: { backgroundColor: themeTokens.colors.background },
+        headerShown: false,
+      }}
+    >
+      <Stack.Protected guard={destination === 'loading'}>
+        <Stack.Screen name="loading" />
+      </Stack.Protected>
+      <Stack.Protected guard={destination === 'error'}>
+        <Stack.Screen name="session-error" />
+      </Stack.Protected>
+      <Stack.Protected guard={destination === 'sign-in'}>
+        <Stack.Screen name="sign-in" />
+      </Stack.Protected>
+      <Stack.Protected guard={destination === 'onboarding'}>
+        <Stack.Screen name="onboarding" />
+      </Stack.Protected>
+      <Stack.Protected guard={destination === 'tabs'}>
+        <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+      <Stack.Protected guard={state.kind === 'authenticated'}>
+        <Stack.Screen name="invitation" />
+      </Stack.Protected>
+    </Stack>
   );
 }

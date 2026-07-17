@@ -15,6 +15,10 @@
     "compose:down": "docker compose down",
     "compose:up": "docker compose up --detach --wait --wait-timeout 60",
     "config:mobile": "turbo run config --filter=@nido/mobile",
+    "db:generate": "pnpm --filter=@nido/api db:generate",
+    "db:migrate:deploy": "pnpm --filter=@nido/api db:migrate:deploy",
+    "db:migrate:dev": "pnpm --filter=@nido/api db:migrate:dev",
+    "db:migrate:status": "pnpm --filter=@nido/api db:migrate:status",
     "dev:api": "turbo run dev --filter=@nido/api",
     "dev:mobile": "turbo run dev --filter=@nido/mobile",
     "doctor:mobile": "turbo run doctor --filter=@nido/mobile",
@@ -22,6 +26,7 @@
     "format:check": "prettier --check .",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "test:integration": "pnpm --filter=@nido/api test:integration",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
