@@ -8,6 +8,7 @@ dist/
 dist-android/
 coverage/
 *.tsbuildinfo
+apps/api/src/generated/prisma/
 
 # Expo local/generated state
 .expo/
@@ -22,6 +23,16 @@ apps/mobile/ios/
 **/.env.*
 !.env.example
 !**/.env.example
+
+# Firebase project state, Admin credentials, and Android signing material stay local
+.firebase/
+firebase-debug.log
+apps/mobile/google-services.json
+apps/mobile/GoogleService-Info.plist
+**/firebase-service-account*.json
+**/firebase-admin*.json
+*.jks
+*.keystore
 
 # Editors and operating systems
 .DS_Store

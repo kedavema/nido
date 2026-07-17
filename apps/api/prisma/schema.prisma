@@ -1,0 +1,89 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum HouseholdRole {
+  OWNER
+  MEMBER
+
+  @@map("household_role")
+}
+
+enum HouseholdMemberStatus {
+  ACTIVE
+  REMOVED
+
+  @@map("household_member_status")
+}
+
+model User {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firebaseUid String   @unique(map: "users_firebase_uid_key") @map("firebase_uid")
+  email       String   @unique(map: "users_email_key")
+  displayName String   @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  timezone    String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdHouseholds Household[]       @relation("HouseholdCreator")
+  memberships       HouseholdMember[]
+
+  @@map("users")
+}
+
+model Household {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  baseCurrency    String   @default("PYG") @map("base_currency") @db.Char(3)
+  timezone        String   @default("America/Asuncion")
+  createdByUserId String   @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  creator     User              @relation("HouseholdCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  memberships HouseholdMember[]
+
+  @@index([createdByUserId], map: "households_created_by_idx")
+  @@map("households")
+}
+
+model HouseholdMember {
+  householdId String                @map("household_id") @db.Uuid
+  userId      String                @map("user_id") @db.Uuid
+  role        HouseholdRole
+  status      HouseholdMemberStatus @default(ACTIVE)
+  joinedAt    DateTime              @default(now()) @map("joined_at") @db.Timestamptz(3)
+
+  household      Household         @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdInvites HouseholdInvite[]
+
+  @@id([householdId, userId], map: "household_members_pkey")
+  @@index([householdId, status], map: "household_members_household_id_status_idx")
+  @@index([userId, status], map: "household_members_user_id_status_idx")
+  @@map("household_members")
+}
+
+model HouseholdInvite {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId     String    @map("household_id") @db.Uuid
+  emailNormalized String    @map("email_normalized")
+  tokenHash       String    @unique(map: "household_invites_token_hash_key") @map("token_hash") @db.Char(64)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt          DateTime? @map("used_at") @db.Timestamptz(3)
+  createdByUserId String    @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  creatorMembership HouseholdMember @relation(fields: [householdId, createdByUserId], references: [householdId, userId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([householdId, emailNormalized], map: "household_invites_household_id_email_normalized_idx")
+  @@index([householdId, expiresAt], map: "household_invites_household_id_expires_at_idx")
+  @@map("household_invites")
+}

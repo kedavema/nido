@@ -11,6 +11,8 @@ import type { Environment } from './config/environment.js';
 const app = await NestFactory.create<NestExpressApplication>(AppModule);
 const config = app.get<ConfigService<Environment, true>>(ConfigService);
 
-configureApplication(app);
+configureApplication(app, {
+  corsOrigins: config.get('CORS_ORIGINS', { infer: true }),
+});
 
 await app.listen(config.get('PORT', { infer: true }));

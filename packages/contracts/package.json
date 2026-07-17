@@ -27,6 +27,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@nido/domain-types": "workspace:*",
     "zod": "4.4.3"
   },
   "devDependencies": {

@@ -19,6 +19,34 @@ jobs:
     name: Quality and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      CORS_ORIGINS: http://localhost:8081
+      DATABASE_URL: postgresql://nido:nido@localhost:5432/nido_ci
+      FIREBASE_PROJECT_ID: nido-ci
+      NODE_ENV: test
+      TEST_DATABASE_URL: postgresql://nido:nido@localhost:5432/nido_ci
+      EXPO_PUBLIC_API_URL: http://localhost:3000
+      EXPO_PUBLIC_FIREBASE_API_KEY: nido-ci-public-api-key
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: nido-ci.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: nido-ci
+      EXPO_PUBLIC_FIREBASE_APP_ID: 1:000000000000:web:0000000000000000
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 000000000000-nido-ci.apps.googleusercontent.com
+
+    services:
+      postgres:
+        image: postgres:18.4-alpine3.24
+        env:
+          POSTGRES_DB: nido_ci
+          POSTGRES_PASSWORD: nido
+          POSTGRES_USER: nido
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=nido --dbname=nido_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Check out repository
@@ -39,6 +67,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply database migrations
+        run: pnpm db:migrate:deploy
+
       - name: Check formatting
         run: pnpm format:check
 
@@ -50,6 +81,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Test PostgreSQL integration
+        run: pnpm test:integration
 
       - name: Build workspaces
         run: pnpm build
