@@ -35,6 +35,7 @@
       "outputs": []
     },
     "lint": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "test": {
