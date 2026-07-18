@@ -4,6 +4,11 @@ Este runbook reproduce M1 desde un checkout limpio y valida el flujo real de Goo
 PostgreSQL, API, web/PWA y, opcionalmente, Android. Las pruebas automatizadas usan una identidad
 sustituta y valores públicos ficticios; no reemplazan esta verificación.
 
+> **Cierre de M1.** M1 quedó cerrado y verificado sobre el commit
+> `6198d7fbb93d862cba93793c9aba38f6311de819` (merge de PR #17 a `main`), con `pnpm doctor:mobile` en
+> 20/20 y la matriz manual M1-01…M1-10 aprobada. Para verificar una revisión posterior, comunicá su
+> SHA como indica la sección 1.
+
 ## Resultado esperado
 
 Al terminar debe quedar demostrado, sobre un commit identificado, que:
@@ -172,24 +177,7 @@ pnpm config:mobile
 pnpm doctor:mobile
 ```
 
-### Excepción temporal conocida de Expo Doctor
-
-En el candidato publicado el 17 de julio de 2026, `pnpm doctor:mobile` completa 19 de 20
-comprobaciones y termina con código 1 porque Expo empezó a exigir cuatro patches publicados ese mismo
-día:
-
-| Paquete           | Fijado en el candidato | Requerido por Doctor |
-| ----------------- | ---------------------- | -------------------- |
-| `expo`            | `57.0.6`               | `~57.0.7`            |
-| `expo-constants`  | `57.0.5`               | `~57.0.6`            |
-| `expo-dev-client` | `57.0.6`               | `~57.0.7`            |
-| `expo-router`     | `57.0.6`               | `~57.0.7`            |
-
-El repositorio exige una antigüedad mínima de 24 horas para dependencias nuevas, por lo que no se
-omitió esa protección para incorporarlas de inmediato. Conservá el checkout y el lockfile inmutables,
-guardá esta salida como excepción conocida y continuá la matriz manual: los exports web y Android sí
-deben pasar. Este candidato sirve para verificación manual, pero M1 no puede declararse terminado hasta
-que un commit posterior incorpore los patches una vez cumplida la ventana y `pnpm doctor:mobile` pase.
+Los nueve comandos deben pasar, incluido `pnpm doctor:mobile` en 20/20.
 
 Para la suite PostgreSQL, creá una base descartable la primera vez:
 
