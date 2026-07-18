@@ -98,6 +98,8 @@ En el MVP ambos pueden crear, editar y eliminar movimientos, presupuestos, categ
 4. La invitación es de un solo uso, dura 72 horas y solo puede aceptarla el correo indicado.
 5. El segundo usuario inicia sesión con Google y entra al hogar.
 
+El paso 3 dice «por correo», pero el envío de email por parte del sistema está diferido a M7; hasta entonces el MVP entrega el token de invitación de forma manual. Ver [ADR 0005](adr/0005-timing-email-invitacion.md).
+
 ## 6. Requisitos funcionales
 
 ### 6.1 Movimientos diarios
