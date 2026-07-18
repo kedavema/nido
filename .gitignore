@@ -39,3 +39,6 @@ apps/mobile/GoogleService-Info.plist
 .idea/
 .vscode/
 *.swp
+
+# Local AI tooling caches
+.atl/

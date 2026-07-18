@@ -22,6 +22,23 @@ enum HouseholdMemberStatus {
   @@map("household_member_status")
 }
 
+enum PaymentSourceType {
+  BANK_ACCOUNT
+  CASH
+  CREDIT_CARD
+  DIGITAL_WALLET
+  OTHER
+
+  @@map("payment_source_type")
+}
+
+enum CategoryKind {
+  EXPENSE
+  INCOME
+
+  @@map("category_kind")
+}
+
 model User {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firebaseUid String   @unique(map: "users_firebase_uid_key") @map("firebase_uid")
@@ -32,8 +49,9 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  createdHouseholds Household[]       @relation("HouseholdCreator")
-  memberships       HouseholdMember[]
+  createdHouseholds   Household[]       @relation("HouseholdCreator")
+  memberships         HouseholdMember[]
+  ownedPaymentSources PaymentSource[]   @relation("PaymentSourceOwner")
 
   @@map("users")
 }
@@ -47,8 +65,10 @@ model Household {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  creator     User              @relation("HouseholdCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  memberships HouseholdMember[]
+  creator        User              @relation("HouseholdCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  memberships    HouseholdMember[]
+  paymentSources PaymentSource[]
+  categories     Category[]
 
   @@index([createdByUserId], map: "households_created_by_idx")
   @@map("households")
@@ -86,4 +106,49 @@ model HouseholdInvite {
   @@index([householdId, emailNormalized], map: "household_invites_household_id_email_normalized_idx")
   @@index([householdId, expiresAt], map: "household_invites_household_id_expires_at_idx")
   @@map("household_invites")
+}
+
+model PaymentSource {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId String            @map("household_id") @db.Uuid
+  name        String
+  type        PaymentSourceType
+  ownerUserId String?           @map("owner_user_id") @db.Uuid
+  isActive    Boolean           @default(true) @map("is_active")
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  owner     User?     @relation("PaymentSourceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([householdId, isActive], map: "payment_sources_household_id_is_active_idx")
+  @@index([ownerUserId], map: "payment_sources_owner_user_id_idx")
+  @@map("payment_sources")
+}
+
+model Category {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId String       @map("household_id") @db.Uuid
+  kind        CategoryKind
+  parentId    String?      @map("parent_id") @db.Uuid
+  name        String
+  icon        String
+  color       String
+  sortOrder   Int          @default(0) @map("sort_order")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children  Category[] @relation("CategoryHierarchy")
+
+  // DB-level rules added by hand in the migration (Prisma cannot express them):
+  // - categories_active_sibling_name_key: partial unique index (household_id, kind, parent_id, name)
+  //   NULLS NOT DISTINCT WHERE is_active, so the NULL-parent root level participates too.
+  // - categories_two_levels_trigger (function categories_enforce_two_levels): max two levels;
+  //   parent must share household and kind; a root with children cannot change household or kind.
+  @@index([householdId, kind, isActive], map: "categories_household_id_kind_is_active_idx")
+  @@index([parentId], map: "categories_parent_id_idx")
+  @@map("categories")
 }
