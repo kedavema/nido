@@ -13,3 +13,17 @@ export type HouseholdRole = (typeof HOUSEHOLD_ROLES)[number];
 export const HOUSEHOLD_MEMBER_STATUSES = ['ACTIVE', 'REMOVED'] as const;
 
 export type HouseholdMemberStatus = (typeof HOUSEHOLD_MEMBER_STATUSES)[number];
+
+export const CATEGORY_KINDS = ['EXPENSE', 'INCOME'] as const;
+
+export type CategoryKind = (typeof CATEGORY_KINDS)[number];
+
+export const PAYMENT_SOURCE_TYPES = [
+  'BANK_ACCOUNT',
+  'CASH',
+  'CREDIT_CARD',
+  'DIGITAL_WALLET',
+  'OTHER',
+] as const;
+
+export type PaymentSourceType = (typeof PAYMENT_SOURCE_TYPES)[number];
