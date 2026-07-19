@@ -8,6 +8,7 @@ import { validateEnvironment } from './config/environment.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HouseholdsModule } from './households/households.module.js';
+import { PaymentSourcesModule } from './payment-sources/payment-sources.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { HouseholdsModule } from './households/households.module.js';
     DatabaseModule,
     HealthModule,
     HouseholdsModule,
+    PaymentSourcesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
