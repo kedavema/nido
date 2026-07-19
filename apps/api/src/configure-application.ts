@@ -10,7 +10,7 @@ export function configureApplication(
   app.enableCors({
     origin: [...options.corsOrigins],
     allowedHeaders: ['Authorization', 'Content-Type'],
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.setGlobalPrefix('v1', {
     exclude: [
