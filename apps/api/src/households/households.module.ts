@@ -22,5 +22,6 @@ import { PrismaHouseholdsRepository } from './prisma-households.repository.js';
     { provide: CLOCK, useExisting: SystemClock },
     { provide: HOUSEHOLDS_REPOSITORY, useExisting: PrismaHouseholdsRepository },
   ],
+  exports: [HouseholdMembershipGuard, HOUSEHOLDS_REPOSITORY],
 })
 export class HouseholdsModule {}
