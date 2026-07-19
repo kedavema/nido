@@ -1,13 +1,17 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  CATEGORY_KINDS,
   HOUSEHOLD_MEMBER_STATUSES,
   HOUSEHOLD_ROLES,
   NIDO_TIME_ZONE,
+  PAYMENT_SOURCE_TYPES,
   SUPPORTED_CURRENCY_CODES,
+  type CategoryKind,
   type HouseholdMemberStatus,
   type HouseholdRole,
   type NidoTimeZone,
+  type PaymentSourceType,
   type SupportedCurrencyCode,
 } from '../src/index.js';
 
@@ -27,5 +31,23 @@ describe('domain constants', () => {
     expect(HOUSEHOLD_MEMBER_STATUSES).toEqual(['ACTIVE', 'REMOVED']);
     expectTypeOf<HouseholdRole>().toEqualTypeOf<'OWNER' | 'MEMBER'>();
     expectTypeOf<HouseholdMemberStatus>().toEqualTypeOf<'ACTIVE' | 'REMOVED'>();
+  });
+
+  it('defines the M2 category kinds', () => {
+    expect(CATEGORY_KINDS).toEqual(['EXPENSE', 'INCOME']);
+    expectTypeOf<CategoryKind>().toEqualTypeOf<'EXPENSE' | 'INCOME'>();
+  });
+
+  it('defines the M2 payment source types', () => {
+    expect(PAYMENT_SOURCE_TYPES).toEqual([
+      'BANK_ACCOUNT',
+      'CASH',
+      'CREDIT_CARD',
+      'DIGITAL_WALLET',
+      'OTHER',
+    ]);
+    expectTypeOf<PaymentSourceType>().toEqualTypeOf<
+      'BANK_ACCOUNT' | 'CASH' | 'CREDIT_CARD' | 'DIGITAL_WALLET' | 'OTHER'
+    >();
   });
 });
