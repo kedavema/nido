@@ -251,6 +251,11 @@ describe.skipIf(!hasTestDatabase)('Transactions API with PostgreSQL', () => {
       }),
     });
     expect(response.status).toBe(400);
+
+    const stored = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+      householdId,
+    ]);
+    expect(stored.rows).toEqual([]);
   });
 
   it("rejects updating a transaction to reference another household's category or payment source with 400", async () => {

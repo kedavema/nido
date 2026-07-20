@@ -24,11 +24,14 @@ const identities = {
 } as const satisfies Record<string, VerifiedIdentity>;
 
 // Real-Postgres money edge cases per ADR 0001/0007: the actual decimal(18,2)/decimal(18,4)/
-// decimal(18,0) column behavior, the actual half-up rounding through the real API, real
-// decimal(18,0) overflow rejection, and proof that a persisted `baseAmountPyg` is never
-// recalculated on a later read. Unit tests already cover `money.ts` in isolation with mocks
-// (see `test/transactions-money.spec.ts`); this file exercises the same rules end-to-end against
-// a real database instead.
+// decimal(18,0) column behavior, the actual half-up rounding through the real API, an
+// amount×fxRateToBase overflow rejected as a domain error before it would reach Postgres'
+// decimal(18,0) column (the application-level check enforces the same boundary the column would,
+// per ADR 0001's "no se trunca, satura, envuelve ni convierte a punto flotante" — see the
+// per-test comment for exactly where the rejection happens), and proof that a persisted
+// `baseAmountPyg` is never recalculated on a later read. Unit tests already cover `money.ts` in
+// isolation with mocks (see `test/transactions-money.spec.ts`); this file exercises the same
+// rules end-to-end against a real database instead.
 describe.skipIf(!hasTestDatabase)('Transactions money edge cases with PostgreSQL', () => {
   let app: NestExpressApplication;
   let baseUrl: string;
