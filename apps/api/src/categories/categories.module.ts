@@ -15,5 +15,9 @@ import { PrismaCategoriesRepository } from './prisma-categories.repository.js';
     PrismaCategoriesRepository,
     { provide: CATEGORIES_REPOSITORY, useExisting: PrismaCategoriesRepository },
   ],
+  // Exported so TransactionsModule can pre-check that a transaction's category belongs to the
+  // household and matches the transaction kind (mirrors how PaymentSourcesModule reuses
+  // HouseholdsModule's HOUSEHOLDS_REPOSITORY for its owner pre-check).
+  exports: [CATEGORIES_REPOSITORY],
 })
 export class CategoriesModule {}
