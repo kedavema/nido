@@ -4,6 +4,8 @@ export const UuidSchema = z.uuid();
 
 export const IsoDateTimeSchema = z.iso.datetime({ offset: true });
 
+export const LocalDateSchema = z.iso.date();
+
 export const NormalizedEmailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 export const AuthenticatedUserSchema = z.strictObject({

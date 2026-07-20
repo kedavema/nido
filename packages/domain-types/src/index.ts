@@ -27,3 +27,11 @@ export const PAYMENT_SOURCE_TYPES = [
 ] as const;
 
 export type PaymentSourceType = (typeof PAYMENT_SOURCE_TYPES)[number];
+
+export const TRANSACTION_TYPES = ['EXPENSE', 'INCOME'] as const;
+
+export type TransactionType = (typeof TRANSACTION_TYPES)[number];
+
+export const TRANSACTION_ORIGINS = ['MANUAL', 'IMPORT', 'RECURRING'] as const;
+
+export type TransactionOrigin = (typeof TRANSACTION_ORIGINS)[number];
