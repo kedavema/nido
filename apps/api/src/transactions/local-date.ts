@@ -44,3 +44,27 @@ export function formatLocalDate(date: Date): string {
   const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Resolves a `YYYY-MM` month (per `reports/monthly-summary`, see ADR 0007) to the first and last
+ * `local_date` values it covers. No household timezone lookup is needed here, unlike
+ * `deriveLocalDate`: `local_date` already encodes the household-local calendar day at write
+ * time, so a month's boundaries are the same calendar dates regardless of which timezone
+ * produced them — this only needs plain calendar arithmetic, done with the same UTC-midnight
+ * `Date` convention `parseLocalDate`/`formatLocalDate` use for `@db.Date` columns.
+ */
+export function deriveMonthLocalDateRange(month: string): { from: string; to: string } {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/u.exec(month);
+  const yearText = match?.[1];
+  const monthText = match?.[2];
+  if (yearText === undefined || monthText === undefined) {
+    throw new Error(`Invalid month "${month}"`);
+  }
+
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  const from = new Date(Date.UTC(year, monthIndex, 1));
+  // Day 0 of the following month is the last day of this month.
+  const to = new Date(Date.UTC(year, monthIndex + 1, 0));
+  return { from: formatLocalDate(from), to: formatLocalDate(to) };
+}

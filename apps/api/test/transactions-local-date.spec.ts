@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   deriveLocalDate,
+  deriveMonthLocalDateRange,
   formatLocalDate,
   parseLocalDate,
 } from '../src/transactions/local-date.js';
@@ -50,5 +51,37 @@ describe('parseLocalDate / formatLocalDate', () => {
   it('round-trips a date near the turn of the year', () => {
     const date = parseLocalDate('2026-12-31');
     expect(formatLocalDate(date)).toBe('2026-12-31');
+  });
+});
+
+describe('deriveMonthLocalDateRange', () => {
+  it('resolves a 31-day month', () => {
+    expect(deriveMonthLocalDateRange('2026-07')).toEqual({ from: '2026-07-01', to: '2026-07-31' });
+  });
+
+  it('resolves a 30-day month', () => {
+    expect(deriveMonthLocalDateRange('2026-04')).toEqual({ from: '2026-04-01', to: '2026-04-30' });
+  });
+
+  it('resolves February in a leap year to 29 days', () => {
+    expect(deriveMonthLocalDateRange('2024-02')).toEqual({ from: '2024-02-01', to: '2024-02-29' });
+  });
+
+  it('resolves February in a non-leap year to 28 days', () => {
+    expect(deriveMonthLocalDateRange('2026-02')).toEqual({ from: '2026-02-01', to: '2026-02-28' });
+  });
+
+  it('resolves December without rolling into the next year', () => {
+    expect(deriveMonthLocalDateRange('2026-12')).toEqual({ from: '2026-12-01', to: '2026-12-31' });
+  });
+
+  it('resolves January without rolling into the previous year', () => {
+    expect(deriveMonthLocalDateRange('2027-01')).toEqual({ from: '2027-01-01', to: '2027-01-31' });
+  });
+
+  it('rejects a malformed month', () => {
+    expect(() => deriveMonthLocalDateRange('2026-13')).toThrow();
+    expect(() => deriveMonthLocalDateRange('2026-7')).toThrow();
+    expect(() => deriveMonthLocalDateRange('not-a-month')).toThrow();
   });
 });

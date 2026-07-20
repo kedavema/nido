@@ -294,7 +294,8 @@ function mapPersistenceError(error: unknown): unknown {
   return error;
 }
 
-function toTransaction(record: TransactionRecord): Transaction {
+/** Exported for reuse by `MonthlySummaryService`'s `recentTransactions`. */
+export function toTransaction(record: TransactionRecord): Transaction {
   return {
     id: record.id,
     householdId: record.householdId,

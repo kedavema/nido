@@ -5,6 +5,10 @@ import {
   DecimalAmountSchema,
   ListTransactionsQuerySchema,
   ListTransactionsResponseSchema,
+  MonthlyBalanceSchema,
+  MonthlySummaryQuerySchema,
+  MonthlySummaryResponseSchema,
+  MonthSchema,
   TransactionSchema,
   UpdateTransactionRequestSchema,
   type CreateTransactionRequest,
@@ -238,5 +242,59 @@ describe('M3 transaction contracts', () => {
     expect(ListTransactionsQuerySchema.parse({})).toEqual({});
     expect(ListTransactionsQuerySchema.safeParse({ from: '07/01/2026' }).success).toBe(false);
     expect(ListTransactionsQuerySchema.safeParse({ userId: 'anything' }).success).toBe(false);
+  });
+});
+
+describe('M3 monthly summary contracts', () => {
+  it('accepts canonical yyyy-MM months and rejects malformed ones', () => {
+    expect(MonthSchema.safeParse('2026-07').success).toBe(true);
+    expect(MonthSchema.safeParse('2026-12').success).toBe(true);
+    expect(MonthSchema.safeParse('2026-00').success).toBe(false);
+    expect(MonthSchema.safeParse('2026-13').success).toBe(false);
+    expect(MonthSchema.safeParse('2026-7').success).toBe(false);
+    expect(MonthSchema.safeParse('2026-07-01').success).toBe(false);
+    expect(MonthSchema.safeParse('not-a-month').success).toBe(false);
+  });
+
+  it('allows a negative balance but stays PYG-scale integral', () => {
+    expect(MonthlyBalanceSchema.safeParse('50000').success).toBe(true);
+    expect(MonthlyBalanceSchema.safeParse('-50000').success).toBe(true);
+    expect(MonthlyBalanceSchema.safeParse('0').success).toBe(true);
+    expect(MonthlyBalanceSchema.safeParse('-50000.5').success).toBe(false);
+    expect(MonthlyBalanceSchema.safeParse('--50000').success).toBe(false);
+  });
+
+  it('requires the month query param and rejects unknown ones', () => {
+    expect(MonthlySummaryQuerySchema.parse({ month: '2026-07' })).toEqual({ month: '2026-07' });
+    expect(MonthlySummaryQuerySchema.safeParse({}).success).toBe(false);
+    expect(
+      MonthlySummaryQuerySchema.safeParse({ month: '2026-07', from: '2026-07-01' }).success,
+    ).toBe(false);
+  });
+
+  it('parses a full monthly summary response and rejects extra fields', () => {
+    const payload = {
+      balance: '-50000',
+      incomeTotal: '100000',
+      expenseTotal: '150000',
+      categoryBreakdown: [
+        {
+          categoryId: '2b9d2c2a-16b1-4a4a-9d43-2f3f2c9c0a22',
+          categoryName: 'Alimentacion',
+          amount: '150000',
+          percentage: 100,
+        },
+      ],
+      recentTransactions: [validPygTransaction],
+    };
+
+    expect(MonthlySummaryResponseSchema.parse(payload)).toEqual(payload);
+    expect(MonthlySummaryResponseSchema.safeParse({ ...payload, total: 1 }).success).toBe(false);
+    expect(
+      MonthlySummaryResponseSchema.safeParse({
+        ...payload,
+        recentTransactions: Array.from({ length: 5 }, () => validPygTransaction),
+      }).success,
+    ).toBe(false);
   });
 });
