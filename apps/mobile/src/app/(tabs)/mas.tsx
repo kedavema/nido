@@ -143,11 +143,20 @@ export default function MasScreen() {
 
       <Card>
         <Text style={m1TextStyles.sectionTitle}>Configuración financiera</Text>
-        <Text style={m1TextStyles.secondary}>Organizá las categorías de {household.name}.</Text>
+        <Text style={m1TextStyles.secondary}>
+          Organizá las categorías y los medios compartidos de {household.name}.
+        </Text>
         <ActionButton
           label="Categorías"
           onPress={() => {
             router.push('/categories');
+          }}
+          variant="secondary"
+        />
+        <ActionButton
+          label="Medios de pago"
+          onPress={() => {
+            router.push('/payment-sources');
           }}
           variant="secondary"
         />
