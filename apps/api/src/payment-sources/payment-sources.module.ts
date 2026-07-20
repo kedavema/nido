@@ -15,5 +15,8 @@ import { PrismaPaymentSourcesRepository } from './prisma-payment-sources.reposit
     PrismaPaymentSourcesRepository,
     { provide: PAYMENT_SOURCES_REPOSITORY, useExisting: PrismaPaymentSourcesRepository },
   ],
+  // Exported so TransactionsModule can pre-check that a transaction's payment source belongs
+  // to the household, the same pre-check pattern this module uses for HOUSEHOLDS_REPOSITORY.
+  exports: [PAYMENT_SOURCES_REPOSITORY],
 })
 export class PaymentSourcesModule {}

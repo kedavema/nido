@@ -9,6 +9,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HouseholdsModule } from './households/households.module.js';
 import { PaymentSourcesModule } from './payment-sources/payment-sources.module.js';
+import { TransactionsModule } from './transactions/transactions.module.js';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { PaymentSourcesModule } from './payment-sources/payment-sources.module.j
     HealthModule,
     HouseholdsModule,
     PaymentSourcesModule,
+    TransactionsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
