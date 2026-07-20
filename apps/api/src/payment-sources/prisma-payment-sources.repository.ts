@@ -15,6 +15,9 @@ import {
 
 const OWNER_FOREIGN_KEY = 'payment_sources_owner_user_id_fkey';
 const FOREIGN_KEY_VIOLATION_CODE = '23503';
+// ON DELETE RESTRICT raises restrict_violation (23001), not foreign_key_violation
+// (23503), when a dependent row blocks the delete.
+const RESTRICT_VIOLATION_CODE = '23001';
 
 @Injectable()
 export class PrismaPaymentSourcesRepository implements PaymentSourcesRepository {
@@ -154,6 +157,7 @@ function isForeignKeyError(error: unknown): boolean {
   return (
     errorCode(error) === 'P2003' ||
     hasPostgresCode(error, FOREIGN_KEY_VIOLATION_CODE) ||
+    hasPostgresCode(error, RESTRICT_VIOLATION_CODE) ||
     collectErrorText(error).includes(OWNER_FOREIGN_KEY)
   );
 }
