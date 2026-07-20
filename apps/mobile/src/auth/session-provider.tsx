@@ -49,6 +49,9 @@ interface SessionContextValue {
     | 'createPaymentSource'
     | 'updatePaymentSource'
     | 'deletePaymentSource'
+    | 'listTransactions'
+    | 'getTransaction'
+    | 'deleteTransaction'
   >;
 }
 
@@ -410,6 +413,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
         api().updatePaymentSource(householdId, paymentSourceId, input),
       deletePaymentSource: (householdId, paymentSourceId) =>
         api().deletePaymentSource(householdId, paymentSourceId),
+      listTransactions: (householdId, query) => api().listTransactions(householdId, query),
+      getTransaction: (householdId, transactionId) =>
+        api().getTransaction(householdId, transactionId),
+      deleteTransaction: (householdId, transactionId) =>
+        api().deleteTransaction(householdId, transactionId),
     };
   }, []);
 
