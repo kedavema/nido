@@ -6,9 +6,11 @@ import {
   formatDecimalEs,
   formatFullLocalDate,
   formatMonthLabel,
+  formatMonthQueryParam,
   formatMovementTimestamp,
   formatOccurredAtTime,
   formatPygMagnitude,
+  formatRecentMovementDateLabel,
   formatSignedPygAmount,
   formatTransactionAmount,
   groupTransactionsByDay,
@@ -280,5 +282,24 @@ describe('month helpers', () => {
 
   it('formats a month label in Spanish', () => {
     expect(formatMonthLabel({ year: 2026, month: 7 })).toBe('Julio 2026');
+  });
+
+  it('formats the yyyy-MM query param for reports/monthly-summary', () => {
+    expect(formatMonthQueryParam({ year: 2026, month: 7 })).toBe('2026-07');
+    expect(formatMonthQueryParam({ year: 2026, month: 1 })).toBe('2026-01');
+  });
+});
+
+describe('formatRecentMovementDateLabel', () => {
+  it('labels the current day as "hoy"', () => {
+    expect(formatRecentMovementDateLabel('2026-07-15', '2026-07-15')).toBe('hoy');
+  });
+
+  it('labels the previous day as "ayer"', () => {
+    expect(formatRecentMovementDateLabel('2026-07-14', '2026-07-15')).toBe('ayer');
+  });
+
+  it('falls back to a lowercase "d mmm" label for older days', () => {
+    expect(formatRecentMovementDateLabel('2026-07-01', '2026-07-15')).toBe('1 jul');
   });
 });
