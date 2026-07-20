@@ -283,4 +283,53 @@ describe('Nido API client', () => {
     ).toThrow();
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
+
+  it('fetches the monthly summary with a yyyy-MM query param, preserving decimal-string amounts', async () => {
+    const householdId = '00000000-0000-4000-8000-000000000011';
+    const summary = {
+      balance: '-620000',
+      incomeTotal: '17700000',
+      expenseTotal: '18320000',
+      categoryBreakdown: [
+        {
+          categoryId: '00000000-0000-4000-8000-000000000020',
+          categoryName: 'Alimentación',
+          amount: '3410000',
+          percentage: 24,
+        },
+      ],
+      recentTransactions: [],
+    };
+    const fetchImplementation = vi.fn<FetchImplementation>(() =>
+      Promise.resolve(jsonResponse(summary)),
+    );
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    await expect(client.getMonthlySummary(householdId, { month: '2026-07' })).resolves.toEqual(
+      summary,
+    );
+    expect(fetchImplementation.mock.calls[0]?.[0]).toBe(
+      `https://api.example.com/v1/households/${householdId}/reports/monthly-summary?month=2026-07`,
+    );
+  });
+
+  it('rejects an invalid monthly-summary query client-side, without making a request', () => {
+    const fetchImplementation = vi.fn<FetchImplementation>();
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    expect(() =>
+      client.getMonthlySummary('00000000-0000-4000-8000-000000000011', {
+        month: '2026-7', // MonthSchema requires a zero-padded month
+      }),
+    ).toThrow();
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
 });

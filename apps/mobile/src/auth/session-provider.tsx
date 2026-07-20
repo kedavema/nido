@@ -54,6 +54,7 @@ interface SessionContextValue {
     | 'createTransaction'
     | 'updateTransaction'
     | 'deleteTransaction'
+    | 'getMonthlySummary'
   >;
 }
 
@@ -423,6 +424,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         api().updateTransaction(householdId, transactionId, input),
       deleteTransaction: (householdId, transactionId) =>
         api().deleteTransaction(householdId, transactionId),
+      getMonthlySummary: (householdId, query) => api().getMonthlySummary(householdId, query),
     };
   }, []);
 

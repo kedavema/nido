@@ -130,6 +130,18 @@ export function formatMovementTimestamp(
   return `${formatFullLocalDate(transaction.localDate)}, ${time}`;
 }
 
+/** "hoy" / "ayer" / "1 jul" — INI-02's compact date caption for a "Recientes" row. */
+export function formatRecentMovementDateLabel(localDate: string, todayLocal: string): string {
+  if (localDate === todayLocal) {
+    return 'hoy';
+  }
+  if (localDate === previousLocalDate(todayLocal)) {
+    return 'ayer';
+  }
+  const { day, month } = parseLocalDate(localDate);
+  return `${day.toString()} ${(MONTH_ABBREVIATIONS[month - 1] ?? '').toLowerCase()}`;
+}
+
 /** Inserts `.` thousand separators into an unsigned integer digit string. */
 export function formatPygMagnitude(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/gu, '.');
@@ -247,6 +259,11 @@ export function monthLocalDateRange({ year, month }: MonthValue): {
     from: `${yearText}-${pad2(month)}-01`,
     to: `${yearText}-${pad2(month)}-${pad2(lastDay)}`,
   };
+}
+
+/** "2026-07" — the `month` query param shape for `reports/monthly-summary` (`MonthSchema`). */
+export function formatMonthQueryParam({ year, month }: MonthValue): string {
+  return `${year.toString()}-${pad2(month)}`;
 }
 
 export function shiftMonth({ year, month }: MonthValue, delta: number): MonthValue {

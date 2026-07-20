@@ -17,6 +17,8 @@ import {
   ListPaymentSourcesResponseSchema,
   ListTransactionsQuerySchema,
   ListTransactionsResponseSchema,
+  MonthlySummaryQuerySchema,
+  MonthlySummaryResponseSchema,
   UpdateCategoryRequestSchema,
   UpdateCategoryResponseSchema,
   UpdatePaymentSourceRequestSchema,
@@ -38,6 +40,8 @@ import {
   type ListPaymentSourcesResponse,
   type ListTransactionsQuery,
   type ListTransactionsResponse,
+  type MonthlySummaryQuery,
+  type MonthlySummaryResponse,
   type UpdateCategoryRequest,
   type UpdateCategoryResponse,
   type UpdatePaymentSourceRequest,
@@ -204,6 +208,10 @@ export interface NidoApiClient {
     input: UpdateTransactionRequest,
   ): Promise<UpdateTransactionResponse>;
   deleteTransaction(householdId: string, transactionId: string): Promise<void>;
+  getMonthlySummary(
+    householdId: string,
+    query: MonthlySummaryQuery,
+  ): Promise<MonthlySummaryResponse>;
 }
 
 export function createNidoApiClient({
@@ -404,6 +412,14 @@ export function createNidoApiClient({
         `/v1/households/${encodeURIComponent(householdId)}/transactions/${encodeURIComponent(transactionId)}`,
         z.void(),
         { method: 'DELETE' },
+      );
+    },
+    getMonthlySummary(householdId, query) {
+      const validQuery = MonthlySummaryQuerySchema.parse(query);
+      const queryString = buildQueryString(validQuery);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/reports/monthly-summary${queryString}`,
+        MonthlySummaryResponseSchema,
       );
     },
   };
