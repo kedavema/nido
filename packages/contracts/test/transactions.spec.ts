@@ -180,6 +180,29 @@ describe('M3 transaction contracts', () => {
     ).toBe(false);
   });
 
+  it('rejects amounts and fx rates that overflow their Postgres column precision', () => {
+    // decimal(18,2): 16 integer digits fit, 17 overflow.
+    expect(
+      TransactionSchema.safeParse({ ...validPygTransaction, amount: '9'.repeat(16) }).success,
+    ).toBe(true);
+    expect(
+      TransactionSchema.safeParse({ ...validPygTransaction, amount: '9'.repeat(17) }).success,
+    ).toBe(false);
+    // decimal(18,4): 14 integer digits fit, 15 overflow.
+    expect(
+      TransactionSchema.safeParse({
+        ...validUsdTransaction,
+        fxRateToBase: '9'.repeat(14),
+      }).success,
+    ).toBe(true);
+    expect(
+      TransactionSchema.safeParse({
+        ...validUsdTransaction,
+        fxRateToBase: '9'.repeat(15),
+      }).success,
+    ).toBe(false);
+  });
+
   it('lists transactions under a transactions key', () => {
     expect(ListTransactionsResponseSchema.parse({ transactions: [validPygTransaction] })).toEqual({
       transactions: [validPygTransaction],

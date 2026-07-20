@@ -21,8 +21,13 @@ export const DecimalAmountSchema = z.string().regex(/^\d+(\.\d+)?$/u);
 const PYG_SCALE_REGEX = /^\d+$/u;
 const USD_SCALE_REGEX = /^\d+(\.\d{1,2})?$/u;
 
-// decimal(18,0) column bound for base_amount_pyg (ADR 0001).
-const MAX_BASE_AMOUNT_PYG = '999999999999999999';
+// Integer-digit bounds derived from the Postgres column precisions in
+// apps/api/prisma/schema.prisma. For a decimal(p, s) column the largest representable integer
+// part has (p - s) digits (an all-nines value), so any string whose integer part has more
+// digits than that is guaranteed to overflow the column regardless of its fractional part.
+const MAX_AMOUNT_INTEGER_DIGITS = 16; // decimal(18, 2)
+const MAX_FX_RATE_INTEGER_DIGITS = 14; // decimal(18, 4)
+const MAX_BASE_AMOUNT_PYG_INTEGER_DIGITS = 18; // decimal(18, 0)
 
 function matchesCurrencyScale(
   currency: z.infer<typeof TransactionCurrencySchema>,
@@ -31,22 +36,37 @@ function matchesCurrencyScale(
   return currency === 'PYG' ? PYG_SCALE_REGEX.test(amount) : USD_SCALE_REGEX.test(amount);
 }
 
-function exceedsMaxBaseAmountPyg(amount: string): boolean {
-  const digits = amount.replace(/^0+(?=\d)/u, '');
-  if (digits.length !== MAX_BASE_AMOUNT_PYG.length) {
-    return digits.length > MAX_BASE_AMOUNT_PYG.length;
-  }
-  return digits > MAX_BASE_AMOUNT_PYG;
+function exceedsMaxIntegerDigits(value: string, maxIntegerDigits: number): boolean {
+  const integerPart = value.split('.', 1)[0] ?? value;
+  const digits = integerPart.replace(/^0+(?=\d)/u, '');
+  return digits.length > maxIntegerDigits;
 }
+
+// amount is bounded by the decimal(18,2) column it is persisted in (ADR 0001: "se validan
+// operandos ... contra el rango contractual y el tipo PostgreSQL correspondiente").
+export const AmountSchema = DecimalAmountSchema.refine(
+  (value) => !exceedsMaxIntegerDigits(value, MAX_AMOUNT_INTEGER_DIGITS),
+  {
+    message: `amount must not exceed the decimal(18,2) range (max ${String(MAX_AMOUNT_INTEGER_DIGITS)} integer digits)`,
+  },
+);
 
 // base_amount_pyg is always PYG-scale (integral), regardless of the movement's own currency,
 // and is bounded by the decimal(18,0) column it is persisted in.
 export const BaseAmountPygSchema = DecimalAmountSchema.regex(PYG_SCALE_REGEX).refine(
-  (value) => !exceedsMaxBaseAmountPyg(value),
-  { message: `baseAmountPyg must not exceed the decimal(18,0) range (max ${MAX_BASE_AMOUNT_PYG})` },
+  (value) => !exceedsMaxIntegerDigits(value, MAX_BASE_AMOUNT_PYG_INTEGER_DIGITS),
+  {
+    message: `baseAmountPyg must not exceed the decimal(18,0) range (max ${String(MAX_BASE_AMOUNT_PYG_INTEGER_DIGITS)} integer digits)`,
+  },
 );
 
-export const FxRateToBaseSchema = DecimalAmountSchema;
+// fx_rate_to_base is bounded by the decimal(18,4) column it is persisted in.
+export const FxRateToBaseSchema = DecimalAmountSchema.refine(
+  (value) => !exceedsMaxIntegerDigits(value, MAX_FX_RATE_INTEGER_DIGITS),
+  {
+    message: `fxRateToBase must not exceed the decimal(18,4) range (max ${String(MAX_FX_RATE_INTEGER_DIGITS)} integer digits)`,
+  },
+);
 
 // Currency-scale (PYG0 vs USD2) and the USD-only fxRateToBase requirement are cross-field
 // rules — they depend on which currency was chosen — so they are enforced together via
@@ -96,7 +116,7 @@ export const TransactionSchema = z
     id: UuidSchema,
     householdId: UuidSchema,
     type: TransactionTypeSchema,
-    amount: DecimalAmountSchema,
+    amount: AmountSchema,
     currency: TransactionCurrencySchema,
     fxRateToBase: FxRateToBaseSchema.nullable(),
     baseAmountPyg: BaseAmountPygSchema,
@@ -119,7 +139,7 @@ export const TransactionSchema = z
 export const CreateTransactionRequestSchema = z
   .strictObject({
     type: TransactionTypeSchema,
-    amount: DecimalAmountSchema,
+    amount: AmountSchema,
     currency: TransactionCurrencySchema,
     fxRateToBase: FxRateToBaseSchema.optional(),
     occurredAt: IsoDateTimeSchema,
@@ -133,7 +153,7 @@ export const CreateTransactionRequestSchema = z
 export const UpdateTransactionRequestSchema = z
   .strictObject({
     type: TransactionTypeSchema.optional(),
-    amount: DecimalAmountSchema.optional(),
+    amount: AmountSchema.optional(),
     currency: TransactionCurrencySchema.optional(),
     fxRateToBase: FxRateToBaseSchema.nullable().optional(),
     occurredAt: IsoDateTimeSchema.optional(),
