@@ -1,6 +1,8 @@
 import type {
+  CategoryExpenseTotal,
   CreateTransactionRecordInput,
   ListTransactionsFilter,
+  MonthlyTotals,
   TransactionRecord,
   UpdateTransactionRecordChanges,
 } from './transaction.js';
@@ -26,4 +28,23 @@ export interface TransactionsRepository {
     changes: UpdateTransactionRecordChanges,
   ): Promise<TransactionRecord | null>;
   deleteById(householdId: string, transactionId: string): Promise<boolean>;
+  /** Income/expense sums over `local_date` in `[from, to]`, per ADR 0007. */
+  getMonthlyTotals(householdId: string, from: string, to: string): Promise<MonthlyTotals>;
+  /**
+   * Expense sums over `local_date` in `[from, to]`, grouped by each transaction's own
+   * `category_id` (leaf or root, unresolved) per ADR 0007. Callers that need root-category
+   * totals (e.g. `MonthlySummaryService`) fold these by category hierarchy themselves.
+   */
+  getExpenseTotalsByCategory(
+    householdId: string,
+    from: string,
+    to: string,
+  ): Promise<readonly CategoryExpenseTotal[]>;
+  /** Up to `limit` most recent transactions (by `localDate`, then `occurredAt`, then `id`, desc) with `local_date` in `[from, to]`. */
+  findRecent(
+    householdId: string,
+    from: string,
+    to: string,
+    limit: number,
+  ): Promise<readonly TransactionRecord[]>;
 }

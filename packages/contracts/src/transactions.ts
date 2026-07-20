@@ -197,6 +197,43 @@ export const ListTransactionsQuerySchema = z.strictObject({
   search: z.string().trim().min(1).max(200).optional(),
 });
 
+// yyyy-MM, per the `reports/monthly-summary` query param (docs/system-design.md §12). Deliberately
+// separate from `LocalDateSchema` (yyyy-MM-dd): a month has no day component, and the endpoint
+// resolves it to a local-date range itself (see `deriveMonthLocalDateRange` in the API).
+export const MonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u);
+
+// Unlike `BaseAmountPygSchema` (always a non-negative persisted column value), the monthly
+// balance is `incomeTotal - expenseTotal` and can be negative when a household spent more than
+// it received, so it allows an optional leading `-` while staying PYG-scale (integral).
+export const MonthlyBalanceSchema = z.string().regex(/^-?\d+$/u);
+
+// Percentage of `expenseTotal` a root category represents, rounded half-up to 2 decimal places
+// by the service (see `roundPercentage`). Not a money amount, so it stays a `number` rather than
+// a decimal string (ADR 0001 only governs amounts and exchange rates).
+export const CategoryBreakdownPercentageSchema = z.number().min(0).max(100);
+
+export const CategoryBreakdownItemSchema = z.strictObject({
+  categoryId: UuidSchema,
+  categoryName: z.string().trim().min(1).max(100),
+  amount: BaseAmountPygSchema,
+  percentage: CategoryBreakdownPercentageSchema,
+});
+
+export const MonthlySummaryQuerySchema = z.strictObject({
+  month: MonthSchema,
+});
+
+// M3 cut of docs/system-design.md §6.8: balance, income/expense totals, expense breakdown by
+// root category, and up to 4 recent movements. Items 2 (presupuesto) and 3 (fijos) depend on
+// Budgets/Fijos (M5/M6) and are out of scope — see ADR 0007.
+export const MonthlySummaryResponseSchema = z.strictObject({
+  balance: MonthlyBalanceSchema,
+  incomeTotal: BaseAmountPygSchema,
+  expenseTotal: BaseAmountPygSchema,
+  categoryBreakdown: z.array(CategoryBreakdownItemSchema),
+  recentTransactions: z.array(TransactionSchema).max(4),
+});
+
 export type TransactionType = z.infer<typeof TransactionTypeSchema>;
 export type TransactionCurrency = z.infer<typeof TransactionCurrencySchema>;
 export type TransactionOrigin = z.infer<typeof TransactionOriginSchema>;
@@ -207,3 +244,6 @@ export type CreateTransactionResponse = z.infer<typeof CreateTransactionResponse
 export type UpdateTransactionResponse = z.infer<typeof UpdateTransactionResponseSchema>;
 export type ListTransactionsResponse = z.infer<typeof ListTransactionsResponseSchema>;
 export type ListTransactionsQuery = z.infer<typeof ListTransactionsQuerySchema>;
+export type CategoryBreakdownItem = z.infer<typeof CategoryBreakdownItemSchema>;
+export type MonthlySummaryQuery = z.infer<typeof MonthlySummaryQuerySchema>;
+export type MonthlySummaryResponse = z.infer<typeof MonthlySummaryResponseSchema>;

@@ -114,6 +114,9 @@ function createTransactionsRepository(
     create: () => Promise.reject(new Error('not used')),
     update: () => Promise.reject(new Error('not used')),
     deleteById: () => Promise.reject(new Error('not used')),
+    getMonthlyTotals: () => Promise.reject(new Error('not used')),
+    getExpenseTotalsByCategory: () => Promise.reject(new Error('not used')),
+    findRecent: () => Promise.reject(new Error('not used')),
     ...overrides,
   };
 }

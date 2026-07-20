@@ -9,10 +9,13 @@ import {
 } from '@nido/domain-types';
 
 import { PrismaService } from '../database/prisma.service.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { parseLocalDate } from './local-date.js';
 import type {
+  CategoryExpenseTotal,
   CreateTransactionRecordInput,
   ListTransactionsFilter,
+  MonthlyTotals,
   TransactionRecord,
   UpdateTransactionRecordChanges,
 } from './transaction.js';
@@ -152,6 +155,81 @@ export class PrismaTransactionsRepository implements TransactionsRepository {
       }
       throw error;
     }
+  }
+
+  /**
+   * ADR 0007: on-the-fly `SUM`/`GROUP BY` over `(household_id, local_date)`, not Prisma's
+   * `groupBy` — raw SQL lets both totals come back from a single grouped-by-type query instead
+   * of two separate `aggregate` round trips. `SUM` is cast to `text` because Postgres returns
+   * `numeric` for it and the driver would otherwise hand back a JS value that is not guaranteed
+   * to preserve full precision; parsing the text with `Prisma.Decimal` keeps this module on the
+   * one `Decimal` type used everywhere else (see `money.ts`).
+   */
+  async getMonthlyTotals(householdId: string, from: string, to: string): Promise<MonthlyTotals> {
+    const rows = await this.prisma.$queryRaw<readonly { type: string; total: string }[]>`
+      SELECT "type", SUM("base_amount_pyg")::text AS "total"
+      FROM "transactions"
+      WHERE "household_id" = ${householdId}::uuid
+        AND "local_date" >= ${from}::date
+        AND "local_date" <= ${to}::date
+      GROUP BY "type"
+    `;
+
+    let income = new Prisma.Decimal(0);
+    let expense = new Prisma.Decimal(0);
+    for (const row of rows) {
+      if (row.type === 'INCOME') {
+        income = new Prisma.Decimal(row.total);
+      } else if (row.type === 'EXPENSE') {
+        expense = new Prisma.Decimal(row.total);
+      }
+    }
+    return { income, expense };
+  }
+
+  /**
+   * ADR 0007: on-the-fly `SUM`/`GROUP BY` over `(household_id, category_id, local_date)` — the
+   * index's column order matches this query's filter (`household_id`, then `local_date` range)
+   * and group key (`category_id`) exactly. Grouped by the transaction's own `category_id`
+   * (leaf or root, unresolved): folding a leaf's total into its root is category-hierarchy
+   * business logic, left to `MonthlySummaryService` (see the `CategoryExpenseTotal` comment).
+   */
+  async getExpenseTotalsByCategory(
+    householdId: string,
+    from: string,
+    to: string,
+  ): Promise<readonly CategoryExpenseTotal[]> {
+    const rows = await this.prisma.$queryRaw<readonly { categoryId: string; amount: string }[]>`
+      SELECT "category_id" AS "categoryId", SUM("base_amount_pyg")::text AS "amount"
+      FROM "transactions"
+      WHERE "household_id" = ${householdId}::uuid
+        AND "type" = 'EXPENSE'
+        AND "local_date" >= ${from}::date
+        AND "local_date" <= ${to}::date
+      GROUP BY "category_id"
+    `;
+
+    return rows.map((row) => ({
+      categoryId: row.categoryId,
+      amount: new Prisma.Decimal(row.amount),
+    }));
+  }
+
+  async findRecent(
+    householdId: string,
+    from: string,
+    to: string,
+    limit: number,
+  ): Promise<readonly TransactionRecord[]> {
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        householdId,
+        localDate: { gte: parseLocalDate(from), lte: parseLocalDate(to) },
+      },
+      orderBy: [{ localDate: 'desc' }, { occurredAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+    });
+    return transactions.map(toTransactionRecord);
   }
 }
 

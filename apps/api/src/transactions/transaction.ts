@@ -73,3 +73,21 @@ export interface ListTransactionsFilter {
   readonly currency?: SupportedCurrencyCode;
   readonly search?: string;
 }
+
+/** Income and expense sums (`base_amount_pyg`) over a `local_date` range, per ADR 0007. */
+export interface MonthlyTotals {
+  readonly income: Decimal;
+  readonly expense: Decimal;
+}
+
+/**
+ * One category's expense total (`base_amount_pyg`) over a `local_date` range, grouped by the
+ * transaction's own `category_id` (leaf or root). Root-category attribution of subcategory
+ * spend — folding a leaf's total into its parent's — is done by `MonthlySummaryService` using
+ * `CategoriesRepository`, not here: the category hierarchy is category-module business logic,
+ * this repository only owns the money aggregation (ADR 0007).
+ */
+export interface CategoryExpenseTotal {
+  readonly categoryId: string;
+  readonly amount: Decimal;
+}
