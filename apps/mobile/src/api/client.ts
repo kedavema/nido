@@ -8,6 +8,7 @@ import {
   CreateHouseholdResponseSchema,
   CreatePaymentSourceRequestSchema,
   CreatePaymentSourceResponseSchema,
+  CreateTransactionRequestSchema,
   CreateTransactionResponseSchema,
   GetHouseholdMembersResponseSchema,
   GetMeResponseSchema,
@@ -20,6 +21,8 @@ import {
   UpdateCategoryResponseSchema,
   UpdatePaymentSourceRequestSchema,
   UpdatePaymentSourceResponseSchema,
+  UpdateTransactionRequestSchema,
+  UpdateTransactionResponseSchema,
   type AcceptHouseholdInviteResponse,
   type CreateCategoryRequest,
   type CreateCategoryResponse,
@@ -27,6 +30,7 @@ import {
   type CreateHouseholdResponse,
   type CreatePaymentSourceRequest,
   type CreatePaymentSourceResponse,
+  type CreateTransactionRequest,
   type CreateTransactionResponse,
   type GetHouseholdMembersResponse,
   type GetMeResponse,
@@ -38,6 +42,8 @@ import {
   type UpdateCategoryResponse,
   type UpdatePaymentSourceRequest,
   type UpdatePaymentSourceResponse,
+  type UpdateTransactionRequest,
+  type UpdateTransactionResponse,
 } from '@nido/contracts';
 import { z } from 'zod';
 
@@ -188,6 +194,15 @@ export interface NidoApiClient {
     query?: ListTransactionsQuery,
   ): Promise<ListTransactionsResponse>;
   getTransaction(householdId: string, transactionId: string): Promise<CreateTransactionResponse>;
+  createTransaction(
+    householdId: string,
+    input: CreateTransactionRequest,
+  ): Promise<CreateTransactionResponse>;
+  updateTransaction(
+    householdId: string,
+    transactionId: string,
+    input: UpdateTransactionRequest,
+  ): Promise<UpdateTransactionResponse>;
   deleteTransaction(householdId: string, transactionId: string): Promise<void>;
 }
 
@@ -366,6 +381,22 @@ export function createNidoApiClient({
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/transactions/${encodeURIComponent(transactionId)}`,
         CreateTransactionResponseSchema,
+      );
+    },
+    createTransaction(householdId, input) {
+      const body = CreateTransactionRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/transactions`,
+        CreateTransactionResponseSchema,
+        { method: 'POST', body },
+      );
+    },
+    updateTransaction(householdId, transactionId, input) {
+      const body = UpdateTransactionRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/transactions/${encodeURIComponent(transactionId)}`,
+        UpdateTransactionResponseSchema,
+        { method: 'PATCH', body },
       );
     },
     deleteTransaction(householdId, transactionId) {
