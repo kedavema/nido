@@ -32,13 +32,16 @@ import {
   amountToWireDecimal,
   favoritePaymentSourceIds,
   formatAmountDisplay,
+  formatFxRateDisplay,
+  fxRateToWireDecimal,
+  fxRateWireToSanitized,
   isValidLocalDateString,
   localDateToOccurredAt,
   mostRecentUsdRate,
   previewUsdToBasePyg,
   recentRootCategoryIds,
   sanitizeAmountInput,
-  sanitizePygAmountInput,
+  sanitizeFxRateInput,
   shiftLocalDate,
 } from '@/utils/expense-form';
 import {
@@ -82,7 +85,7 @@ interface Draft {
   readonly type: TransactionType;
   readonly currency: TransactionCurrency;
   readonly amount: string; // sanitized display value (see utils/expense-form.ts)
-  readonly fxRate: string; // sanitized PYG-style digits, only meaningful when currency === 'USD'
+  readonly fxRate: string; // sanitized comma-decimal (see sanitizeFxRateInput), only meaningful when currency === 'USD'
   readonly categoryId: string | undefined;
   readonly paymentSourceId: string | null;
   readonly localDate: string;
@@ -121,7 +124,7 @@ function buildDraft(original: Transaction | null, todayLocal: string): Draft {
     type: original.type,
     currency: original.currency,
     amount: original.currency === 'PYG' ? original.amount : original.amount.replace('.', ','),
-    fxRate: original.fxRateToBase ?? '',
+    fxRate: original.fxRateToBase === null ? '' : fxRateWireToSanitized(original.fxRateToBase),
     categoryId: original.categoryId,
     paymentSourceId: original.paymentSourceId,
     localDate: original.localDate,
@@ -321,7 +324,12 @@ export default function NuevoGastoScreen() {
     updateDraft({
       currency,
       amount: '',
-      fxRate: currency === 'USD' ? (defaultUsdRate?.fxRateToBase ?? '') : draft.fxRate,
+      fxRate:
+        currency === 'USD'
+          ? defaultUsdRate === undefined
+            ? ''
+            : fxRateWireToSanitized(defaultUsdRate.fxRateToBase)
+          : draft.fxRate,
     });
   }
 
@@ -351,6 +359,7 @@ export default function NuevoGastoScreen() {
     setSaving(true);
     try {
       const amountWire = amountToWireDecimal(draft.amount, draft.currency);
+      const fxRateWire = draft.currency === 'USD' ? fxRateToWireDecimal(draft.fxRate) : null;
       const trimmedNotes = draft.notes.trim();
       const trimmedDescription = draft.description.trim();
       const original = screenState.original;
@@ -360,7 +369,7 @@ export default function NuevoGastoScreen() {
           type: 'EXPENSE',
           amount: amountWire,
           currency: draft.currency,
-          ...(draft.currency === 'USD' ? { fxRateToBase: draft.fxRate } : {}),
+          ...(fxRateWire === null ? {} : { fxRateToBase: fxRateWire }),
           occurredAt: draft.occurredAt,
           categoryId: draft.categoryId,
           ...(draft.paymentSourceId === null ? {} : { paymentSourceId: draft.paymentSourceId }),
@@ -372,7 +381,7 @@ export default function NuevoGastoScreen() {
         const request: UpdateTransactionRequest = {
           amount: amountWire,
           currency: draft.currency,
-          fxRateToBase: draft.currency === 'USD' ? draft.fxRate : null,
+          fxRateToBase: fxRateWire,
           occurredAt: draft.occurredAt,
           categoryId: draft.categoryId,
           paymentSourceId: draft.paymentSourceId,
@@ -391,7 +400,10 @@ export default function NuevoGastoScreen() {
 
   const usdPreview =
     draft.currency === 'USD' && draft.amount !== '' && draft.fxRate !== ''
-      ? previewUsdToBasePyg(amountToWireDecimal(draft.amount, 'USD'), draft.fxRate)
+      ? previewUsdToBasePyg(
+          amountToWireDecimal(draft.amount, 'USD'),
+          fxRateToWireDecimal(draft.fxRate),
+        )
       : undefined;
 
   const discardSummary = [
@@ -451,12 +463,12 @@ export default function NuevoGastoScreen() {
                   <Text style={m1TextStyles.secondary}>Gs.</Text>
                   <TextInput
                     accessibilityLabel="Tipo de cambio manual"
-                    keyboardType="number-pad"
+                    keyboardType="decimal-pad"
                     onChangeText={(text) => {
-                      updateDraft({ fxRate: sanitizePygAmountInput(text) });
+                      updateDraft({ fxRate: sanitizeFxRateInput(text) });
                     }}
                     style={styles.fxRateInput}
-                    value={formatPygMagnitude(draft.fxRate)}
+                    value={formatFxRateDisplay(draft.fxRate)}
                   />
                 </View>
               </View>
@@ -602,7 +614,9 @@ export default function NuevoGastoScreen() {
       </KeyboardAvoidingView>
 
       <CategoryPickerModal
-        categories={categories.filter((category) => category.kind === categoryKind)}
+        categories={categories.filter(
+          (category) => category.kind === categoryKind && category.isActive,
+        )}
         onClose={() => {
           setShowCategoryPicker(false);
         }}

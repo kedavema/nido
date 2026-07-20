@@ -85,6 +85,46 @@ export function sanitizeAmountInput(raw: string, currency: TransactionCurrency):
   return currency === 'PYG' ? sanitizePygAmountInput(raw) : sanitizeUsdAmountInput(raw);
 }
 
+/**
+ * Keeps digits and a single Spanish decimal comma, capped at 4 fraction digits —
+ * `fxRateToBase` is a decimal(18,4) column (see `FxRateToBaseSchema`), unlike PYG amounts which
+ * have no fractional unit. Reusing `sanitizePygAmountInput` here would silently strip the comma
+ * and any fraction digits a user types or that a pre-filled rate carries.
+ */
+export function sanitizeFxRateInput(raw: string): string {
+  const kept = raw.replace(/[^\d,]/gu, '');
+  const firstComma = kept.indexOf(',');
+  const withSingleComma =
+    firstComma === -1
+      ? kept
+      : kept.slice(0, firstComma + 1) + kept.slice(firstComma + 1).replace(/,/gu, '');
+  const [integerPart = '', fractionPart] = withSingleComma.split(',');
+  const cleanInteger = integerPart.replace(/^0+(?=\d)/u, '');
+  if (fractionPart === undefined) {
+    return cleanInteger;
+  }
+  return `${cleanInteger === '' ? '0' : cleanInteger},${fractionPart.slice(0, 4)}`;
+}
+
+/** Converts a wire decimal string ("7350" / "7350.0004") into the comma-display sanitized form. */
+export function fxRateWireToSanitized(wire: string): string {
+  return wire.replace('.', ',');
+}
+
+/** "7.350" / "7.350,0004" — grouped-thousands display for the manual exchange-rate field. */
+export function formatFxRateDisplay(sanitized: string): string {
+  const [integerPart = '', fractionPart] = sanitized.split(',');
+  const groupedInteger = integerPart === '' ? '' : formatPygMagnitude(integerPart);
+  return fractionPart === undefined
+    ? groupedInteger
+    : `${groupedInteger === '' ? '0' : groupedInteger},${fractionPart}`;
+}
+
+/** Converts a sanitized fx-rate display value into the decimal-string wire format. */
+export function fxRateToWireDecimal(sanitized: string): string {
+  return sanitized.replace(',', '.');
+}
+
 /** "386.500" / "45,90" — grouped thousands for display, matching GAS-01/GAS-02's big amount readout. */
 export function formatAmountDisplay(sanitized: string, currency: TransactionCurrency): string {
   if (currency === 'PYG') {

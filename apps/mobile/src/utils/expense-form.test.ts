@@ -4,12 +4,16 @@ import {
   amountToWireDecimal,
   favoritePaymentSourceIds,
   formatAmountDisplay,
+  formatFxRateDisplay,
+  fxRateToWireDecimal,
+  fxRateWireToSanitized,
   isValidLocalDateString,
   localDateToOccurredAt,
   mostRecentUsdRate,
   previewUsdToBasePyg,
   recentRootCategoryIds,
   sanitizeAmountInput,
+  sanitizeFxRateInput,
   sanitizePygAmountInput,
   sanitizeUsdAmountInput,
   shiftLocalDate,
@@ -72,6 +76,26 @@ describe('sanitizePygAmountInput / sanitizeUsdAmountInput', () => {
   it('dispatches by currency', () => {
     expect(sanitizeAmountInput('45,90', 'PYG')).toBe('4590');
     expect(sanitizeAmountInput('45,90', 'USD')).toBe('45,90');
+  });
+});
+
+describe('sanitizeFxRateInput / formatFxRateDisplay / fxRateToWireDecimal / fxRateWireToSanitized', () => {
+  it('allows a single comma and caps fraction digits at 4, unlike the PYG-amount sanitizer', () => {
+    expect(sanitizeFxRateInput('7350')).toBe('7350');
+    expect(sanitizeFxRateInput('7350,00045')).toBe('7350,0004');
+    expect(sanitizeFxRateInput('7,3,50')).toBe('7,350');
+    expect(sanitizeFxRateInput(',5')).toBe('0,5');
+  });
+
+  it('round-trips a fractional wire rate through display without losing the fraction', () => {
+    expect(fxRateWireToSanitized('7350.0004')).toBe('7350,0004');
+    expect(formatFxRateDisplay(fxRateWireToSanitized('7350.0004'))).toBe('7.350,0004');
+    expect(fxRateToWireDecimal(fxRateWireToSanitized('7350.0004'))).toBe('7350.0004');
+  });
+
+  it('groups thousands and preserves the fraction for display', () => {
+    expect(formatFxRateDisplay('7350')).toBe('7.350');
+    expect(formatFxRateDisplay('7350,5')).toBe('7.350,5');
   });
 });
 
