@@ -7,12 +7,16 @@ import {
   NIDO_TIME_ZONE,
   PAYMENT_SOURCE_TYPES,
   SUPPORTED_CURRENCY_CODES,
+  TRANSACTION_ORIGINS,
+  TRANSACTION_TYPES,
   type CategoryKind,
   type HouseholdMemberStatus,
   type HouseholdRole,
   type NidoTimeZone,
   type PaymentSourceType,
   type SupportedCurrencyCode,
+  type TransactionOrigin,
+  type TransactionType,
 } from '../src/index.js';
 
 describe('domain constants', () => {
@@ -49,5 +53,12 @@ describe('domain constants', () => {
     expectTypeOf<PaymentSourceType>().toEqualTypeOf<
       'BANK_ACCOUNT' | 'CASH' | 'CREDIT_CARD' | 'DIGITAL_WALLET' | 'OTHER'
     >();
+  });
+
+  it('defines the M3 transaction types and origins', () => {
+    expect(TRANSACTION_TYPES).toEqual(['EXPENSE', 'INCOME']);
+    expect(TRANSACTION_ORIGINS).toEqual(['MANUAL', 'IMPORT', 'RECURRING']);
+    expectTypeOf<TransactionType>().toEqualTypeOf<'EXPENSE' | 'INCOME'>();
+    expectTypeOf<TransactionOrigin>().toEqualTypeOf<'MANUAL' | 'IMPORT' | 'RECURRING'>();
   });
 });
