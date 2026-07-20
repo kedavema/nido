@@ -196,4 +196,91 @@ describe('Nido API client', () => {
     });
     expect(fetchImplementation.mock.calls[1]?.[1]).toMatchObject({ method: 'DELETE' });
   });
+
+  it('creates and updates transactions with decimal-string amounts, never numbers', async () => {
+    const householdId = '00000000-0000-4000-8000-000000000011';
+    const transactionId = '00000000-0000-4000-8000-000000000012';
+    const categoryId = '00000000-0000-4000-8000-000000000013';
+    const transaction = {
+      id: transactionId,
+      householdId,
+      type: 'EXPENSE',
+      amount: '45.90',
+      currency: 'USD',
+      fxRateToBase: '7350',
+      baseAmountPyg: '337365',
+      occurredAt: '2026-07-15T12:00:00.000Z',
+      localDate: '2026-07-15',
+      categoryId,
+      paymentSourceId: null,
+      description: 'Amazon',
+      notes: null,
+      origin: 'MANUAL',
+      createdBy: '00000000-0000-4000-8000-000000000001',
+      updatedBy: '00000000-0000-4000-8000-000000000001',
+      createdAt: '2026-07-15T12:00:00.000Z',
+      updatedAt: '2026-07-15T12:00:00.000Z',
+    } as const;
+    const fetchImplementation = vi
+      .fn<FetchImplementation>()
+      .mockResolvedValueOnce(jsonResponse({ transaction }))
+      .mockResolvedValueOnce(jsonResponse({ transaction }));
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    await expect(
+      client.createTransaction(householdId, {
+        type: 'EXPENSE',
+        amount: '45.90',
+        currency: 'USD',
+        fxRateToBase: '7350',
+        occurredAt: '2026-07-15T12:00:00.000Z',
+        categoryId,
+        description: 'Amazon',
+      }),
+    ).resolves.toEqual({ transaction });
+    await expect(
+      client.updateTransaction(householdId, transactionId, {
+        amount: '45.90',
+        currency: 'USD',
+        fxRateToBase: '7350',
+      }),
+    ).resolves.toEqual({ transaction });
+
+    expect(fetchImplementation.mock.calls[0]?.[0]).toBe(
+      `https://api.example.com/v1/households/${householdId}/transactions`,
+    );
+    const createBody = JSON.parse(fetchImplementation.mock.calls[0]?.[1].body as string) as unknown;
+    expect(createBody).toMatchObject({ amount: '45.90', fxRateToBase: '7350' });
+    expect(fetchImplementation.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' });
+
+    expect(fetchImplementation.mock.calls[1]?.[0]).toBe(
+      `https://api.example.com/v1/households/${householdId}/transactions/${transactionId}`,
+    );
+    expect(fetchImplementation.mock.calls[1]?.[1]).toMatchObject({ method: 'PATCH' });
+  });
+
+  it('rejects an invalid transaction payload client-side, without making a request', () => {
+    const fetchImplementation = vi.fn<FetchImplementation>();
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    expect(() =>
+      client.createTransaction('00000000-0000-4000-8000-000000000011', {
+        type: 'EXPENSE',
+        amount: '45.9', // PYG scale requires an integer, no decimals
+        currency: 'PYG',
+        occurredAt: '2026-07-15T12:00:00.000Z',
+        categoryId: '00000000-0000-4000-8000-000000000013',
+        description: 'Amazon',
+      }),
+    ).toThrow();
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
 });
