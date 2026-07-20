@@ -39,6 +39,28 @@ enum CategoryKind {
   @@map("category_kind")
 }
 
+enum TransactionType {
+  EXPENSE
+  INCOME
+
+  @@map("transaction_type")
+}
+
+enum TransactionCurrency {
+  PYG
+  USD
+
+  @@map("transaction_currency")
+}
+
+enum TransactionOrigin {
+  MANUAL
+  IMPORT
+  RECURRING
+
+  @@map("transaction_origin")
+}
+
 model User {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firebaseUid String   @unique(map: "users_firebase_uid_key") @map("firebase_uid")
@@ -52,6 +74,8 @@ model User {
   createdHouseholds   Household[]       @relation("HouseholdCreator")
   memberships         HouseholdMember[]
   ownedPaymentSources PaymentSource[]   @relation("PaymentSourceOwner")
+  createdTransactions Transaction[]     @relation("TransactionCreatedBy")
+  updatedTransactions Transaction[]     @relation("TransactionUpdatedBy")
 
   @@map("users")
 }
@@ -69,6 +93,7 @@ model Household {
   memberships    HouseholdMember[]
   paymentSources PaymentSource[]
   categories     Category[]
+  transactions   Transaction[]
 
   @@index([createdByUserId], map: "households_created_by_idx")
   @@map("households")
@@ -118,8 +143,9 @@ model PaymentSource {
   createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  owner     User?     @relation("PaymentSourceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  owner        User?         @relation("PaymentSourceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  transactions Transaction[]
 
   @@index([householdId, isActive], map: "payment_sources_household_id_is_active_idx")
   @@index([ownerUserId], map: "payment_sources_owner_user_id_idx")
@@ -139,9 +165,10 @@ model Category {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  children  Category[] @relation("CategoryHierarchy")
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children     Category[]    @relation("CategoryHierarchy")
+  transactions Transaction[]
 
   // DB-level rules added by hand in the migration (Prisma cannot express them):
   // - categories_active_sibling_name_key: partial unique index (household_id, kind, parent_id, name)
@@ -151,4 +178,50 @@ model Category {
   @@index([householdId, kind, isActive], map: "categories_household_id_kind_is_active_idx")
   @@index([parentId], map: "categories_parent_id_idx")
   @@map("categories")
+}
+
+model Transaction {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId        String              @map("household_id") @db.Uuid
+  type               TransactionType
+  amount             Decimal             @db.Decimal(18, 2)
+  currency           TransactionCurrency
+  fxRateToBase       Decimal?            @map("fx_rate_to_base") @db.Decimal(18, 4)
+  baseAmountPyg      Decimal             @map("base_amount_pyg") @db.Decimal(18, 0)
+  occurredAt         DateTime            @map("occurred_at") @db.Timestamptz(3)
+  localDate          DateTime            @map("local_date") @db.Date
+  categoryId         String              @map("category_id") @db.Uuid
+  paymentSourceId    String?             @map("payment_source_id") @db.Uuid
+  description        String
+  notes              String?
+  origin             TransactionOrigin   @default(MANUAL)
+  sourceOccurrenceId String?             @unique(map: "transactions_source_occurrence_id_key") @map("source_occurrence_id") @db.Uuid
+  externalReference  String?             @map("external_reference")
+  clientMutationId   String?             @map("client_mutation_id") @db.Uuid
+  createdBy          String              @map("created_by") @db.Uuid
+  updatedBy          String              @map("updated_by") @db.Uuid
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  household     Household      @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  category      Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  paymentSource PaymentSource? @relation(fields: [paymentSourceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  creator       User           @relation("TransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updater       User           @relation("TransactionUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // DB-level rules added by hand in the migration (Prisma cannot express them):
+  // - transactions_created_by_client_mutation_id_key: partial unique index
+  //   (created_by, client_mutation_id) WHERE client_mutation_id IS NOT NULL, so idempotent
+  //   client retries are deduplicated per author.
+  // - transactions_household_payment_source_external_reference_key: partial unique index
+  //   (household_id, payment_source_id, external_reference) WHERE external_reference IS NOT NULL,
+  //   so imports are not double-booked.
+  // - transactions_category_and_payment_source_trigger (function
+  //   transactions_enforce_category_and_payment_source): the referenced category must belong to
+  //   the same household and have a kind matching the transaction type; when payment_source_id is
+  //   set, the referenced payment source must belong to the same household.
+  @@index([householdId, localDate(sort: Desc)], map: "transactions_household_id_local_date_idx")
+  @@index([householdId, categoryId, localDate], map: "transactions_household_id_category_id_local_date_idx")
+  @@index([householdId, paymentSourceId, localDate], map: "transactions_household_id_payment_source_id_local_date_idx")
+  @@map("transactions")
 }
