@@ -164,14 +164,15 @@ export const ListTransactionsResponseSchema = z.strictObject({
   transactions: z.array(TransactionSchema),
 });
 
-// Filters per docs/system-design.md §12: date range, type, category, payment source, currency,
-// and free-text search.
+// Filters per docs/system-design.md §12: date range, type, category, payment source, user,
+// currency, and free-text search.
 export const ListTransactionsQuerySchema = z.strictObject({
   from: LocalDateSchema.optional(),
   to: LocalDateSchema.optional(),
   type: TransactionTypeSchema.optional(),
   categoryId: UuidSchema.optional(),
   paymentSourceId: UuidSchema.optional(),
+  createdBy: UuidSchema.optional(),
   currency: TransactionCurrencySchema.optional(),
   search: z.string().trim().min(1).max(200).optional(),
 });
