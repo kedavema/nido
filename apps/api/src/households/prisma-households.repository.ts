@@ -8,6 +8,7 @@ import {
 } from '@nido/domain-types';
 
 import { PrismaService } from '../database/prisma.service.js';
+import { INITIAL_CATEGORIES } from '../categories/initial-categories.js';
 import type {
   AcceptInviteResult,
   HouseholdAccess,
@@ -68,6 +69,34 @@ export class PrismaHouseholdsRepository implements HouseholdsRepository {
           status: 'ACTIVE',
         },
       });
+
+      for (const [rootIndex, category] of INITIAL_CATEGORIES.entries()) {
+        const root = await transaction.category.create({
+          data: {
+            householdId: household.id,
+            kind: category.kind,
+            name: category.name,
+            icon: category.icon,
+            color: category.color,
+            sortOrder: rootIndex,
+          },
+          select: { id: true },
+        });
+
+        if (category.children.length > 0) {
+          await transaction.category.createMany({
+            data: category.children.map((name, childIndex) => ({
+              householdId: household.id,
+              kind: category.kind,
+              parentId: root.id,
+              name,
+              icon: category.icon,
+              color: category.color,
+              sortOrder: childIndex,
+            })),
+          });
+        }
+      }
 
       return {
         id: household.id,

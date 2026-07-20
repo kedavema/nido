@@ -153,6 +153,27 @@ describe.skipIf(!hasTestDatabase)('M1 API with PostgreSQL', () => {
     );
     expect(rows.rows).toEqual([{ role: 'OWNER', status: 'ACTIVE', member_count: '1' }]);
 
+    const categories = await pool.query<{
+      kind: string;
+      name: string;
+      parent_name: string | null;
+    }>(
+      `SELECT category.kind::text, category.name, parent.name AS parent_name
+         FROM categories category
+         LEFT JOIN categories parent ON parent.id = category.parent_id
+        WHERE category.household_id = $1
+        ORDER BY category.kind, category.sort_order, category.name`,
+      [household.household.id],
+    );
+    expect(categories.rowCount).toBe(35);
+    expect(categories.rows).toEqual(
+      expect.arrayContaining([
+        { kind: 'EXPENSE', name: 'Housing', parent_name: null },
+        { kind: 'EXPENSE', name: 'Rent', parent_name: 'Housing' },
+        { kind: 'INCOME', name: 'Salary', parent_name: null },
+      ]),
+    );
+
     const meResponse = await request('/v1/me', { token: 'owner' });
     expect(meResponse.status).toBe(200);
     const me = GetMeResponseSchema.parse(await meResponse.json());
