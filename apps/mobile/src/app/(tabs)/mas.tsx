@@ -1,6 +1,6 @@
 import type { CreateHouseholdInviteResponse, HouseholdMember } from '@nido/contracts';
 import { useCallback, useRef, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
@@ -139,6 +139,18 @@ export default function MasScreen() {
           <Text style={m1TextStyles.secondary}>Moneda base</Text>
           <Text style={m1TextStyles.body}>{household.baseCurrency}</Text>
         </View>
+      </Card>
+
+      <Card>
+        <Text style={m1TextStyles.sectionTitle}>Configuración financiera</Text>
+        <Text style={m1TextStyles.secondary}>Organizá las categorías de {household.name}.</Text>
+        <ActionButton
+          label="Categorías"
+          onPress={() => {
+            router.push('/categories');
+          }}
+          variant="secondary"
+        />
       </Card>
 
       <Card>
