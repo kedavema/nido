@@ -41,7 +41,14 @@ interface SessionContextValue {
   ) => Promise<CreateHouseholdInviteResponse>;
   readonly catalog: Pick<
     NidoApiClient,
-    'listCategories' | 'createCategory' | 'updateCategory' | 'deleteCategory'
+    | 'listCategories'
+    | 'createCategory'
+    | 'updateCategory'
+    | 'deleteCategory'
+    | 'listPaymentSources'
+    | 'createPaymentSource'
+    | 'updatePaymentSource'
+    | 'deletePaymentSource'
   >;
 }
 
@@ -397,6 +404,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
       updateCategory: (householdId, categoryId, input) =>
         api().updateCategory(householdId, categoryId, input),
       deleteCategory: (householdId, categoryId) => api().deleteCategory(householdId, categoryId),
+      listPaymentSources: (householdId) => api().listPaymentSources(householdId),
+      createPaymentSource: (householdId, input) => api().createPaymentSource(householdId, input),
+      updatePaymentSource: (householdId, paymentSourceId, input) =>
+        api().updatePaymentSource(householdId, paymentSourceId, input),
+      deletePaymentSource: (householdId, paymentSourceId) =>
+        api().deletePaymentSource(householdId, paymentSourceId),
     };
   }, []);
 

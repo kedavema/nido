@@ -6,22 +6,32 @@ import {
   CreateHouseholdInviteResponseSchema,
   CreateHouseholdRequestSchema,
   CreateHouseholdResponseSchema,
+  CreatePaymentSourceRequestSchema,
+  CreatePaymentSourceResponseSchema,
   GetHouseholdMembersResponseSchema,
   GetMeResponseSchema,
   InviteTokenSchema,
   ListCategoriesResponseSchema,
+  ListPaymentSourcesResponseSchema,
   UpdateCategoryRequestSchema,
   UpdateCategoryResponseSchema,
+  UpdatePaymentSourceRequestSchema,
+  UpdatePaymentSourceResponseSchema,
   type AcceptHouseholdInviteResponse,
   type CreateCategoryRequest,
   type CreateCategoryResponse,
   type CreateHouseholdInviteResponse,
   type CreateHouseholdResponse,
+  type CreatePaymentSourceRequest,
+  type CreatePaymentSourceResponse,
   type GetHouseholdMembersResponse,
   type GetMeResponse,
   type ListCategoriesResponse,
+  type ListPaymentSourcesResponse,
   type UpdateCategoryRequest,
   type UpdateCategoryResponse,
+  type UpdatePaymentSourceRequest,
+  type UpdatePaymentSourceResponse,
 } from '@nido/contracts';
 import { z } from 'zod';
 
@@ -143,6 +153,17 @@ export interface NidoApiClient {
     input: UpdateCategoryRequest,
   ): Promise<UpdateCategoryResponse>;
   deleteCategory(householdId: string, categoryId: string): Promise<void>;
+  listPaymentSources(householdId: string): Promise<ListPaymentSourcesResponse>;
+  createPaymentSource(
+    householdId: string,
+    input: CreatePaymentSourceRequest,
+  ): Promise<CreatePaymentSourceResponse>;
+  updatePaymentSource(
+    householdId: string,
+    paymentSourceId: string,
+    input: UpdatePaymentSourceRequest,
+  ): Promise<UpdatePaymentSourceResponse>;
+  deletePaymentSource(householdId: string, paymentSourceId: string): Promise<void>;
 }
 
 export function createNidoApiClient({
@@ -275,6 +296,35 @@ export function createNidoApiClient({
     deleteCategory(householdId, categoryId) {
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/categories/${encodeURIComponent(categoryId)}`,
+        z.void(),
+        { method: 'DELETE' },
+      );
+    },
+    listPaymentSources(householdId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/payment-sources`,
+        ListPaymentSourcesResponseSchema,
+      );
+    },
+    createPaymentSource(householdId, input) {
+      const body = CreatePaymentSourceRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/payment-sources`,
+        CreatePaymentSourceResponseSchema,
+        { method: 'POST', body },
+      );
+    },
+    updatePaymentSource(householdId, paymentSourceId, input) {
+      const body = UpdatePaymentSourceRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/payment-sources/${encodeURIComponent(paymentSourceId)}`,
+        UpdatePaymentSourceResponseSchema,
+        { method: 'PATCH', body },
+      );
+    },
+    deletePaymentSource(householdId, paymentSourceId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/payment-sources/${encodeURIComponent(paymentSourceId)}`,
         z.void(),
         { method: 'DELETE' },
       );

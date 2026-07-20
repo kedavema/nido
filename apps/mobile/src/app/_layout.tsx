@@ -89,6 +89,7 @@ function SessionStack() {
       <Stack.Protected guard={state.kind === 'authenticated'}>
         <Stack.Screen name="invitation" />
         <Stack.Screen name="categories" />
+        <Stack.Screen name="payment-sources" />
       </Stack.Protected>
     </Stack>
   );
