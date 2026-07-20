@@ -77,16 +77,23 @@ describe.skipIf(!hasTestDatabase)('Payment sources API with PostgreSQL', () => {
     await app.listen(0, '127.0.0.1');
     baseUrl = await app.getUrl();
     pool = new Pool({ connectionString: testDatabaseUrl });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payment_source_test_references (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        payment_source_id uuid NOT NULL REFERENCES payment_sources(id) ON DELETE RESTRICT
+      )
+    `);
   });
 
   beforeEach(async () => {
     await pool.query(
-      'TRUNCATE TABLE categories, payment_sources, household_invites, household_members, households, users CASCADE',
+      'TRUNCATE TABLE payment_source_test_references, categories, payment_sources, household_invites, household_members, households, users CASCADE',
     );
   });
 
   afterAll(async () => {
     try {
+      await pool.query('DROP TABLE IF EXISTS payment_source_test_references');
       await pool.end();
       await app.close();
     } finally {
@@ -278,6 +285,29 @@ describe.skipIf(!hasTestDatabase)('Payment sources API with PostgreSQL', () => {
       householdId,
     ]);
     expect(stored.rows).toEqual([]);
+  });
+
+  it('archives on DELETE when another row references the payment source', async () => {
+    const householdId = await createHousehold('owner');
+    const created = await createPaymentSource('owner', householdId, {
+      name: 'Ueno TC',
+      type: 'CREDIT_CARD',
+    });
+    await pool.query('INSERT INTO payment_source_test_references (payment_source_id) VALUES ($1)', [
+      created.paymentSource.id,
+    ]);
+
+    const response = await request(
+      `/v1/households/${householdId}/payment-sources/${created.paymentSource.id}`,
+      { method: 'DELETE', token: 'owner' },
+    );
+
+    expect(response.status).toBe(204);
+    const stored = await pool.query<{ is_active: boolean }>(
+      'SELECT is_active FROM payment_sources WHERE id = $1',
+      [created.paymentSource.id],
+    );
+    expect(stored.rows).toEqual([{ is_active: false }]);
   });
 
   it('translates an owner foreign-key race into the owner-missing domain error', async () => {
