@@ -8,11 +8,14 @@ import {
   CreateHouseholdResponseSchema,
   CreatePaymentSourceRequestSchema,
   CreatePaymentSourceResponseSchema,
+  CreateTransactionResponseSchema,
   GetHouseholdMembersResponseSchema,
   GetMeResponseSchema,
   InviteTokenSchema,
   ListCategoriesResponseSchema,
   ListPaymentSourcesResponseSchema,
+  ListTransactionsQuerySchema,
+  ListTransactionsResponseSchema,
   UpdateCategoryRequestSchema,
   UpdateCategoryResponseSchema,
   UpdatePaymentSourceRequestSchema,
@@ -24,10 +27,13 @@ import {
   type CreateHouseholdResponse,
   type CreatePaymentSourceRequest,
   type CreatePaymentSourceResponse,
+  type CreateTransactionResponse,
   type GetHouseholdMembersResponse,
   type GetMeResponse,
   type ListCategoriesResponse,
   type ListPaymentSourcesResponse,
+  type ListTransactionsQuery,
+  type ListTransactionsResponse,
   type UpdateCategoryRequest,
   type UpdateCategoryResponse,
   type UpdatePaymentSourceRequest,
@@ -118,6 +124,19 @@ function messageForStatus(status: number): string {
   }
 }
 
+function buildQueryString(params: Readonly<Record<string, string | undefined>>): string {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      searchParams.set(key, value);
+    }
+  }
+
+  const query = searchParams.toString();
+  return query.length === 0 ? '' : `?${query}`;
+}
+
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
 
@@ -164,6 +183,12 @@ export interface NidoApiClient {
     input: UpdatePaymentSourceRequest,
   ): Promise<UpdatePaymentSourceResponse>;
   deletePaymentSource(householdId: string, paymentSourceId: string): Promise<void>;
+  listTransactions(
+    householdId: string,
+    query?: ListTransactionsQuery,
+  ): Promise<ListTransactionsResponse>;
+  getTransaction(householdId: string, transactionId: string): Promise<CreateTransactionResponse>;
+  deleteTransaction(householdId: string, transactionId: string): Promise<void>;
 }
 
 export function createNidoApiClient({
@@ -325,6 +350,27 @@ export function createNidoApiClient({
     deletePaymentSource(householdId, paymentSourceId) {
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/payment-sources/${encodeURIComponent(paymentSourceId)}`,
+        z.void(),
+        { method: 'DELETE' },
+      );
+    },
+    listTransactions(householdId, query = {}) {
+      const validQuery = ListTransactionsQuerySchema.parse(query);
+      const queryString = buildQueryString(validQuery);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/transactions${queryString}`,
+        ListTransactionsResponseSchema,
+      );
+    },
+    getTransaction(householdId, transactionId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/transactions/${encodeURIComponent(transactionId)}`,
+        CreateTransactionResponseSchema,
+      );
+    },
+    deleteTransaction(householdId, transactionId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/transactions/${encodeURIComponent(transactionId)}`,
         z.void(),
         { method: 'DELETE' },
       );
