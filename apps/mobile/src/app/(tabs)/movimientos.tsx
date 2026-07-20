@@ -116,32 +116,43 @@ export default function MovimientosScreen() {
     queueMicrotask(() => void loadCatalog());
   }, [loadCatalog]);
 
-  const loadTransactions = useCallback(async () => {
-    if (household === null) return;
-    setTransactionsState({ kind: 'loading' });
-    const { from, to } = monthLocalDateRange(month);
-    const query: ListTransactionsQuery = {
-      from,
-      to,
-      ...(filters.type === undefined ? {} : { type: filters.type }),
-      ...(filters.categoryId === undefined ? {} : { categoryId: filters.categoryId }),
-      ...(filters.paymentSourceId === undefined
-        ? {}
-        : { paymentSourceId: filters.paymentSourceId }),
-      ...(filters.currency === undefined ? {} : { currency: filters.currency }),
-      ...(debouncedSearch === '' ? {} : { search: debouncedSearch }),
-    };
-    try {
-      const { transactions } = await catalog.listTransactions(household.id, query);
-      setTransactionsState({ kind: 'loaded', transactions });
-    } catch (error) {
-      setTransactionsState({ kind: 'error', message: messageForActionError(error) });
-    }
-  }, [catalog, household, month, filters, debouncedSearch]);
+  const loadTransactions = useCallback(
+    async (isActive: () => boolean) => {
+      if (household === null) return;
+      setTransactionsState({ kind: 'loading' });
+      const { from, to } = monthLocalDateRange(month);
+      const query: ListTransactionsQuery = {
+        from,
+        to,
+        ...(filters.type === undefined ? {} : { type: filters.type }),
+        ...(filters.categoryId === undefined ? {} : { categoryId: filters.categoryId }),
+        ...(filters.paymentSourceId === undefined
+          ? {}
+          : { paymentSourceId: filters.paymentSourceId }),
+        ...(filters.currency === undefined ? {} : { currency: filters.currency }),
+        ...(debouncedSearch === '' ? {} : { search: debouncedSearch }),
+      };
+      try {
+        const { transactions } = await catalog.listTransactions(household.id, query);
+        if (isActive()) {
+          setTransactionsState({ kind: 'loaded', transactions });
+        }
+      } catch (error) {
+        if (isActive()) {
+          setTransactionsState({ kind: 'error', message: messageForActionError(error) });
+        }
+      }
+    },
+    [catalog, household, month, filters, debouncedSearch],
+  );
 
   useFocusEffect(
     useCallback(() => {
-      void loadTransactions();
+      let active = true;
+      void loadTransactions(() => active);
+      return () => {
+        active = false;
+      };
     }, [loadTransactions]),
   );
 
@@ -313,7 +324,7 @@ export default function MovimientosScreen() {
             <InlineNotice tone="error">{transactionsState.message}</InlineNotice>
             <ActionButton
               label="Reintentar"
-              onPress={() => void loadTransactions()}
+              onPress={() => void loadTransactions(() => true)}
               variant="secondary"
             />
           </>
