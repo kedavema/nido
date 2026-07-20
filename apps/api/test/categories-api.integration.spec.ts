@@ -124,7 +124,7 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
   it('creates root and child categories and lists them, archived included', async () => {
     const householdId = await createHousehold('owner');
 
-    const root = await createCategory('owner', householdId, { name: 'Food' });
+    const root = await createCategory('owner', householdId, { name: 'Test Food' });
     const child = await createCategory('owner', householdId, {
       name: 'Supermarket',
       parentId: root.category.id,
@@ -142,15 +142,20 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
     });
     expect(listResponse.status).toBe(200);
     const list = ListCategoriesResponseSchema.parse(await listResponse.json());
-    expect(list.categories).toHaveLength(2);
-    expect(list.categories.map((category) => category.isActive).sort()).toEqual([false, true]);
+    // The household also carries the atomically seeded default categories
+    // (ADR 0006); scope the assertion to the two categories this test made.
+    const created = list.categories.filter((category) =>
+      [root.category.id, child.category.id].includes(category.id),
+    );
+    expect(created).toHaveLength(2);
+    expect(created.map((category) => category.isActive).sort()).toEqual([false, true]);
   });
 
   it('lets an active MEMBER manage categories too', async () => {
     const householdId = await createHousehold('owner');
     await addActiveMember(householdId, identities.member);
 
-    const created = await createCategory('member', householdId, { name: 'Transport' });
+    const created = await createCategory('member', householdId, { name: 'Test Transport' });
     const patchResponse = await request(
       `/v1/households/${householdId}/categories/${created.category.id}`,
       { method: 'PATCH', token: 'member', body: { name: 'Mobility' } },
@@ -162,12 +167,12 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
 
   it('rejects duplicate active sibling names with 409 and allows reusing archived names', async () => {
     const householdId = await createHousehold('owner');
-    const first = await createCategory('owner', householdId, { name: 'Food' });
+    const first = await createCategory('owner', householdId, { name: 'Test Food' });
 
     const duplicateResponse = await request(`/v1/households/${householdId}/categories`, {
       method: 'POST',
       token: 'owner',
-      body: { kind: 'EXPENSE', name: 'Food', icon: 'cart', color: '#AABBCC' },
+      body: { kind: 'EXPENSE', name: 'Test Food', icon: 'cart', color: '#AABBCC' },
     });
     expect(duplicateResponse.status).toBe(409);
 
@@ -179,7 +184,7 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
     const reuseResponse = await request(`/v1/households/${householdId}/categories`, {
       method: 'POST',
       token: 'owner',
-      body: { kind: 'EXPENSE', name: 'Food', icon: 'cart', color: '#AABBCC' },
+      body: { kind: 'EXPENSE', name: 'Test Food', icon: 'cart', color: '#AABBCC' },
     });
     expect(reuseResponse.status).toBe(201);
   });
@@ -187,13 +192,16 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
   it('rejects invalid parents with 400: third level, wrong kind, other household', async () => {
     const householdId = await createHousehold('owner');
     const otherHouseholdId = await createHousehold('outsider');
-    const root = await createCategory('owner', householdId, { name: 'Food' });
+    const root = await createCategory('owner', householdId, { name: 'Test Food' });
     const child = await createCategory('owner', householdId, {
       name: 'Supermarket',
       parentId: root.category.id,
     });
-    const income = await createCategory('owner', householdId, { name: 'Salary', kind: 'INCOME' });
-    const foreignRoot = await createCategory('outsider', otherHouseholdId, { name: 'Food' });
+    const income = await createCategory('owner', householdId, {
+      name: 'Test Salary',
+      kind: 'INCOME',
+    });
+    const foreignRoot = await createCategory('outsider', otherHouseholdId, { name: 'Test Food' });
 
     for (const parentId of [child.category.id, income.category.id, foreignRoot.category.id]) {
       const response = await request(`/v1/households/${householdId}/categories`, {
@@ -207,12 +215,12 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
 
   it('rejects reparenting a category that has subcategories with 400', async () => {
     const householdId = await createHousehold('owner');
-    const root = await createCategory('owner', householdId, { name: 'Food' });
+    const root = await createCategory('owner', householdId, { name: 'Test Food' });
     await createCategory('owner', householdId, {
       name: 'Supermarket',
       parentId: root.category.id,
     });
-    const otherRoot = await createCategory('owner', householdId, { name: 'Transport' });
+    const otherRoot = await createCategory('owner', householdId, { name: 'Test Transport' });
 
     const response = await request(`/v1/households/${householdId}/categories/${root.category.id}`, {
       method: 'PATCH',
@@ -225,7 +233,7 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
   it('conceals categories of other households from members with 404', async () => {
     const householdId = await createHousehold('owner');
     const otherHouseholdId = await createHousehold('outsider');
-    const foreign = await createCategory('outsider', otherHouseholdId, { name: 'Food' });
+    const foreign = await createCategory('outsider', otherHouseholdId, { name: 'Test Food' });
 
     const patchResponse = await request(
       `/v1/households/${householdId}/categories/${foreign.category.id}`,
@@ -242,7 +250,7 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
 
   it('archives on DELETE when references exist and hard-deletes otherwise', async () => {
     const householdId = await createHousehold('owner');
-    const root = await createCategory('owner', householdId, { name: 'Food' });
+    const root = await createCategory('owner', householdId, { name: 'Test Food' });
     const child = await createCategory('owner', householdId, {
       name: 'Supermarket',
       parentId: root.category.id,
@@ -260,16 +268,18 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
     );
     expect(deleteResponse.status).toBe(204);
 
+    // The household also carries the atomically seeded default categories
+    // (ADR 0006); scope the query to the two rows this test made.
     const stored = await pool.query<{ id: string; is_active: boolean }>(
-      'SELECT id, is_active FROM categories WHERE household_id = $1',
-      [householdId],
+      'SELECT id, is_active FROM categories WHERE household_id = $1 AND id = ANY($2)',
+      [householdId, [root.category.id, child.category.id]],
     );
     expect(stored.rows).toEqual([{ id: root.category.id, is_active: false }]);
   });
 
   it('translates database races that bypass the service pre-checks into domain errors', async () => {
     const householdId = await createHousehold('owner');
-    const root = await createCategory('owner', householdId, { name: 'Food' });
+    const root = await createCategory('owner', householdId, { name: 'Test Food' });
     const child = await createCategory('owner', householdId, {
       name: 'Supermarket',
       parentId: root.category.id,
@@ -282,7 +292,7 @@ describe.skipIf(!hasTestDatabase)('Categories API with PostgreSQL', () => {
         householdId,
         kind: 'EXPENSE',
         parentId: null,
-        name: 'Food',
+        name: 'Test Food',
         icon: 'wallet',
         color: '#AABBCC',
         sortOrder: undefined,
