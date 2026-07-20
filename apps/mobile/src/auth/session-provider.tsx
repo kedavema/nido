@@ -39,6 +39,10 @@ interface SessionContextValue {
     householdId: string,
     email: string,
   ) => Promise<CreateHouseholdInviteResponse>;
+  readonly catalog: Pick<
+    NidoApiClient,
+    'listCategories' | 'createCategory' | 'updateCategory' | 'deleteCategory'
+  >;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -379,6 +383,23 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return api.createHouseholdInvite(householdId, email);
   }, []);
 
+  const catalog = useMemo<SessionContextValue['catalog']>(() => {
+    const api = (): NidoApiClient => {
+      if (apiRef.current === null) {
+        throw new ApiError('Necesitás iniciar sesión para continuar.', 401, 'authentication');
+      }
+      return apiRef.current;
+    };
+
+    return {
+      listCategories: (householdId) => api().listCategories(householdId),
+      createCategory: (householdId, input) => api().createCategory(householdId, input),
+      updateCategory: (householdId, categoryId, input) =>
+        api().updateCategory(householdId, categoryId, input),
+      deleteCategory: (householdId, categoryId) => api().deleteCategory(householdId, categoryId),
+    };
+  }, []);
+
   const value = useMemo<SessionContextValue>(
     () => ({
       state,
@@ -389,9 +410,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
       acceptInvitation,
       getMembers,
       createInvitation,
+      catalog,
     }),
     [
       acceptInvitation,
+      catalog,
       createHousehold,
       createInvitation,
       getMembers,

@@ -159,4 +159,41 @@ describe('Nido API client', () => {
     await assertion;
     expect(fetchImplementation.mock.calls[0]?.[1].signal?.aborted).toBe(true);
   });
+
+  it('uses PATCH and accepts empty DELETE responses for catalog mutations', async () => {
+    const categoryId = '00000000-0000-4000-8000-000000000010';
+    const householdId = '00000000-0000-4000-8000-000000000011';
+    const category = {
+      id: categoryId,
+      householdId,
+      kind: 'EXPENSE',
+      parentId: null,
+      name: 'Food',
+      icon: 'restaurant',
+      color: '#E67E22',
+      sortOrder: 0,
+      isActive: false,
+      createdAt: '2026-07-16T12:00:00.000Z',
+      updatedAt: '2026-07-16T12:00:00.000Z',
+    } as const;
+    const fetchImplementation = vi
+      .fn<FetchImplementation>()
+      .mockResolvedValueOnce(jsonResponse({ category }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    await expect(
+      client.updateCategory(householdId, categoryId, { isActive: false }),
+    ).resolves.toEqual({ category });
+    await expect(client.deleteCategory(householdId, categoryId)).resolves.toBeUndefined();
+    expect(fetchImplementation.mock.calls[0]?.[1]).toMatchObject({
+      method: 'PATCH',
+      body: JSON.stringify({ isActive: false }),
+    });
+    expect(fetchImplementation.mock.calls[1]?.[1]).toMatchObject({ method: 'DELETE' });
+  });
 });

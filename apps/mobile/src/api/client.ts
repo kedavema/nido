@@ -1,5 +1,7 @@
 import {
   AcceptHouseholdInviteResponseSchema,
+  CreateCategoryRequestSchema,
+  CreateCategoryResponseSchema,
   CreateHouseholdInviteRequestSchema,
   CreateHouseholdInviteResponseSchema,
   CreateHouseholdRequestSchema,
@@ -7,13 +9,21 @@ import {
   GetHouseholdMembersResponseSchema,
   GetMeResponseSchema,
   InviteTokenSchema,
+  ListCategoriesResponseSchema,
+  UpdateCategoryRequestSchema,
+  UpdateCategoryResponseSchema,
   type AcceptHouseholdInviteResponse,
+  type CreateCategoryRequest,
+  type CreateCategoryResponse,
   type CreateHouseholdInviteResponse,
   type CreateHouseholdResponse,
   type GetHouseholdMembersResponse,
   type GetMeResponse,
+  type ListCategoriesResponse,
+  type UpdateCategoryRequest,
+  type UpdateCategoryResponse,
 } from '@nido/contracts';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 export type GetIdToken = () => Promise<string | null>;
 export type FetchImplementation = (input: string, init: RequestInit) => Promise<Response>;
@@ -122,6 +132,17 @@ export interface NidoApiClient {
   getHouseholdMembers(householdId: string): Promise<GetHouseholdMembersResponse>;
   createHouseholdInvite(householdId: string, email: string): Promise<CreateHouseholdInviteResponse>;
   acceptHouseholdInvite(token: string): Promise<AcceptHouseholdInviteResponse>;
+  listCategories(householdId: string): Promise<ListCategoriesResponse>;
+  createCategory(
+    householdId: string,
+    input: CreateCategoryRequest,
+  ): Promise<CreateCategoryResponse>;
+  updateCategory(
+    householdId: string,
+    categoryId: string,
+    input: UpdateCategoryRequest,
+  ): Promise<UpdateCategoryResponse>;
+  deleteCategory(householdId: string, categoryId: string): Promise<void>;
 }
 
 export function createNidoApiClient({
@@ -133,7 +154,10 @@ export function createNidoApiClient({
   async function request<T>(
     path: string,
     schema: z.ZodType<T>,
-    body?: Readonly<Record<string, unknown>>,
+    options: {
+      readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+      readonly body?: Readonly<Record<string, unknown>>;
+    } = {},
   ): Promise<T> {
     return withRequestDeadline(requestTimeoutMilliseconds, async (signal) => {
       let token: string | null;
@@ -151,14 +175,14 @@ export function createNidoApiClient({
 
       try {
         response = await fetchImplementation(`${baseUrl}${path}`, {
-          method: body === undefined ? 'GET' : 'POST',
+          method: options.method ?? 'GET',
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
-            ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+            ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
           },
           signal,
-          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
         });
       } catch {
         throw networkError();
@@ -166,6 +190,10 @@ export function createNidoApiClient({
 
       if (!response.ok) {
         throw new ApiError(messageForStatus(response.status), response.status, 'response');
+      }
+
+      if (response.status === 204) {
+        return undefined as T;
       }
 
       let payload: unknown;
@@ -198,7 +226,7 @@ export function createNidoApiClient({
     },
     createHousehold(name) {
       const body = CreateHouseholdRequestSchema.parse({ name });
-      return request('/v1/households', CreateHouseholdResponseSchema, body);
+      return request('/v1/households', CreateHouseholdResponseSchema, { method: 'POST', body });
     },
     getHouseholdMembers(householdId) {
       return request(
@@ -211,7 +239,7 @@ export function createNidoApiClient({
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/invites`,
         CreateHouseholdInviteResponseSchema,
-        body,
+        { method: 'POST', body },
       );
     },
     acceptHouseholdInvite(token) {
@@ -219,7 +247,36 @@ export function createNidoApiClient({
       return request(
         `/v1/invites/${encodeURIComponent(validToken)}/accept`,
         AcceptHouseholdInviteResponseSchema,
-        {},
+        { method: 'POST', body: {} },
+      );
+    },
+    listCategories(householdId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/categories`,
+        ListCategoriesResponseSchema,
+      );
+    },
+    createCategory(householdId, input) {
+      const body = CreateCategoryRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/categories`,
+        CreateCategoryResponseSchema,
+        { method: 'POST', body },
+      );
+    },
+    updateCategory(householdId, categoryId, input) {
+      const body = UpdateCategoryRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/categories/${encodeURIComponent(categoryId)}`,
+        UpdateCategoryResponseSchema,
+        { method: 'PATCH', body },
+      );
+    },
+    deleteCategory(householdId, categoryId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/categories/${encodeURIComponent(categoryId)}`,
+        z.void(),
+        { method: 'DELETE' },
       );
     },
   };
