@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Param,
   Patch,
@@ -50,7 +52,16 @@ export class TransactionsController {
   createTransaction(
     @CurrentHouseholdAccess() access: HouseholdAccess,
     @Body(new ZodValidationPipe(CreateTransactionRequestSchema)) input: CreateTransactionRequest,
+    @Headers('Idempotency-Key') idempotencyKey: string | undefined,
   ): Promise<CreateTransactionResponse> {
+    // ADR 0003: when the client opts into idempotency (sends clientMutationId), the
+    // Idempotency-Key header must be present and match it before any DB work happens. When
+    // clientMutationId is absent (older/back-compat clients), the header is ignored entirely.
+    if (input.clientMutationId !== undefined && input.clientMutationId !== idempotencyKey) {
+      throw new BadRequestException(
+        'Idempotency-Key header is required and must match clientMutationId',
+      );
+    }
     return this.transactions.createTransaction(access, input);
   }
 

@@ -18,10 +18,29 @@ export const TRANSACTIONS_REPOSITORY = Symbol('TRANSACTIONS_REPOSITORY');
 export class TransactionCategoryInvalidError extends Error {}
 export class TransactionPaymentSourceInvalidError extends Error {}
 
+/**
+ * The composite partial unique index `transactions_created_by_household_id_client_mutation_id_key`
+ * (created_by, household_id, client_mutation_id) rejected the insert (ADR 0003): the same actor
+ * already claimed this idempotency key for this household. The service catches this to re-fetch
+ * the existing row and decide between returning it as a replay or raising a 409 for a
+ * hash mismatch.
+ */
+export class TransactionIdempotencyKeyCollisionError extends Error {}
+
 export interface TransactionsRepository {
   list(householdId: string, filter: ListTransactionsFilter): Promise<readonly TransactionRecord[]>;
   findInHousehold(householdId: string, transactionId: string): Promise<TransactionRecord | null>;
   create(input: CreateTransactionRecordInput): Promise<TransactionRecord>;
+  /**
+   * Looks up a transaction by the ADR 0003 idempotency tuple `(created_by, household_id,
+   * client_mutation_id)`, used to re-fetch and compare hashes after a
+   * `TransactionIdempotencyKeyCollisionError`.
+   */
+  findByClientMutationId(
+    createdBy: string,
+    householdId: string,
+    clientMutationId: string,
+  ): Promise<TransactionRecord | null>;
   update(
     householdId: string,
     transactionId: string,

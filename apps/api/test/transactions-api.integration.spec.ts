@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import {
@@ -340,6 +342,211 @@ describe.skipIf(!hasTestDatabase)('Transactions API with PostgreSQL', () => {
     expect(response.status).toBe(400);
   });
 
+  // ADR 0003 idempotency protocol — "Verificación obligatoria en M4" checklist, against real
+  // PostgreSQL so the composite unique index and concurrency actually decide the outcome.
+  describe('POST /v1/households/:householdId/transactions idempotency (ADR 0003)', () => {
+    it('sequential resend with the same key and payload creates exactly one row, and the resend replays the same transaction', async () => {
+      const householdId = await createHousehold('owner');
+      const category = await createCategory('owner', householdId, { name: 'Comida' });
+      const key = randomUUID();
+      const body = {
+        ...validTransactionBody({ categoryId: category.category.id }),
+        clientMutationId: key,
+      };
+
+      const first = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body,
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(first.status).toBe(201);
+      const firstParsed = CreateTransactionResponseSchema.parse(await first.json());
+
+      const second = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body,
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(second.status).toBe(201);
+      const secondParsed = CreateTransactionResponseSchema.parse(await second.json());
+
+      expect(secondParsed.transaction).toEqual(firstParsed.transaction);
+
+      const stored = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+        householdId,
+      ]);
+      expect(stored.rows).toHaveLength(1);
+    });
+
+    it('concurrent resend with the same key and payload creates exactly one row; the losing request replays the winner instead of erroring', async () => {
+      const householdId = await createHousehold('owner');
+      const category = await createCategory('owner', householdId, { name: 'Comida' });
+      const key = randomUUID();
+      const body = {
+        ...validTransactionBody({ categoryId: category.category.id }),
+        clientMutationId: key,
+      };
+      const send = (): Promise<Response> =>
+        request(`/v1/households/${householdId}/transactions`, {
+          method: 'POST',
+          token: 'owner',
+          body,
+          headers: { 'Idempotency-Key': key },
+        });
+
+      const [responseA, responseB] = await Promise.all([send(), send()]);
+
+      expect(responseA.status).toBe(201);
+      expect(responseB.status).toBe(201);
+      const parsedA = CreateTransactionResponseSchema.parse(await responseA.json());
+      const parsedB = CreateTransactionResponseSchema.parse(await responseB.json());
+      expect(parsedA.transaction).toEqual(parsedB.transaction);
+
+      const stored = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+        householdId,
+      ]);
+      expect(stored.rows).toHaveLength(1);
+    });
+
+    it('responds 409 when the same key is reused with a different payload, without creating a second row', async () => {
+      const householdId = await createHousehold('owner');
+      const category = await createCategory('owner', householdId, { name: 'Comida' });
+      const key = randomUUID();
+      const firstBody = {
+        ...validTransactionBody({ categoryId: category.category.id }),
+        clientMutationId: key,
+      };
+
+      const first = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body: firstBody,
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(first.status).toBe(201);
+
+      const second = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body: { ...firstBody, description: 'Different transaction data' },
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(second.status).toBe(409);
+
+      const stored = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+        householdId,
+      ]);
+      expect(stored.rows).toHaveLength(1);
+    });
+
+    it('does not collide when a different actor reuses the same idempotency key in the same household', async () => {
+      const householdId = await createHousehold('owner');
+      await addActiveMember(householdId, identities.member);
+      const category = await createCategory('owner', householdId, { name: 'Comida' });
+      const key = randomUUID();
+      const body = {
+        ...validTransactionBody({ categoryId: category.category.id }),
+        clientMutationId: key,
+      };
+
+      const ownerResponse = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body,
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(ownerResponse.status).toBe(201);
+
+      const memberResponse = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'member',
+        body,
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(memberResponse.status).toBe(201);
+
+      const ownerParsed = CreateTransactionResponseSchema.parse(await ownerResponse.json());
+      const memberParsed = CreateTransactionResponseSchema.parse(await memberResponse.json());
+      expect(ownerParsed.transaction.id).not.toBe(memberParsed.transaction.id);
+
+      const stored = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+        householdId,
+      ]);
+      expect(stored.rows).toHaveLength(2);
+    });
+
+    it('does not collide when the same actor reuses the same idempotency key in a different household', async () => {
+      const householdIdA = await createHousehold('owner');
+      const householdIdB = await createHousehold('owner');
+      const categoryA = await createCategory('owner', householdIdA, { name: 'Comida' });
+      const categoryB = await createCategory('owner', householdIdB, { name: 'Comida' });
+      const key = randomUUID();
+
+      const responseA = await request(`/v1/households/${householdIdA}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body: {
+          ...validTransactionBody({ categoryId: categoryA.category.id }),
+          clientMutationId: key,
+        },
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(responseA.status).toBe(201);
+
+      const responseB = await request(`/v1/households/${householdIdB}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body: {
+          ...validTransactionBody({ categoryId: categoryB.category.id }),
+          clientMutationId: key,
+        },
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(responseB.status).toBe(201);
+
+      const parsedA = CreateTransactionResponseSchema.parse(await responseA.json());
+      const parsedB = CreateTransactionResponseSchema.parse(await responseB.json());
+      expect(parsedA.transaction.id).not.toBe(parsedB.transaction.id);
+
+      const stored = await pool.query(
+        'SELECT id FROM transactions WHERE household_id IN ($1, $2)',
+        [householdIdA, householdIdB],
+      );
+      expect(stored.rows).toHaveLength(2);
+    });
+
+    it('rejects a clientMutationId whose Idempotency-Key header does not match it, before touching the database', async () => {
+      const householdId = await createHousehold('owner');
+      const category = await createCategory('owner', householdId, { name: 'Comida' });
+      const key = randomUUID();
+
+      const response = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body: {
+          ...validTransactionBody({ categoryId: category.category.id }),
+          clientMutationId: key,
+        },
+        headers: { 'Idempotency-Key': randomUUID() },
+      });
+      expect(response.status).toBe(400);
+
+      const stored = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+        householdId,
+      ]);
+      expect(stored.rows).toEqual([]);
+    });
+
+    // ADR 0003 item 6 ("un reinicio del proceso conserva la deduplicacion") is inherently
+    // satisfied by this design and not separately tested by restarting the process: idempotency
+    // state lives entirely in durable PostgreSQL rows (client_mutation_id/client_mutation_hash
+    // plus the composite unique index), never in an in-memory cache tied to the running process.
+    // A resend after a real process restart takes the exact same code path already exercised by
+    // the sequential-resend test above (re-fetch by the tuple, compare the stored hash).
+  });
+
   function validTransactionBody(overrides: {
     readonly categoryId: string;
     readonly paymentSourceId?: string;
@@ -438,6 +645,7 @@ describe.skipIf(!hasTestDatabase)('Transactions API with PostgreSQL', () => {
       readonly token?: string;
       readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
       readonly body?: unknown;
+      readonly headers?: Readonly<Record<string, string>>;
     } = {},
   ): Promise<Response> {
     const headers = new Headers();
@@ -446,6 +654,9 @@ describe.skipIf(!hasTestDatabase)('Transactions API with PostgreSQL', () => {
     }
     if (options.body !== undefined) {
       headers.set('Content-Type', 'application/json');
+    }
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      headers.set(name, value);
     }
 
     return fetch(`${baseUrl}${path}`, {

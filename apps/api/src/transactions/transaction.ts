@@ -23,6 +23,10 @@ export interface TransactionRecord {
   readonly updatedBy: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  /** ADR 0003: the offline mutation UUID the client sent, when it did; null otherwise. */
+  readonly clientMutationId: string | null;
+  /** ADR 0003: SHA-256 hex digest of the semantic request payload, when idempotent; null otherwise. */
+  readonly clientMutationHash: string | null;
 }
 
 export interface CreateTransactionRecordInput {
@@ -40,6 +44,9 @@ export interface CreateTransactionRecordInput {
   readonly notes: string | null;
   readonly createdBy: string;
   readonly updatedBy: string;
+  /** ADR 0003: present together, or both null when the client did not opt into idempotency. */
+  readonly clientMutationId: string | null;
+  readonly clientMutationHash: string | null;
 }
 
 /**
