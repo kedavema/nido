@@ -25,7 +25,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+  SyncStatusPill,
+} from '@/components/m1-ui';
+import type { CreateExpenseOutcome } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
@@ -48,7 +55,10 @@ import {
 import {
   categoryLabel,
   formatFullLocalDate,
+  formatMonthLabel,
   formatPygMagnitude,
+  formatRecentMovementDateLabel,
+  monthFromLocalDate,
   todayLocalDate,
 } from '@/utils/movement-format';
 
@@ -80,17 +90,24 @@ const EMPTY_CATEGORIES: readonly Category[] = [];
 const EMPTY_PAYMENT_SOURCES: readonly PaymentSource[] = [];
 const EMPTY_TRANSACTIONS: readonly Transaction[] = [];
 
-// How long the "Guardado en este teléfono" confirmation stays on screen before navigating back —
-// long enough to read, short enough not to feel stuck. The Movimientos "Pendientes" section is
-// the persistent confirmation; this is just the immediate, unambiguous acknowledgment §6.9 asks
-// for at the moment of saving.
-const QUEUED_NOTICE_DISPLAY_MILLISECONDS = 1400;
-
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 type Mode = 'create' | 'edit';
+
+/**
+ * Snapshot of what was just saved, built from the draft at submit time (not refetched from the
+ * server) — GAS-03/GAS-04's dedicated save-confirmation view (M4 UI QA #63) renders straight off
+ * this instead of the old inline-banner-then-auto-navigate-back behavior. Scoped to `mode ===
+ * 'create'` only: editing an existing transaction still just navigates back on save, matching the
+ * design set (both references are captioned around the "Nuevo gasto" flow, and "Cargar otro
+ * gasto" only makes sense after a fresh save).
+ */
+interface SavedExpenseSummary {
+  readonly outcome: CreateExpenseOutcome;
+  readonly description: string;
+  readonly categoryId: string;
+  readonly paymentSourceId: string | null;
+  readonly localDate: string;
+  readonly amountDisplay: string;
+}
 
 interface Draft {
   readonly type: TransactionType;
@@ -148,16 +165,18 @@ function buildDraft(original: Transaction | null, todayLocal: string): Draft {
 export default function NuevoGastoScreen() {
   const { transactionId } = useLocalSearchParams<{ transactionId?: string }>();
   const mode: Mode = transactionId === undefined ? 'create' : 'edit';
-  const { catalog, state } = useSession();
+  const { catalog, getMembers, state } = useSession();
   const syncQueue = useSyncQueue();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
+  const currentUserId = state.kind === 'authenticated' ? state.profile.user.id : undefined;
 
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
-  const [queuedNotice, setQueuedNotice] = useState(false);
+  const [savedExpense, setSavedExpense] = useState<SavedExpenseSummary | null>(null);
+  const [otherMemberName, setOtherMemberName] = useState<string>();
   const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showPaymentSourcePicker, setShowPaymentSourcePicker] = useState(false);
@@ -196,6 +215,31 @@ export default function NuevoGastoScreen() {
   useEffect(() => {
     queueMicrotask(() => void load());
   }, [load]);
+
+  useEffect(() => {
+    // Only worth asking for on the synced ('created') path — GAS-03's "{la otra persona} ya lo
+    // puede ver" line names whoever else is in the household. A 'queued' save has no server
+    // round-trip to hang this off of (and may well be offline), so GAS-04 never needs it.
+    if (savedExpense?.outcome !== 'created' || household === null) {
+      return;
+    }
+    let active = true;
+    getMembers(household.id)
+      .then(({ members }) => {
+        if (!active) return;
+        const other = members.find(
+          (member) => member.userId !== currentUserId && member.status === 'ACTIVE',
+        );
+        setOtherMemberName(other?.displayName);
+      })
+      .catch(() => {
+        // Best-effort only: the confirmation copy falls back to a name-free sentence if this
+        // fails, it never blocks or errors the confirmation screen itself.
+      });
+    return () => {
+      active = false;
+    };
+  }, [savedExpense, household, getMembers, currentUserId]);
 
   function updateDraft(patch: Partial<Draft>): void {
     setDraft((current) => (current === null ? current : { ...current, ...patch }));
@@ -313,6 +357,22 @@ export default function NuevoGastoScreen() {
     );
   }
 
+  if (mode === 'create' && savedExpense !== null) {
+    return (
+      <SavedExpenseConfirmation
+        categories={categories}
+        onCargarOtro={startNewExpense}
+        onListo={() => {
+          router.back();
+        }}
+        otherMemberName={otherMemberName}
+        paymentSources={paymentSources}
+        saved={savedExpense}
+        todayLocal={todayLocal}
+      />
+    );
+  }
+
   const isIncome = draft.type === 'INCOME';
   const noun = isIncome ? 'ingreso' : 'gasto';
   const title = mode === 'create' ? 'Nuevo gasto' : `Editar ${noun}`;
@@ -330,6 +390,17 @@ export default function NuevoGastoScreen() {
     } else {
       router.back();
     }
+  }
+
+  /** "Cargar otro gasto" on the save confirmation — resets to a blank draft and stays on this
+   * route rather than navigating anywhere, per GAS-03/GAS-04. */
+  function startNewExpense(): void {
+    setSavedExpense(null);
+    setOtherMemberName(undefined);
+    setDraft(buildDraft(null, todayLocal));
+    setDirty(false);
+    setNotesExpanded(false);
+    setSubmitError(undefined);
   }
 
   function selectCurrency(currency: TransactionCurrency): void {
@@ -369,7 +440,6 @@ export default function NuevoGastoScreen() {
       return;
     }
     setSubmitError(undefined);
-    setQueuedNotice(false);
     setSaving(true);
     try {
       const amountWire = amountToWireDecimal(draft.amount, draft.currency);
@@ -392,13 +462,18 @@ export default function NuevoGastoScreen() {
         };
         // Always attempts the direct request first (per docs/system-design.md §10) and only
         // falls back to the local queue on a genuine network failure — see syncQueue.createExpense.
+        // `result.outcome` is exactly the signal GAS-03 vs GAS-04 need: 'created' means the server
+        // already has it (online/synced copy + green pill), 'queued' means it's only local so far
+        // (offline copy + amber pill) — see SavedExpenseSummary/SavedExpenseConfirmation below.
         const result = await syncQueue.createExpense(household.id, request);
-        if (result.outcome === 'queued') {
-          // §6.9: offline mode must confirm "Guardado en este teléfono" unambiguously. The
-          // Movimientos "Pendientes" section is the lasting confirmation; this is the immediate one.
-          setQueuedNotice(true);
-          await wait(QUEUED_NOTICE_DISPLAY_MILLISECONDS);
-        }
+        setSavedExpense({
+          outcome: result.outcome,
+          description: trimmedDescription,
+          categoryId: draft.categoryId,
+          paymentSourceId: draft.paymentSourceId,
+          localDate: draft.localDate,
+          amountDisplay: `${draft.currency === 'PYG' ? 'Gs.' : 'USD'} ${formatAmountDisplay(draft.amount, draft.currency)}`,
+        });
       } else {
         const request: UpdateTransactionRequest = {
           amount: amountWire,
@@ -411,8 +486,8 @@ export default function NuevoGastoScreen() {
           notes: trimmedNotes === '' ? null : trimmedNotes,
         };
         await catalog.updateTransaction(household.id, original.id, request);
+        router.back();
       }
-      router.back();
     } catch (error) {
       setSubmitError(messageForActionError(error));
     } finally {
@@ -619,12 +694,6 @@ export default function NuevoGastoScreen() {
               <Text style={styles.addNoteText}>+ Agregar nota (opcional)</Text>
             </Pressable>
           )}
-
-          {queuedNotice ? (
-            <InlineNotice tone="success">
-              Guardado en este teléfono. Se sincroniza automáticamente cuando haya conexión.
-            </InlineNotice>
-          ) : null}
 
           {submitError === undefined ? null : (
             <InlineNotice tone="error">{submitError}</InlineNotice>
@@ -1164,6 +1233,98 @@ function DiscardConfirmModal({
   );
 }
 
+/**
+ * GAS-03 ("Confirmación de guardado online") / GAS-04 ("Guardado en este teléfono · offline") —
+ * per the design's own caption these are "la misma estructura", one view with two states keyed
+ * off `saved.outcome`, not two separate screens. Renders full-screen in place of the form (no
+ * header, no bottom nav — this route is already a modal-style screen) until the user taps one of
+ * the two CTAs below.
+ */
+function SavedExpenseConfirmation({
+  saved,
+  categories,
+  paymentSources,
+  todayLocal,
+  otherMemberName,
+  onCargarOtro,
+  onListo,
+}: {
+  readonly saved: SavedExpenseSummary;
+  readonly categories: readonly Category[];
+  readonly paymentSources: readonly PaymentSource[];
+  readonly todayLocal: string;
+  readonly otherMemberName: string | undefined;
+  readonly onCargarOtro: () => void;
+  readonly onListo: () => void;
+}) {
+  const isSynced = saved.outcome === 'created';
+  const heading = isSynced ? 'Gasto guardado' : 'Guardado en este teléfono';
+  const monthLabel = formatMonthLabel(monthFromLocalDate(saved.localDate))
+    .replace(/\s\d{4}$/u, '')
+    .toLowerCase();
+  const explanation = isSynced
+    ? otherMemberName === undefined
+      ? `Ya se sincronizó. Los totales de ${monthLabel} se actualizaron.`
+      : `${otherMemberName} ya lo puede ver. Los totales de ${monthLabel} se actualizaron.`
+    : 'Se va a sincronizar automáticamente cuando vuelva la conexión. No tenés que hacer nada.';
+
+  const category = categories.find((candidate) => candidate.id === saved.categoryId);
+  const categoryLabelText = categoryLabel(saved.categoryId, categories) ?? 'Sin categoría';
+  const paymentSourceName =
+    saved.paymentSourceId === null
+      ? undefined
+      : paymentSources.find((source) => source.id === saved.paymentSourceId)?.name;
+  const dateLabel = formatRecentMovementDateLabel(saved.localDate, todayLocal);
+  const subtitle = [categoryLabelText, paymentSourceName, dateLabel]
+    .filter((part): part is string => part !== undefined)
+    .join(' · ');
+  const accentColor = category?.color ?? themeTokens.colors.inkSecondary;
+  const initial = saved.description.trim().charAt(0).toUpperCase() || '·';
+
+  return (
+    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
+      <View style={styles.confirmationContent}>
+        <View style={styles.confirmationIconCircle}>
+          <Ionicons
+            color={themeTokens.semanticColors.success.foreground}
+            name="checkmark"
+            size={32}
+          />
+        </View>
+        <Text accessibilityRole="header" style={styles.confirmationHeading}>
+          {heading}
+        </Text>
+
+        <View style={[styles.confirmationCard, cardShadowStyle]}>
+          <View style={[styles.confirmationAvatar, { backgroundColor: `${accentColor}26` }]}>
+            <Text style={[styles.confirmationAvatarText, { color: accentColor }]}>{initial}</Text>
+          </View>
+          <View style={styles.confirmationReceiptCopy}>
+            <Text numberOfLines={1} style={m1TextStyles.body}>
+              {saved.description}
+            </Text>
+            <Text numberOfLines={1} style={m1TextStyles.secondary}>
+              {subtitle}
+            </Text>
+          </View>
+          <Text style={styles.confirmationAmount}>{saved.amountDisplay}</Text>
+        </View>
+
+        <SyncStatusPill tone={isSynced ? 'synced' : 'pending'} />
+
+        <Text style={styles.confirmationExplanation}>{explanation}</Text>
+      </View>
+
+      <View style={styles.footer}>
+        <ActionButton label="Cargar otro gasto" onPress={onCargarOtro} />
+        <Pressable accessibilityRole="button" onPress={onListo} style={styles.confirmationListo}>
+          <Text style={styles.confirmationListoText}>Listo</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -1511,5 +1672,76 @@ const styles = StyleSheet.create({
   dateQuickRow: {
     flexDirection: 'row',
     gap: themeTokens.spacing.cardGap,
+  },
+  confirmationContent: {
+    flex: 1,
+    alignItems: 'center',
+    gap: themeTokens.spacing.cardGap,
+    paddingHorizontal: themeTokens.spacing.screen,
+    paddingTop: themeTokens.spacing.screen * 2,
+  },
+  confirmationIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: themeTokens.semanticColors.success.background,
+  },
+  confirmationHeading: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.displaySemibold,
+    fontSize: themeTokens.typography.scale.hero,
+    textAlign: 'center',
+  },
+  confirmationCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: themeTokens.spacing.cardGap,
+    borderWidth: 1,
+    borderColor: themeTokens.colors.border,
+    borderRadius: themeTokens.radii.card,
+    backgroundColor: themeTokens.colors.surface,
+    padding: themeTokens.spacing.cardPadding,
+  },
+  confirmationAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmationAvatarText: {
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+  },
+  confirmationReceiptCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  confirmationAmount: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+  },
+  confirmationExplanation: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.body,
+    lineHeight: 23,
+    textAlign: 'center',
+    paddingHorizontal: themeTokens.spacing.cardGap,
+  },
+  confirmationListo: {
+    minHeight: themeTokens.touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmationListoText: {
+    color: themeTokens.colors.primary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+    textDecorationLine: 'underline',
   },
 });

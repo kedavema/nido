@@ -1,6 +1,6 @@
 import type { CreateHouseholdInviteResponse, HouseholdMember } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -16,7 +16,11 @@ import {
   m1TextStyles,
 } from '@/components/m1-ui';
 import { createInvitationRequestGuard } from '@/invitations/invitation-request-guard';
-import { decideSignOutFlow } from '@/sync/sync-queue';
+import {
+  CREATE_TRANSACTION_MUTATION_TYPE,
+  decideSignOutFlow,
+  isCreateTransactionPayload,
+} from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { themeTokens } from '@/theme/tokens';
 
@@ -31,6 +35,17 @@ type MembersState =
   | { readonly kind: 'loaded'; readonly members: readonly HouseholdMember[] }
   | { readonly kind: 'error'; readonly message: string };
 
+/** "A y B" for two names, "A, B y C" for three or more — the only name-joining convention this
+ * codebase has needed so far, so it's kept local to MAS-06's warning box rather than promoted to
+ * a shared util for a single call site. */
+function joinNamesEs(names: readonly string[]): string {
+  if (names.length <= 1) {
+    return names[0] ?? '';
+  }
+  const last = names[names.length - 1];
+  return `${names.slice(0, -1).join(', ')} y ${last ?? ''}`;
+}
+
 function formatExpiration(value: string): string {
   return new Intl.DateTimeFormat('es-PY', {
     dateStyle: 'medium',
@@ -42,6 +57,19 @@ function formatExpiration(value: string): string {
 export default function MasScreen() {
   const { catalog, createInvitation, getMembers, signOut, state } = useSession();
   const { pending, discardAllPending } = useSyncQueue();
+  // MAS-06's warning box names the affected transactions by description rather than just a count —
+  // only `create-transaction` mutations carry one; anything else this queue might one day hold has
+  // no description to show, so it's silently left out of the list rather than showing "undefined".
+  const pendingExpenseNames = useMemo(
+    () =>
+      pending
+        .filter((mutation) => mutation.type === CREATE_TRANSACTION_MUTATION_TYPE)
+        .map((mutation) => mutation.payload)
+        .filter(isCreateTransactionPayload)
+        .map((payload) => payload.request.description.trim())
+        .filter((name) => name !== ''),
+    [pending],
+  );
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [membersState, setMembersState] = useState<MembersState>({
     kind: 'loading',
@@ -309,6 +337,7 @@ export default function MasScreen() {
         }}
         onConfirm={() => void discardPendingAndSignOut()}
         pendingCount={pending.length}
+        pendingNames={pendingExpenseNames}
         visible={showPendingSyncWarning}
       />
     </AppScreen>
@@ -393,38 +422,51 @@ function InviteReceipt({
 function PendingSyncSignOutModal({
   visible,
   pendingCount,
+  pendingNames,
   onCancel,
   onConfirm,
 }: {
   readonly visible: boolean;
   readonly pendingCount: number;
+  readonly pendingNames: readonly string[];
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }) {
+  const countLabel =
+    pendingCount === 1
+      ? '1 movimiento sin sincronizar'
+      : `${pendingCount.toString()} movimientos sin sincronizar`;
+  const namesLabel = joinNamesEs(pendingNames);
+
   return (
     <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalSheet}>
           <Text accessibilityRole="header" style={styles.modalTitle}>
-            Tenés movimientos sin sincronizar
+            ¿Cerrar sesión?
           </Text>
+          <View style={styles.warningBox}>
+            <Ionicons
+              color={themeTokens.semanticColors.warning.foreground}
+              name="warning"
+              size={18}
+              style={styles.warningIcon}
+            />
+            <Text style={styles.warningText}>
+              Hay <Text style={styles.warningTextBold}>{countLabel}</Text> en este teléfono
+              {namesLabel === '' ? '' : ` (${namesLabel})`}. Si cerrás sesión ahora,{' '}
+              <Text style={styles.warningTextBold}>se pierden</Text>.
+            </Text>
+          </View>
           <Text style={m1TextStyles.secondary}>
-            {pendingCount === 1
-              ? 'Este teléfono guardó 1 movimiento'
-              : `Este teléfono guardó ${pendingCount.toString()} movimientos`}{' '}
-            que todavía no se sincronizaron. Quedaron guardados con esta cuenta: si cerrás sesión
-            ahora, no van a sincronizar y se pierden.
+            Conectate a internet y esperá el ✓ de sincronización antes de salir.
           </Text>
           <View style={styles.modalActions}>
             <View style={styles.actionColumn}>
-              <ActionButton label="Seguir con la sesión" onPress={onCancel} variant="secondary" />
+              <ActionButton label="Cancelar" onPress={onCancel} variant="secondary" />
             </View>
             <View style={styles.actionColumn}>
-              <ActionButton
-                label="Descartar y cerrar sesión"
-                onPress={onConfirm}
-                variant="danger"
-              />
+              <ActionButton label="Cerrar igual" onPress={onConfirm} variant="danger" />
             </View>
           </View>
         </View>
@@ -540,5 +582,26 @@ const styles = StyleSheet.create({
   },
   actionColumn: {
     flex: 1,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    borderRadius: themeTokens.radii.button,
+    backgroundColor: themeTokens.semanticColors.warning.background,
+    padding: 12,
+  },
+  warningIcon: {
+    marginTop: 2,
+  },
+  warningText: {
+    flex: 1,
+    color: themeTokens.semanticColors.warning.foreground,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+    lineHeight: 19,
+  },
+  warningTextBold: {
+    fontFamily: themeTokens.typography.families.bodySemibold,
   },
 });

@@ -175,6 +175,37 @@ export function InlineNotice({ children, tone = 'neutral' }: InlineNoticeProps) 
   );
 }
 
+export type SyncStatusTone = 'synced' | 'pending' | 'error';
+
+const SYNC_STATUS_PILL_COPY: Record<SyncStatusTone, string> = {
+  synced: '✓ Sincronizado',
+  pending: '⟳ Pendiente de sincronizar',
+  error: '⚠ No se pudo sincronizar · tocá para reintentar',
+};
+
+/**
+ * The single amber/green/red "sync status" pill convention shared by the GAS-03/GAS-04 save
+ * confirmation (nuevo-gasto.tsx) and the Movimientos "Pendientes" section's per-item badge
+ * (movimientos.tsx) — one visual language for "did this reach the server yet" everywhere it shows
+ * up, per the M4 offline-indicators design set. `label` overrides the default copy only for
+ * call sites that need to interpolate something (none currently do; kept for flexibility).
+ */
+export function SyncStatusPill({
+  tone,
+  label,
+}: {
+  readonly tone: SyncStatusTone;
+  readonly label?: string;
+}) {
+  return (
+    <View style={[styles.syncPill, syncPillToneStyles[tone]]}>
+      <Text numberOfLines={1} style={[styles.syncPillText, syncPillTextToneStyles[tone]]}>
+        {label ?? SYNC_STATUS_PILL_COPY[tone]}
+      </Text>
+    </View>
+  );
+}
+
 export function LoadingContent({ label = 'Conectando…' }: { readonly label?: string }) {
   return (
     <View accessibilityLiveRegion="polite" accessibilityRole="progressbar" style={styles.loading}>
@@ -417,6 +448,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: themeTokens.spacing.cardGap,
   },
+  syncPill: {
+    alignSelf: 'flex-start',
+    borderRadius: themeTokens.radii.chip,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  syncPillText: {
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
+});
+
+const syncPillToneStyles = StyleSheet.create({
+  synced: { backgroundColor: themeTokens.semanticColors.success.background },
+  pending: { backgroundColor: themeTokens.semanticColors.warning.background },
+  error: { backgroundColor: themeTokens.semanticColors.danger.background },
+});
+
+const syncPillTextToneStyles = StyleSheet.create({
+  synced: { color: themeTokens.semanticColors.success.foreground },
+  pending: { color: themeTokens.semanticColors.warning.foreground },
+  error: { color: themeTokens.semanticColors.danger.foreground },
 });
 
 const skeletonStyles = StyleSheet.create({

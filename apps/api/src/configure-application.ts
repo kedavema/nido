@@ -9,7 +9,7 @@ export function configureApplication(
   app.enableShutdownHooks();
   app.enableCors({
     origin: [...options.corsOrigins],
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.setGlobalPrefix('v1', {

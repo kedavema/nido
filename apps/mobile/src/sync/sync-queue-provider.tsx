@@ -26,6 +26,14 @@ import type { QueuedMutation } from './sync-store.types';
 interface SyncQueueContextValue {
   /** Every queued mutation that hasn't synced yet (`pending`, `syncing`, or `error`). */
   readonly pending: readonly QueuedMutation[];
+  /**
+   * The most recent NetInfo-derived connectivity reading (see `isNetInfoStateOnline`). Starts
+   * `true` (optimistic default before NetInfo's first event lands) — the same assumption the
+   * reconnect detector below already makes for its own initial state. Exposed for MOV-02's offline
+   * banner (T-4xx UI QA #63): that banner reuses this instead of standing up a second NetInfo
+   * subscription.
+   */
+  readonly isOnline: boolean;
   readonly createExpense: (
     householdId: string,
     request: CreateTransactionRequest,
@@ -50,6 +58,7 @@ export function SyncQueueProvider({ children }: PropsWithChildren) {
   const { catalog } = useSession();
   const syncStore = useMemo(() => getSyncStore(), []);
   const [mutations, setMutations] = useState<readonly QueuedMutation[]>([]);
+  const [isOnline, setIsOnline] = useState(true);
 
   const refresh = useCallback(async () => {
     const list = await syncStore.list();
@@ -98,8 +107,10 @@ export function SyncQueueProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const detector = reconnectDetectorRef.current;
     const unsubscribe = NetInfo.addEventListener((netInfoState) => {
+      const online = isNetInfoStateOnline(netInfoState);
+      setIsOnline(online);
       // Only drains on an offline→online transition, not on every connectivity event.
-      if (detector.observe(isNetInfoStateOnline(netInfoState))) {
+      if (detector.observe(online)) {
         void drain();
       }
     });
@@ -127,8 +138,8 @@ export function SyncQueueProvider({ children }: PropsWithChildren) {
   );
 
   const value = useMemo<SyncQueueContextValue>(
-    () => ({ pending, createExpense, retry, retryAll, discardAllPending }),
-    [pending, createExpense, retry, retryAll, discardAllPending],
+    () => ({ pending, isOnline, createExpense, retry, retryAll, discardAllPending }),
+    [pending, isOnline, createExpense, retry, retryAll, discardAllPending],
   );
 
   return <SyncQueueContext.Provider value={value}>{children}</SyncQueueContext.Provider>;
