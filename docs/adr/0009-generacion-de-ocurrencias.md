@@ -34,11 +34,11 @@ regla nunca reescriba un pago o cobro ya realizado — la generación no puede s
 
 ## Opciones consideradas
 
-| Estrategia                              | Ventaja                                                        | Costo                                                              |
-| ---------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Lazy-on-read + advisory lock (elegida)   | No depende de infraestructura de pago; el lock evita duplicados | Primera apertura del día paga el costo del barrido                  |
-| Job/cron dedicado desde ya               | Ocurrencias siempre al día sin esperar una apertura             | Requiere infraestructura de scheduler que M7 todavía no define       |
-| Generar todo el horizonte solo al crear  | Más simple, sin barrido recurrente                             | Reglas editadas después de creadas quedarían con ocurrencias viejas y el horizonte de 12 meses se agotaría sin refrescar |
+| Estrategia                              | Ventaja                                                         | Costo                                                                                                                    |
+| --------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Lazy-on-read + advisory lock (elegida)  | No depende de infraestructura de pago; el lock evita duplicados | Primera apertura del día paga el costo del barrido                                                                       |
+| Job/cron dedicado desde ya              | Ocurrencias siempre al día sin esperar una apertura             | Requiere infraestructura de scheduler que M7 todavía no define                                                           |
+| Generar todo el horizonte solo al crear | Más simple, sin barrido recurrente                              | Reglas editadas después de creadas quedarían con ocurrencias viejas y el horizonte de 12 meses se agotaría sin refrescar |
 
 ## Idempotencia
 
