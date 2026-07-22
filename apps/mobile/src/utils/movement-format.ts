@@ -275,3 +275,24 @@ export function shiftMonth({ year, month }: MonthValue, delta: number): MonthVal
 export function formatMonthLabel({ year, month }: MonthValue): string {
   return `${MONTH_NAMES[month - 1] ?? ''} ${year.toString()}`;
 }
+
+/** Whole months `to` is chronologically after `from` (negative when `to` is in the past). */
+function monthDifference(from: MonthValue, to: MonthValue): number {
+  return to.year * 12 + (to.month - 1) - (from.year * 12 + (from.month - 1));
+}
+
+/**
+ * GLO-03's small gray header subtitle for a month strictly after the real current month (the
+ * user paged forward with "Mes siguiente"). `undefined` for the current month or any past month,
+ * even one with zero transactions — only a future month gets this line.
+ */
+export function futureMonthSubtitle(month: MonthValue, todayLocal: string): string | undefined {
+  const monthsAhead = monthDifference(monthFromLocalDate(todayLocal), month);
+  if (monthsAhead === 1) {
+    return 'mes siguiente · aún no empezó';
+  }
+  if (monthsAhead > 1) {
+    return 'aún no empezó';
+  }
+  return undefined;
+}

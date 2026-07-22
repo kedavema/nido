@@ -7,12 +7,21 @@ import type {
 } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ApiError } from '@/api/client';
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, Card, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import { getSummaryCache } from '@/cache/summary-cache';
+import {
+  ActionButton,
+  Card,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+  SummarySkeleton,
+} from '@/components/m1-ui';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
@@ -20,10 +29,12 @@ import {
   categoryLabel,
   formatMonthLabel,
   formatMonthQueryParam,
+  formatOccurredAtTime,
   formatPygMagnitude,
   formatRecentMovementDateLabel,
   formatSignedPygAmount,
   formatTransactionAmount,
+  futureMonthSubtitle,
   monthFromLocalDate,
   shiftMonth,
   todayLocalDate,
@@ -38,6 +49,11 @@ const MAX_CATEGORY_ROWS = 5;
 const EMPTY_CATEGORIES: readonly Category[] = [];
 const EMPTY_PAYMENT_SOURCES: readonly PaymentSource[] = [];
 
+// GLO-02's "de {HH:MM}" / "último intento {HH:MM}" times are about this device's clock (when the
+// cache was written / the retry was attempted locally), not the household's business timezone —
+// unlike movement timestamps, which always use HOUSEHOLD_TIMEZONE.
+const DEVICE_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 type CatalogState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
@@ -50,6 +66,16 @@ type CatalogState =
 type SummaryState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
+  | {
+      // GLO-02: the fetch failed but a previous successful fetch for this same household+month
+      // was cached locally, so we show that instead of an empty error screen (docs/system-design.md
+      // §6.9). `status`/`lastAttemptAt` back the collapsed-by-default "Detalles" technical line.
+      readonly kind: 'error-with-cache';
+      readonly status: number | undefined;
+      readonly summary: MonthlySummaryResponse;
+      readonly cachedAt: string;
+      readonly lastAttemptAt: string;
+    }
   | { readonly kind: 'loaded'; readonly summary: MonthlySummaryResponse };
 
 /** "24" / "7,5" — trims trailing zeros from the service's 2-decimal percentage without rounding. */
@@ -70,9 +96,11 @@ function isEmptyMonth(summary: MonthlySummaryResponse): boolean {
 export default function InicioScreen() {
   const { catalog, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
+  const summaryCache = useMemo(() => getSummaryCache(), []);
 
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
   const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [errorDetailsOpen, setErrorDetailsOpen] = useState(false);
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: 'loading' });
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: 'loading' });
 
@@ -98,20 +126,33 @@ export default function InicioScreen() {
     async (isActive: () => boolean) => {
       if (household === null) return;
       setSummaryState({ kind: 'loading' });
+      setErrorDetailsOpen(false);
+      const monthParam = formatMonthQueryParam(month);
       try {
-        const summary = await catalog.getMonthlySummary(household.id, {
-          month: formatMonthQueryParam(month),
-        });
+        const summary = await catalog.getMonthlySummary(household.id, { month: monthParam });
+        // Always persisted, even if the user has since navigated away from this month/tab — a
+        // fetch that did land is worth caching regardless of whether this screen still cares.
+        await summaryCache.write(household.id, monthParam, summary);
         if (isActive()) {
           setSummaryState({ kind: 'loaded', summary });
         }
       } catch (error) {
-        if (isActive()) {
+        if (!isActive()) return;
+        const cached = await summaryCache.read(household.id, monthParam);
+        if (cached === undefined) {
           setSummaryState({ kind: 'error', message: messageForActionError(error) });
+          return;
         }
+        setSummaryState({
+          kind: 'error-with-cache',
+          status: error instanceof ApiError ? error.status : undefined,
+          summary: cached.summary,
+          cachedAt: cached.cachedAt,
+          lastAttemptAt: new Date().toISOString(),
+        });
       }
     },
-    [catalog, household, month],
+    [catalog, household, month, summaryCache],
   );
 
   // Same stale-response guard as movimientos.tsx: without it, a slow response for a month the
@@ -139,6 +180,7 @@ export default function InicioScreen() {
   const paymentSources =
     catalogState.kind === 'loaded' ? catalogState.paymentSources : EMPTY_PAYMENT_SOURCES;
   const todayLocal = todayLocalDate();
+  const monthSubtitle = futureMonthSubtitle(month, todayLocal);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -148,6 +190,9 @@ export default function InicioScreen() {
           <Text accessibilityRole="header" style={styles.title}>
             {formatMonthLabel(month)}
           </Text>
+          {monthSubtitle === undefined ? null : (
+            <Text style={styles.monthSubtitle}>{monthSubtitle}</Text>
+          )}
         </View>
         <View style={styles.monthPill}>
           <Pressable
@@ -175,7 +220,7 @@ export default function InicioScreen() {
 
       <ScrollView contentContainerStyle={styles.listArea}>
         {summaryState.kind === 'loading' || catalogState.kind === 'loading' ? (
-          <LoadingContent label="Cargando resumen…" />
+          <SummarySkeleton />
         ) : null}
 
         {summaryState.kind === 'error' ? (
@@ -185,6 +230,34 @@ export default function InicioScreen() {
               label="Reintentar"
               onPress={() => void loadSummary(() => true)}
               variant="secondary"
+            />
+          </>
+        ) : null}
+
+        {summaryState.kind === 'error-with-cache' ? (
+          <>
+            <CachedSummaryNotice
+              cachedAt={summaryState.cachedAt}
+              detailsOpen={errorDetailsOpen}
+              lastAttemptAt={summaryState.lastAttemptAt}
+              onRetry={() => void loadSummary(() => true)}
+              onToggleDetails={() => {
+                setErrorDetailsOpen((current) => !current);
+              }}
+              status={summaryState.status}
+            />
+            <BalanceCard
+              onToggleTooltip={() => {
+                setTooltipOpen((current) => !current);
+              }}
+              summary={summaryState.summary}
+              tooltipOpen={tooltipOpen}
+            />
+            <RecentTransactionsCard
+              categories={categories}
+              paymentSources={paymentSources}
+              todayLocal={todayLocal}
+              transactions={summaryState.summary.recentTransactions}
             />
           </>
         ) : null}
@@ -227,31 +300,12 @@ export default function InicioScreen() {
                 />
               ) : null}
 
-              {summaryState.summary.recentTransactions.length > 0 ? (
-                <Card>
-                  <Text style={styles.cardLabel}>
-                    RECIENTES · {summaryState.summary.recentTransactions.length.toString()}
-                  </Text>
-                  {summaryState.summary.recentTransactions.map((transaction, index) => (
-                    <RecentMovementRow
-                      category={categories.find((c) => c.id === transaction.categoryId)}
-                      categoryLabelText={categoryLabel(transaction.categoryId, categories)}
-                      isLast={index === summaryState.summary.recentTransactions.length - 1}
-                      key={transaction.id}
-                      onPress={() => {
-                        router.push(`/movimiento/${transaction.id}`);
-                      }}
-                      paymentSourceName={
-                        transaction.paymentSourceId === null
-                          ? undefined
-                          : paymentSources.find((s) => s.id === transaction.paymentSourceId)?.name
-                      }
-                      todayLocal={todayLocal}
-                      transaction={transaction}
-                    />
-                  ))}
-                </Card>
-              ) : null}
+              <RecentTransactionsCard
+                categories={categories}
+                paymentSources={paymentSources}
+                todayLocal={todayLocal}
+                transactions={summaryState.summary.recentTransactions}
+              />
             </>
           )
         ) : null}
@@ -452,6 +506,107 @@ function RecentMovementRow({
   );
 }
 
+/**
+ * The "RECIENTES · N" card, shared by the loaded-summary branch and GLO-02's cached-error
+ * branch so neither has to duplicate this markup (both show the same recent transactions once
+ * data — live or cached — is available).
+ */
+function RecentTransactionsCard({
+  transactions,
+  categories,
+  paymentSources,
+  todayLocal,
+}: {
+  readonly transactions: readonly Transaction[];
+  readonly categories: readonly Category[];
+  readonly paymentSources: readonly PaymentSource[];
+  readonly todayLocal: string;
+}) {
+  if (transactions.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <Text style={styles.cardLabel}>RECIENTES · {transactions.length.toString()}</Text>
+      {transactions.map((transaction, index) => (
+        <RecentMovementRow
+          category={categories.find((c) => c.id === transaction.categoryId)}
+          categoryLabelText={categoryLabel(transaction.categoryId, categories)}
+          isLast={index === transactions.length - 1}
+          key={transaction.id}
+          onPress={() => {
+            router.push(`/movimiento/${transaction.id}`);
+          }}
+          paymentSourceName={
+            transaction.paymentSourceId === null
+              ? undefined
+              : paymentSources.find((s) => s.id === transaction.paymentSourceId)?.name
+          }
+          todayLocal={todayLocal}
+          transaction={transaction}
+        />
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * GLO-02's "No pudimos actualizar" notice: primary "Reintentar" action plus a collapsed-by-
+ * default "Detalles" row exposing the technical error code — per docs/system-design.md §6.9, that
+ * code must never be visible without the user explicitly tapping "Detalles".
+ */
+function CachedSummaryNotice({
+  status,
+  cachedAt,
+  lastAttemptAt,
+  detailsOpen,
+  onToggleDetails,
+  onRetry,
+}: {
+  readonly status: number | undefined;
+  readonly cachedAt: string;
+  readonly lastAttemptAt: string;
+  readonly detailsOpen: boolean;
+  readonly onToggleDetails: () => void;
+  readonly onRetry: () => void;
+}) {
+  const cachedTime = formatOccurredAtTime(cachedAt, DEVICE_TIME_ZONE);
+  const attemptTime = formatOccurredAtTime(lastAttemptAt, DEVICE_TIME_ZONE);
+  const technicalLabel =
+    status === undefined ? 'Error de conexión' : `Error del servidor (${status.toString()})`;
+
+  return (
+    <Card>
+      <Text style={m1TextStyles.sectionTitle}>No pudimos actualizar</Text>
+      <Text style={m1TextStyles.secondary}>
+        Mostramos lo último guardado en este teléfono, de {cachedTime}.
+      </Text>
+      <ActionButton label="Reintentar" onPress={onRetry} variant="primary" />
+      <Pressable
+        accessibilityLabel="Detalles"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: detailsOpen }}
+        hitSlop={8}
+        onPress={onToggleDetails}
+        style={styles.detailsRow}
+      >
+        <Text style={styles.detailsLabel}>Detalles</Text>
+        <Ionicons
+          color={themeTokens.colors.inkSecondary}
+          name={detailsOpen ? 'chevron-up' : 'chevron-down'}
+          size={16}
+        />
+      </Pressable>
+      {detailsOpen ? (
+        <Text style={m1TextStyles.token}>
+          {technicalLabel} · último intento {attemptTime}
+        </Text>
+      ) : null}
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -478,6 +633,11 @@ const styles = StyleSheet.create({
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
   },
+  monthSubtitle: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
   monthPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -500,6 +660,18 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.label,
     letterSpacing: 0.4,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 4,
+    minHeight: themeTokens.touchTarget.minimum,
+  },
+  detailsLabel: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
   },
   balanceAmount: {
     color: themeTokens.colors.ink,
