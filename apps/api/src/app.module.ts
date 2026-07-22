@@ -9,6 +9,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HouseholdsModule } from './households/households.module.js';
 import { PaymentSourcesModule } from './payment-sources/payment-sources.module.js';
+import { RecurringItemsModule } from './recurring-items/recurring-items.module.js';
 import { TransactionsModule } from './transactions/transactions.module.js';
 
 @Module({
@@ -30,6 +31,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
     HealthModule,
     HouseholdsModule,
     PaymentSourcesModule,
+    RecurringItemsModule,
     TransactionsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
