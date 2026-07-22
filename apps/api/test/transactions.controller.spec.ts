@@ -15,9 +15,7 @@ const access: HouseholdAccess = {
 
 const clientMutationId = '1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061';
 
-function createInput(
-  overrides: Partial<CreateTransactionRequest> = {},
-): CreateTransactionRequest {
+function createInput(overrides: Partial<CreateTransactionRequest> = {}): CreateTransactionRequest {
   return {
     type: 'EXPENSE',
     amount: '150000',
@@ -47,11 +45,7 @@ describe('TransactionsController createTransaction idempotency header', () => {
     const controller = createController(createTransaction);
 
     expect(() =>
-      controller.createTransaction(
-        access,
-        createInput({ clientMutationId }),
-        undefined,
-      ),
+      controller.createTransaction(access, createInput({ clientMutationId }), undefined),
     ).toThrow(BadRequestException);
     expect(createTransaction).not.toHaveBeenCalled();
   });
@@ -78,11 +72,7 @@ describe('TransactionsController createTransaction idempotency header', () => {
     );
     const controller = createController(createTransaction);
 
-    await controller.createTransaction(
-      access,
-      createInput({ clientMutationId }),
-      clientMutationId,
-    );
+    await controller.createTransaction(access, createInput({ clientMutationId }), clientMutationId);
 
     expect(createTransaction).toHaveBeenCalledWith(
       access,

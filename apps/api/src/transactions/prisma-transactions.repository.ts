@@ -28,8 +28,7 @@ import {
 
 const CATEGORY_FOREIGN_KEY = 'transactions_category_id_fkey';
 const PAYMENT_SOURCE_FOREIGN_KEY = 'transactions_payment_source_id_fkey';
-const IDEMPOTENCY_KEY_UNIQUE_INDEX =
-  'transactions_created_by_household_id_client_mutation_id_key';
+const IDEMPOTENCY_KEY_UNIQUE_INDEX = 'transactions_created_by_household_id_client_mutation_id_key';
 const FOREIGN_KEY_VIOLATION_CODE = '23503';
 const UNIQUE_VIOLATION_CODE = '23505';
 const CHECK_VIOLATION_CODE = '23514';

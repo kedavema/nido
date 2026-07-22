@@ -513,19 +513,19 @@ describe('TransactionsService create idempotency (ADR 0003)', () => {
 
     const createInput = create.mock.calls[0]?.[0];
     expect(createInput?.clientMutationId).toBe(clientMutationId);
-    expect(createInput?.clientMutationHash).toBe(computeClientMutationHash({
-      ...baseInput,
-      clientMutationId,
-    }));
+    expect(createInput?.clientMutationHash).toBe(
+      computeClientMutationHash({
+        ...baseInput,
+        clientMutationId,
+      }),
+    );
   });
 
   it('returns the existing transaction as a replay when the collision hash matches', async () => {
     const expectedHash = computeClientMutationHash({ ...baseInput, clientMutationId });
     const create = vi.fn(() => Promise.reject(new TransactionIdempotencyKeyCollisionError()));
     const findByClientMutationId = vi.fn(() =>
-      Promise.resolve(
-        transactionRecord({ clientMutationId, clientMutationHash: expectedHash }),
-      ),
+      Promise.resolve(transactionRecord({ clientMutationId, clientMutationHash: expectedHash })),
     );
     const service = createService({
       transactionsRepository: { create, findByClientMutationId },

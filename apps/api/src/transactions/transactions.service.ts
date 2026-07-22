@@ -128,8 +128,7 @@ export class TransactionsService {
     // it before this point. When absent, both stay null and the create path behaves exactly as
     // it did before this feature existed (plain insert, back-compat with clients that predate it).
     const clientMutationId = input.clientMutationId ?? null;
-    const clientMutationHash =
-      clientMutationId === null ? null : computeClientMutationHash(input);
+    const clientMutationHash = clientMutationId === null ? null : computeClientMutationHash(input);
 
     try {
       const transaction = await this.transactionsRepository.create({
