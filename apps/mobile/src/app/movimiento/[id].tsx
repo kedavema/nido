@@ -205,7 +205,11 @@ function DetailBody({
         <Text style={styles.sectionEyebrow}>Datos del movimiento</Text>
         <DetailRow
           label="Categoría"
-          value={categoryLabel(transaction.categoryId, categories) ?? 'Sin categoría'}
+          value={
+            transaction.type === 'INCOME'
+              ? 'Ingreso'
+              : (categoryLabel(transaction.categoryId, categories) ?? 'Sin categoría')
+          }
         />
         <DetailRow label="Pagado con" value={paymentSourceName} />
         {transaction.currency === 'USD' ? (
@@ -219,6 +223,14 @@ function DetailBody({
           label="Cargado por"
           value={`${createdByName} · ${formatOccurredAtTime(transaction.createdAt)}`}
         />
+        {/* This screen is only reachable for transactions already fetched via
+            catalog.getTransaction (GET /transactions/:id) — the offline queue's pending/error
+            mutations (apps/mobile/src/sync/) render as their own rows in Movimientos' "Pendientes"
+            section and aren't navigable to this detail screen (see movimientos.tsx's
+            PendingMutationRow, which has no onPress into `movimiento/[id]`). So any transaction
+            that loads here is, by definition, already synced with the server — no per-transaction
+            sync-status plumbing is needed beyond that. */}
+        <DetailRow label="Sincronización" tone="success" value="✓ Sincronizado" />
         <DetailRow label="Nota" value={transaction.notes ?? '—'} />
       </Card>
 
@@ -234,11 +246,21 @@ function DetailBody({
   );
 }
 
-function DetailRow({ label, value }: { readonly label: string; readonly value: string }) {
+function DetailRow({
+  label,
+  value,
+  tone,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly tone?: 'success';
+}) {
   return (
     <View style={styles.detailRow}>
       <Text style={m1TextStyles.secondary}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
+      <Text style={[styles.detailValue, tone === 'success' && styles.detailValueSuccess]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -377,6 +399,9 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
     textAlign: 'right',
+  },
+  detailValueSuccess: {
+    color: themeTokens.semanticColors.success.foreground,
   },
   actionsRow: {
     flexDirection: 'row',

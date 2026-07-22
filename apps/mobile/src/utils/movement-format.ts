@@ -115,19 +115,23 @@ export function formatOccurredAtTime(occurredAt: string, timeZone = HOUSEHOLD_TI
   return `${hour}:${minute}`;
 }
 
-/** "hoy, 9:12" / "ayer, 18:04" / "mié 1 jul 2026, 9:12" — MOV-03 hero timestamp. */
+/** "hoy · mié 15 jul, 9:12" / "ayer · mar 14 jul, 18:04" / "mié 1 jul, 9:12" — MOV-03 hero
+ * timestamp. No year here (unlike `formatFullLocalDate`'s "Fecha" row below it) — the year is
+ * dropped the same way `nuevo-gasto.tsx`'s "Último usado" caption drops it, by stripping the
+ * trailing " yyyy" off `formatFullLocalDate`'s output. */
 export function formatMovementTimestamp(
   transaction: Pick<Transaction, 'localDate' | 'occurredAt'>,
   todayLocal: string,
 ): string {
   const time = formatOccurredAtTime(transaction.occurredAt);
+  const dateWithoutYear = formatFullLocalDate(transaction.localDate).replace(/\s\d{4}$/u, '');
   if (transaction.localDate === todayLocal) {
-    return `hoy, ${time}`;
+    return `hoy · ${dateWithoutYear}, ${time}`;
   }
   if (transaction.localDate === previousLocalDate(todayLocal)) {
-    return `ayer, ${time}`;
+    return `ayer · ${dateWithoutYear}, ${time}`;
   }
-  return `${formatFullLocalDate(transaction.localDate)}, ${time}`;
+  return `${dateWithoutYear}, ${time}`;
 }
 
 /** "hoy" / "ayer" / "1 jul" — INI-02's compact date caption for a "Recientes" row. */

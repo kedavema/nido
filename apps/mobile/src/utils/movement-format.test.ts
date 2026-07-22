@@ -226,31 +226,31 @@ describe('formatOccurredAtTime', () => {
 });
 
 describe('formatMovementTimestamp', () => {
-  it('uses "hoy" for the current day', () => {
+  it('uses "hoy ·" plus the yearless date for the current day', () => {
     expect(
       formatMovementTimestamp(
         { localDate: '2026-07-15', occurredAt: '2026-07-15T12:12:00.000Z' },
         '2026-07-15',
       ),
-    ).toMatch(/^hoy, \d{1,2}:\d{2}$/u);
+    ).toMatch(/^hoy · mié 15 jul, \d{1,2}:\d{2}$/u);
   });
 
-  it('uses "ayer" for the previous day', () => {
+  it('uses "ayer ·" plus the yearless date for the previous day', () => {
     expect(
       formatMovementTimestamp(
         { localDate: '2026-07-14', occurredAt: '2026-07-14T12:12:00.000Z' },
         '2026-07-15',
       ),
-    ).toMatch(/^ayer, \d{1,2}:\d{2}$/u);
+    ).toMatch(/^ayer · mar 14 jul, \d{1,2}:\d{2}$/u);
   });
 
-  it('uses the full date for older days', () => {
+  it('uses the yearless date with no relative prefix for older days', () => {
     expect(
       formatMovementTimestamp(
         { localDate: '2026-07-01', occurredAt: '2026-07-01T12:12:00.000Z' },
         '2026-07-15',
       ),
-    ).toMatch(/^mié 1 jul 2026, \d{1,2}:\d{2}$/u);
+    ).toMatch(/^mié 1 jul, \d{1,2}:\d{2}$/u);
   });
 });
 
