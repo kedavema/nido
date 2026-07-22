@@ -5,7 +5,9 @@ import { ApiError } from '../api/client';
 import {
   createReconnectDetector,
   createSyncQueueEngine,
+  decideSignOutFlow,
   isCreateTransactionPayload,
+  isNetInfoStateOnline,
   type CreateTransactionQueuedPayload,
 } from './sync-queue';
 import type { QueuedMutation, QueuedMutationStatus, SyncStore } from './sync-store.types';
@@ -244,6 +246,45 @@ describe('sync queue engine', () => {
     expect(createTransaction).not.toHaveBeenCalled();
   });
 
+  it("discardAllPending does not error or double-remove when a mutation is concurrently removed elsewhere (e.g. finished syncing via the engine's own replay)", async () => {
+    const syncStore = createFakeSyncStore();
+    await syncStore.enqueue({
+      id: 'mutation-1',
+      type: 'create-transaction',
+      payload: { householdId, request: baseRequest() } satisfies CreateTransactionQueuedPayload,
+    });
+    await syncStore.enqueue({
+      id: 'mutation-2',
+      type: 'create-transaction',
+      payload: { householdId, request: baseRequest() } satisfies CreateTransactionQueuedPayload,
+    });
+
+    // Wraps the store so `getPending` mimics the exact race described in the module's docs: by
+    // the time `discardAllPending` gets around to removing 'mutation-1', it has already been
+    // removed elsewhere (e.g. a concurrent successful replay finishing it). `SyncStore.remove`
+    // on an already-removed id must be a safe no-op (see sync-store.ts/.web.ts's `DELETE`/
+    // `.delete()` calls, which are no-ops on a missing key), not an error.
+    const racingStore: SyncStore = {
+      ...syncStore,
+      getPending: async () => {
+        const pending = await syncStore.getPending();
+        await syncStore.remove('mutation-1');
+        return pending;
+      },
+    };
+    const createTransaction = vi.fn();
+    const engine = createSyncQueueEngine({
+      syncStore: racingStore,
+      createTransaction,
+      generateMutationId,
+    });
+
+    await expect(engine.discardAllPending()).resolves.toBeUndefined();
+
+    await expect(syncStore.list()).resolves.toEqual([]);
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
   it('notifies onQueueChanged after every store-mutating operation', async () => {
     const syncStore = createFakeSyncStore();
     const onQueueChanged = vi.fn();
@@ -297,5 +338,45 @@ describe('createReconnectDetector', () => {
     const detector = createReconnectDetector(true);
 
     expect(detector.observe(true)).toBe(true);
+  });
+});
+
+describe('isNetInfoStateOnline', () => {
+  it('treats connected + unknown reachability as online (NetInfo has not settled yet)', () => {
+    expect(isNetInfoStateOnline({ isConnected: true, isInternetReachable: null })).toBe(true);
+  });
+
+  it('treats connected + confirmed unreachable as offline', () => {
+    expect(isNetInfoStateOnline({ isConnected: true, isInternetReachable: false })).toBe(false);
+  });
+
+  it('treats connected + confirmed reachable as online', () => {
+    expect(isNetInfoStateOnline({ isConnected: true, isInternetReachable: true })).toBe(true);
+  });
+
+  it('treats not connected as offline regardless of isInternetReachable', () => {
+    expect(isNetInfoStateOnline({ isConnected: false, isInternetReachable: true })).toBe(false);
+    expect(isNetInfoStateOnline({ isConnected: false, isInternetReachable: null })).toBe(false);
+  });
+
+  it('treats an unknown isConnected reading as offline', () => {
+    // `NetInfoUnknownState` reports `isConnected: boolean | null` — unlike
+    // `isInternetReachable`, an unresolved *connection* (not just reachability) is not
+    // optimistically treated as online, since there is no transport to even attempt a drain on.
+    expect(isNetInfoStateOnline({ isConnected: null, isInternetReachable: null })).toBe(false);
+  });
+});
+
+describe('decideSignOutFlow', () => {
+  it('signs out immediately when nothing is pending', () => {
+    expect(decideSignOutFlow(0)).toBe('sign-out-immediately');
+  });
+
+  it('warns when exactly one mutation is pending', () => {
+    expect(decideSignOutFlow(1)).toBe('warn-about-pending');
+  });
+
+  it('warns when several mutations are pending', () => {
+    expect(decideSignOutFlow(5)).toBe('warn-about-pending');
   });
 });

@@ -1,4 +1,5 @@
 import type { CreateTransactionRequest, CreateTransactionResponse } from '@nido/contracts';
+import type { NetInfoState } from '@react-native-community/netinfo';
 
 // Relative import (not the `@/` alias used elsewhere in apps/mobile): this module is unit-tested
 // directly by sync-queue.test.ts, and vitest.config.ts has no alias resolution configured (see
@@ -192,4 +193,38 @@ export function createReconnectDetector(initiallyOffline = false): ReconnectDete
       return reconnected;
     },
   };
+}
+
+/**
+ * Decides whether a `NetInfo` reading counts as "online" for reconnect-detection purposes
+ * (pairs with `createReconnectDetector`, which consumes its boolean output). Pulled out of
+ * `sync-queue-provider.tsx`'s `NetInfo.addEventListener` callback so the connectivity rule is a
+ * plain, directly-testable function instead of inline logic only exercisable through a live
+ * NetInfo event.
+ *
+ * `isInternetReachable` is `boolean | null` on `NetInfoState` — NetInfo reports `null` while it
+ * hasn't finished determining reachability yet (see the library's own `NetInfoConnectedState`/
+ * `NetInfoUnknownState` types). Only an explicit `false` counts as offline; an unknown reading
+ * must not be treated as offline, or every app start would flash offline before NetInfo settles.
+ * `isConnected` is checked first and strictly, since `false`/`null` there means there is no
+ * transport at all regardless of what `isInternetReachable` says.
+ */
+export function isNetInfoStateOnline(
+  state: Pick<NetInfoState, 'isConnected' | 'isInternetReachable'>,
+): boolean {
+  return state.isConnected === true && state.isInternetReachable !== false;
+}
+
+/** What `mas.tsx`'s sign-out button should do given how many mutations are still queued. */
+export type SignOutDecision = 'sign-out-immediately' | 'warn-about-pending';
+
+/**
+ * The pure decision behind `mas.tsx`'s `handleSignOutPress` (see §11 / ADR 0008): a queued
+ * mutation is tied to whoever is signed in when it finally syncs, so signing out while any are
+ * still pending must warn explicitly instead of discarding them silently. Extracted so the
+ * invariant is directly testable without rendering the screen's modal (this repo has no
+ * component-render test harness).
+ */
+export function decideSignOutFlow(pendingCount: number): SignOutDecision {
+  return pendingCount > 0 ? 'warn-about-pending' : 'sign-out-immediately';
 }

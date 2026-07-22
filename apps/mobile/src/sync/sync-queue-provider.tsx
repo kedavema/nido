@@ -17,6 +17,7 @@ import { useSession } from '@/auth/session-provider';
 import {
   createReconnectDetector,
   createSyncQueueEngine,
+  isNetInfoStateOnline,
   type CreateExpenseResult,
 } from './sync-queue';
 import { getSyncStore } from './sync-store';
@@ -97,10 +98,8 @@ export function SyncQueueProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const detector = reconnectDetectorRef.current;
     const unsubscribe = NetInfo.addEventListener((netInfoState) => {
-      const isOnline =
-        netInfoState.isConnected === true && netInfoState.isInternetReachable !== false;
       // Only drains on an offline→online transition, not on every connectivity event.
-      if (detector.observe(isOnline)) {
+      if (detector.observe(isNetInfoStateOnline(netInfoState))) {
         void drain();
       }
     });

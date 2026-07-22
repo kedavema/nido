@@ -15,6 +15,7 @@ import {
   m1TextStyles,
 } from '@/components/m1-ui';
 import { createInvitationRequestGuard } from '@/invitations/invitation-request-guard';
+import { decideSignOutFlow } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { themeTokens } from '@/theme/tokens';
 
@@ -130,7 +131,8 @@ export default function MasScreen() {
   function handleSignOutPress(): void {
     // §11 / ADR 0008: a queued mutation is tied to whoever is signed in when it finally syncs,
     // so signing out with pending mutations must warn explicitly instead of discarding silently.
-    if (pending.length > 0) {
+    // The actual decision is `decideSignOutFlow` (sync-queue.ts) so it's directly testable.
+    if (decideSignOutFlow(pending.length) === 'warn-about-pending') {
       setShowPendingSyncWarning(true);
       return;
     }
