@@ -61,6 +61,31 @@ enum TransactionOrigin {
   @@map("transaction_origin")
 }
 
+enum RecurringItemKind {
+  EXPENSE
+  INCOME
+
+  @@map("recurring_item_kind")
+}
+
+enum RecurringFrequency {
+  ONE_TIME
+  MONTHLY
+  YEARLY
+  EVERY_N_MONTHS
+
+  @@map("recurring_frequency")
+}
+
+enum OccurrenceStatus {
+  PENDING
+  SETTLED
+  OVERDUE
+  SKIPPED
+
+  @@map("occurrence_status")
+}
+
 model User {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   firebaseUid String   @unique(map: "users_firebase_uid_key") @map("firebase_uid")
@@ -71,11 +96,13 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  createdHouseholds   Household[]       @relation("HouseholdCreator")
-  memberships         HouseholdMember[]
-  ownedPaymentSources PaymentSource[]   @relation("PaymentSourceOwner")
-  createdTransactions Transaction[]     @relation("TransactionCreatedBy")
-  updatedTransactions Transaction[]     @relation("TransactionUpdatedBy")
+  createdHouseholds      Household[]       @relation("HouseholdCreator")
+  memberships            HouseholdMember[]
+  ownedPaymentSources    PaymentSource[]   @relation("PaymentSourceOwner")
+  createdTransactions    Transaction[]     @relation("TransactionCreatedBy")
+  updatedTransactions    Transaction[]     @relation("TransactionUpdatedBy")
+  responsibleRecurring   RecurringItem[]   @relation("RecurringItemResponsible")
+  responsibleOccurrences Occurrence[]      @relation("OccurrenceResponsible")
 
   @@map("users")
 }
@@ -94,6 +121,8 @@ model Household {
   paymentSources PaymentSource[]
   categories     Category[]
   transactions   Transaction[]
+  recurringItems RecurringItem[]
+  occurrences    Occurrence[]
 
   @@index([createdByUserId], map: "households_created_by_idx")
   @@map("households")
@@ -143,9 +172,10 @@ model PaymentSource {
   createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  owner        User?         @relation("PaymentSourceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  transactions Transaction[]
+  household      Household       @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  owner          User?           @relation("PaymentSourceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  transactions   Transaction[]
+  recurringItems RecurringItem[]
 
   @@index([householdId, isActive], map: "payment_sources_household_id_is_active_idx")
   @@index([ownerUserId], map: "payment_sources_owner_user_id_idx")
@@ -165,10 +195,11 @@ model Category {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  children     Category[]    @relation("CategoryHierarchy")
-  transactions Transaction[]
+  household      Household       @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parent         Category?       @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children       Category[]      @relation("CategoryHierarchy")
+  transactions   Transaction[]
+  recurringItems RecurringItem[]
 
   // DB-level rules added by hand in the migration (Prisma cannot express them):
   // - categories_active_sibling_name_key: partial unique index (household_id, kind, parent_id, name)
@@ -204,11 +235,12 @@ model Transaction {
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  household     Household      @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  category      Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  paymentSource PaymentSource? @relation(fields: [paymentSourceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  creator       User           @relation("TransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  updater       User           @relation("TransactionUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  household        Household      @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  category         Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  paymentSource    PaymentSource? @relation(fields: [paymentSourceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  creator          User           @relation("TransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updater          User           @relation("TransactionUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  sourceOccurrence Occurrence?    @relation("TransactionSourceOccurrence", fields: [sourceOccurrenceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   // DB-level rules added by hand in the migration (Prisma cannot express them):
   // - transactions_created_by_household_id_client_mutation_id_key: partial unique index
@@ -228,4 +260,76 @@ model Transaction {
   @@index([householdId, categoryId, localDate], map: "transactions_household_id_category_id_local_date_idx")
   @@index([householdId, paymentSourceId, localDate], map: "transactions_household_id_payment_source_id_local_date_idx")
   @@map("transactions")
+}
+
+// A recurring item is a rule describing what should happen (docs/system-design.md §6.4):
+// e.g. "Internet, mensual, vence el día 10, estimado Gs. 200.000". It never represents a
+// concrete payment/collection by itself — that's what `Occurrence` and `Transaction` are for.
+model RecurringItem {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId         String              @map("household_id") @db.Uuid
+  kind                RecurringItemKind
+  name                String
+  description         String?
+  categoryId          String              @map("category_id") @db.Uuid
+  paymentSourceId     String?             @map("payment_source_id") @db.Uuid
+  responsibleUserId   String?             @map("responsible_user_id") @db.Uuid
+  estimatedAmount     Decimal             @map("estimated_amount") @db.Decimal(18, 2)
+  currency            TransactionCurrency
+  plannedFxRateToBase Decimal?            @map("planned_fx_rate_to_base") @db.Decimal(18, 4)
+  frequency           RecurringFrequency
+  intervalMonths      Int?                @map("interval_months")
+  firstDueDate        DateTime            @map("first_due_date") @db.Date
+  endDate             DateTime?           @map("end_date") @db.Date
+  notificationOffsets Int[]               @default([]) @map("notification_offsets")
+  isActive            Boolean             @default(true) @map("is_active")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  household       Household      @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  category        Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  paymentSource   PaymentSource? @relation(fields: [paymentSourceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  responsibleUser User?          @relation("RecurringItemResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  occurrences     Occurrence[]
+
+  // interval_months is only meaningful (and required) when frequency = EVERY_N_MONTHS; enforced
+  // at the application layer (T-503/T-504), not by a DB constraint, per scope of this change.
+  @@index([householdId, isActive], map: "recurring_items_household_id_is_active_idx")
+  @@index([categoryId], map: "recurring_items_category_id_idx")
+  @@index([paymentSourceId], map: "recurring_items_payment_source_id_idx")
+  @@index([responsibleUserId], map: "recurring_items_responsible_user_id_idx")
+  @@map("recurring_items")
+}
+
+// An occurrence is a concrete obligation generated from a `RecurringItem` rule for a single due
+// date (docs/system-design.md §6.4): e.g. "Internet julio 2026, vence 10/07/2026". Amount,
+// currency, planned FX rate, and responsible user are copied from the parent rule at generation
+// time, so editing the rule later never rewrites an occurrence that already exists.
+model Occurrence {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recurringItemId   String              @map("recurring_item_id") @db.Uuid
+  householdId       String              @map("household_id") @db.Uuid
+  dueDate           DateTime            @map("due_date") @db.Date
+  amount            Decimal             @db.Decimal(18, 2)
+  currency          TransactionCurrency
+  fxRateToBase      Decimal?            @map("fx_rate_to_base") @db.Decimal(18, 4)
+  responsibleUserId String?             @map("responsible_user_id") @db.Uuid
+  status            OccurrenceStatus    @default(PENDING)
+  settledAt         DateTime?           @map("settled_at") @db.Timestamptz(3)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recurringItem   RecurringItem @relation(fields: [recurringItemId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  household       Household     @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  responsibleUser User?         @relation("OccurrenceResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  transaction     Transaction?  @relation("TransactionSourceOccurrence")
+
+  // Settling/skipping an occurrence (status transitions + settledAt + linking a Transaction via
+  // Transaction.sourceOccurrenceId) is T-506 — out of scope here. This model only guarantees the
+  // shape: a SETTLED occurrence's one-to-one link to its Transaction is enforced by
+  // transactions_source_occurrence_id_key (unique), not by anything added in this migration.
+  @@unique([recurringItemId, dueDate], map: "occurrences_recurring_item_id_due_date_key")
+  @@index([householdId, dueDate], map: "occurrences_household_id_due_date_idx")
+  @@index([householdId, status], map: "occurrences_household_id_status_idx")
+  @@map("occurrences")
 }
