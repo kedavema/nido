@@ -17,6 +17,7 @@ import { IBMPlexSans_700Bold } from '@expo-google-fonts/ibm-plex-sans/700Bold';
 import { themeTokens } from '@/theme/tokens';
 import { SessionProvider, useSession } from '@/auth/session-provider';
 import { destinationForSession } from '@/auth/session-machine';
+import { SyncQueueProvider } from '@/sync/sync-queue-provider';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -54,7 +55,9 @@ export default function RootLayout() {
       </Head>
       <StatusBar style="dark" />
       <SessionProvider>
-        <SessionStack />
+        <SyncQueueProvider>
+          <SessionStack />
+        </SyncQueueProvider>
       </SessionProvider>
     </SafeAreaProvider>
   );

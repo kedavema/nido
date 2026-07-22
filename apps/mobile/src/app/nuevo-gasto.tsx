@@ -26,6 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { ActionButton, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
 import {
@@ -78,6 +79,16 @@ import {
 const EMPTY_CATEGORIES: readonly Category[] = [];
 const EMPTY_PAYMENT_SOURCES: readonly PaymentSource[] = [];
 const EMPTY_TRANSACTIONS: readonly Transaction[] = [];
+
+// How long the "Guardado en este teléfono" confirmation stays on screen before navigating back —
+// long enough to read, short enough not to feel stuck. The Movimientos "Pendientes" section is
+// the persistent confirmation; this is just the immediate, unambiguous acknowledgment §6.9 asks
+// for at the moment of saving.
+const QUEUED_NOTICE_DISPLAY_MILLISECONDS = 1400;
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 type Mode = 'create' | 'edit';
 
@@ -138,6 +149,7 @@ export default function NuevoGastoScreen() {
   const { transactionId } = useLocalSearchParams<{ transactionId?: string }>();
   const mode: Mode = transactionId === undefined ? 'create' : 'edit';
   const { catalog, state } = useSession();
+  const syncQueue = useSyncQueue();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
 
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' });
@@ -145,6 +157,7 @@ export default function NuevoGastoScreen() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
+  const [queuedNotice, setQueuedNotice] = useState(false);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showPaymentSourcePicker, setShowPaymentSourcePicker] = useState(false);
@@ -356,6 +369,7 @@ export default function NuevoGastoScreen() {
       return;
     }
     setSubmitError(undefined);
+    setQueuedNotice(false);
     setSaving(true);
     try {
       const amountWire = amountToWireDecimal(draft.amount, draft.currency);
@@ -376,7 +390,15 @@ export default function NuevoGastoScreen() {
           description: trimmedDescription,
           ...(trimmedNotes === '' ? {} : { notes: trimmedNotes }),
         };
-        await catalog.createTransaction(household.id, request);
+        // Always attempts the direct request first (per docs/system-design.md §10) and only
+        // falls back to the local queue on a genuine network failure — see syncQueue.createExpense.
+        const result = await syncQueue.createExpense(household.id, request);
+        if (result.outcome === 'queued') {
+          // §6.9: offline mode must confirm "Guardado en este teléfono" unambiguously. The
+          // Movimientos "Pendientes" section is the lasting confirmation; this is the immediate one.
+          setQueuedNotice(true);
+          await wait(QUEUED_NOTICE_DISPLAY_MILLISECONDS);
+        }
       } else {
         const request: UpdateTransactionRequest = {
           amount: amountWire,
@@ -597,6 +619,12 @@ export default function NuevoGastoScreen() {
               <Text style={styles.addNoteText}>+ Agregar nota (opcional)</Text>
             </Pressable>
           )}
+
+          {queuedNotice ? (
+            <InlineNotice tone="success">
+              Guardado en este teléfono. Se sincroniza automáticamente cuando haya conexión.
+            </InlineNotice>
+          ) : null}
 
           {submitError === undefined ? null : (
             <InlineNotice tone="error">{submitError}</InlineNotice>

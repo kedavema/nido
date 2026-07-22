@@ -263,6 +263,68 @@ describe('Nido API client', () => {
     expect(fetchImplementation.mock.calls[1]?.[1]).toMatchObject({ method: 'PATCH' });
   });
 
+  it('sends Idempotency-Key only when clientMutationId is set, matching it exactly', async () => {
+    const householdId = '00000000-0000-4000-8000-000000000011';
+    const categoryId = '00000000-0000-4000-8000-000000000013';
+    const clientMutationId = '00000000-0000-4000-8000-000000000099';
+    const transaction = {
+      id: '00000000-0000-4000-8000-000000000012',
+      householdId,
+      type: 'EXPENSE',
+      amount: '10000',
+      currency: 'PYG',
+      fxRateToBase: null,
+      baseAmountPyg: '10000',
+      occurredAt: '2026-07-15T12:00:00.000Z',
+      localDate: '2026-07-15',
+      categoryId,
+      paymentSourceId: null,
+      description: 'Almuerzo',
+      notes: null,
+      origin: 'MANUAL',
+      createdBy: '00000000-0000-4000-8000-000000000001',
+      updatedBy: '00000000-0000-4000-8000-000000000001',
+      createdAt: '2026-07-15T12:00:00.000Z',
+      updatedAt: '2026-07-15T12:00:00.000Z',
+    } as const;
+    const fetchImplementation = vi
+      .fn<FetchImplementation>()
+      .mockResolvedValueOnce(jsonResponse({ transaction }))
+      .mockResolvedValueOnce(jsonResponse({ transaction }));
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    await client.createTransaction(householdId, {
+      type: 'EXPENSE',
+      amount: '10000',
+      currency: 'PYG',
+      occurredAt: '2026-07-15T12:00:00.000Z',
+      categoryId,
+      description: 'Almuerzo',
+      clientMutationId,
+    });
+    await client.createTransaction(householdId, {
+      type: 'EXPENSE',
+      amount: '10000',
+      currency: 'PYG',
+      occurredAt: '2026-07-15T12:00:00.000Z',
+      categoryId,
+      description: 'Almuerzo',
+    });
+
+    const withIdHeaders = fetchImplementation.mock.calls[0]?.[1].headers as Record<string, string>;
+    expect(withIdHeaders['Idempotency-Key']).toBe(clientMutationId);
+
+    const withoutIdHeaders = fetchImplementation.mock.calls[1]?.[1].headers as Record<
+      string,
+      string
+    >;
+    expect(withoutIdHeaders['Idempotency-Key']).toBeUndefined();
+  });
+
   it('rejects an invalid transaction payload client-side, without making a request', () => {
     const fetchImplementation = vi.fn<FetchImplementation>();
     const client = createNidoApiClient({
