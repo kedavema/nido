@@ -115,19 +115,23 @@ export function formatOccurredAtTime(occurredAt: string, timeZone = HOUSEHOLD_TI
   return `${hour}:${minute}`;
 }
 
-/** "hoy, 9:12" / "ayer, 18:04" / "mié 1 jul 2026, 9:12" — MOV-03 hero timestamp. */
+/** "hoy · mié 15 jul, 9:12" / "ayer · mar 14 jul, 18:04" / "mié 1 jul, 9:12" — MOV-03 hero
+ * timestamp. No year here (unlike `formatFullLocalDate`'s "Fecha" row below it) — the year is
+ * dropped the same way `nuevo-gasto.tsx`'s "Último usado" caption drops it, by stripping the
+ * trailing " yyyy" off `formatFullLocalDate`'s output. */
 export function formatMovementTimestamp(
   transaction: Pick<Transaction, 'localDate' | 'occurredAt'>,
   todayLocal: string,
 ): string {
   const time = formatOccurredAtTime(transaction.occurredAt);
+  const dateWithoutYear = formatFullLocalDate(transaction.localDate).replace(/\s\d{4}$/u, '');
   if (transaction.localDate === todayLocal) {
-    return `hoy, ${time}`;
+    return `hoy · ${dateWithoutYear}, ${time}`;
   }
   if (transaction.localDate === previousLocalDate(todayLocal)) {
-    return `ayer, ${time}`;
+    return `ayer · ${dateWithoutYear}, ${time}`;
   }
-  return `${formatFullLocalDate(transaction.localDate)}, ${time}`;
+  return `${dateWithoutYear}, ${time}`;
 }
 
 /** "hoy" / "ayer" / "1 jul" — INI-02's compact date caption for a "Recientes" row. */
@@ -295,4 +299,27 @@ export function futureMonthSubtitle(month: MonthValue, todayLocal: string): stri
     return 'aún no empezó';
   }
   return undefined;
+}
+
+/** Whether `month` is the real current calendar month (not a past or future one being paged to). */
+export function isCurrentMonth(month: MonthValue, todayLocal: string): boolean {
+  return monthDifference(monthFromLocalDate(todayLocal), month) === 0;
+}
+
+/**
+ * INI-02's "quedan N días" header caption — whole days left in the current calendar month,
+ * counting today itself as already under way (so the last day of the month reads "quedan 0
+ * días"). `undefined` for any month other than the real current one, since the caption only makes
+ * sense next to the month you're actually living in.
+ */
+export function daysRemainingInCurrentMonth(
+  month: MonthValue,
+  todayLocal: string,
+): number | undefined {
+  if (!isCurrentMonth(month, todayLocal)) {
+    return undefined;
+  }
+  const { year, day } = parseLocalDate(todayLocal);
+  const lastDay = new Date(Date.UTC(year, month.month, 0)).getUTCDate();
+  return lastDay - day;
 }

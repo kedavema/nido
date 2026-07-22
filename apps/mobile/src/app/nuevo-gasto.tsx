@@ -826,6 +826,13 @@ function CategoryPickerModal({
   readonly onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
+  // Root-expand/collapse state, same `Record<id, boolean>` toggle pattern as `categories.tsx`'s
+  // `expandedRoots`/`toggleRoot`. GAS-05 shows tapping a root expanding it inline to reveal
+  // subcategory chips (plus "Sin subcategoría") rather than selecting+closing immediately —
+  // before this, `onSelect(root)` fired straight from the root row's onPress, so the chip row
+  // below it (which already existed) was unreachable except via search or a pre-existing
+  // selection. Only a root actually gets this state; picking a chip still selects+closes.
+  const [expandedRoots, setExpandedRoots] = useState<Record<string, boolean>>({});
   const query = search.trim().toLowerCase();
   const roots = categories.filter((category) => category.parentId === null);
 
@@ -870,16 +877,23 @@ function CategoryPickerModal({
             if (query !== '' && !matchesRoot && filteredChildren.length === 0) {
               return null;
             }
-            const expanded =
-              query !== '' ||
+            const containsSelection =
               selectedCategoryId === root.id ||
               children.some((child) => child.id === selectedCategoryId);
+            const expanded =
+              query !== '' ||
+              expandedRoots[root.id] === true ||
+              (expandedRoots[root.id] !== false && containsSelection);
             return (
               <View key={root.id} style={styles.pickerRootGroup}>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => {
-                    onSelect(root);
+                    if (children.length === 0) {
+                      onSelect(root);
+                      return;
+                    }
+                    setExpandedRoots((current) => ({ ...current, [root.id]: !expanded }));
                   }}
                   style={styles.pickerRootRow}
                 >
@@ -1227,6 +1241,12 @@ const styles = StyleSheet.create({
   },
   amountInput: {
     flex: 1,
+    // On web, react-native-web renders this as a plain <input>, and the browser's UA default
+    // min-content width for a text input scales with fontSize (here 40px) — without an explicit
+    // minWidth override, Chrome refuses to shrink the flex item below that intrinsic width
+    // (~470px+ at this font size), overflowing `amountRow` and the whole form's ScrollView
+    // horizontally. minWidth: 0 lets the flex-basis:0/flex-grow:1 sizing actually apply.
+    minWidth: 0,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.displayBold,
     fontSize: 40,

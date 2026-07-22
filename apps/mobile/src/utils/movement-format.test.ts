@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   categoryLabel,
+  daysRemainingInCurrentMonth,
   formatDayHeading,
   formatDecimalEs,
   formatFullLocalDate,
@@ -15,6 +16,7 @@ import {
   formatTransactionAmount,
   futureMonthSubtitle,
   groupTransactionsByDay,
+  isCurrentMonth,
   monthFromLocalDate,
   monthLocalDateRange,
   previousLocalDate,
@@ -226,31 +228,31 @@ describe('formatOccurredAtTime', () => {
 });
 
 describe('formatMovementTimestamp', () => {
-  it('uses "hoy" for the current day', () => {
+  it('uses "hoy ·" plus the yearless date for the current day', () => {
     expect(
       formatMovementTimestamp(
         { localDate: '2026-07-15', occurredAt: '2026-07-15T12:12:00.000Z' },
         '2026-07-15',
       ),
-    ).toMatch(/^hoy, \d{1,2}:\d{2}$/u);
+    ).toMatch(/^hoy · mié 15 jul, \d{1,2}:\d{2}$/u);
   });
 
-  it('uses "ayer" for the previous day', () => {
+  it('uses "ayer ·" plus the yearless date for the previous day', () => {
     expect(
       formatMovementTimestamp(
         { localDate: '2026-07-14', occurredAt: '2026-07-14T12:12:00.000Z' },
         '2026-07-15',
       ),
-    ).toMatch(/^ayer, \d{1,2}:\d{2}$/u);
+    ).toMatch(/^ayer · mar 14 jul, \d{1,2}:\d{2}$/u);
   });
 
-  it('uses the full date for older days', () => {
+  it('uses the yearless date with no relative prefix for older days', () => {
     expect(
       formatMovementTimestamp(
         { localDate: '2026-07-01', occurredAt: '2026-07-01T12:12:00.000Z' },
         '2026-07-15',
       ),
-    ).toMatch(/^mié 1 jul 2026, \d{1,2}:\d{2}$/u);
+    ).toMatch(/^mié 1 jul, \d{1,2}:\d{2}$/u);
   });
 });
 
@@ -312,6 +314,32 @@ describe('month helpers', () => {
   it('formats the yyyy-MM query param for reports/monthly-summary', () => {
     expect(formatMonthQueryParam({ year: 2026, month: 7 })).toBe('2026-07');
     expect(formatMonthQueryParam({ year: 2026, month: 1 })).toBe('2026-01');
+  });
+
+  it('INI-02: identifies the real current month', () => {
+    expect(isCurrentMonth({ year: 2026, month: 7 }, '2026-07-15')).toBe(true);
+  });
+
+  it('INI-02: rejects a past or future month as "current"', () => {
+    expect(isCurrentMonth({ year: 2026, month: 6 }, '2026-07-15')).toBe(false);
+    expect(isCurrentMonth({ year: 2026, month: 8 }, '2026-07-15')).toBe(false);
+  });
+
+  it('INI-02: counts the days remaining in the current month', () => {
+    expect(daysRemainingInCurrentMonth({ year: 2026, month: 7 }, '2026-07-15')).toBe(16);
+  });
+
+  it('INI-02: has no days-remaining caption for a past or future month', () => {
+    expect(daysRemainingInCurrentMonth({ year: 2026, month: 6 }, '2026-07-15')).toBeUndefined();
+    expect(daysRemainingInCurrentMonth({ year: 2026, month: 8 }, '2026-07-15')).toBeUndefined();
+  });
+
+  it('INI-02: counts zero days remaining on the last day of the month', () => {
+    expect(daysRemainingInCurrentMonth({ year: 2026, month: 7 }, '2026-07-31')).toBe(0);
+  });
+
+  it('INI-02: handles a shorter month (February, non-leap year)', () => {
+    expect(daysRemainingInCurrentMonth({ year: 2026, month: 2 }, '2026-02-01')).toBe(27);
   });
 });
 
