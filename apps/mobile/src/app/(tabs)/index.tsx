@@ -1,6 +1,7 @@
 import type {
   Category,
   CategoryBreakdownItem,
+  HouseholdMember,
   MonthlySummaryResponse,
   PaymentSource,
   Transaction,
@@ -27,6 +28,7 @@ import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
 import {
   categoryLabel,
+  daysRemainingInCurrentMonth,
   formatMonthLabel,
   formatMonthQueryParam,
   formatOccurredAtTime,
@@ -35,6 +37,7 @@ import {
   formatSignedPygAmount,
   formatTransactionAmount,
   futureMonthSubtitle,
+  isCurrentMonth,
   monthFromLocalDate,
   shiftMonth,
   todayLocalDate,
@@ -48,6 +51,7 @@ const MAX_CATEGORY_ROWS = 5;
 
 const EMPTY_CATEGORIES: readonly Category[] = [];
 const EMPTY_PAYMENT_SOURCES: readonly PaymentSource[] = [];
+const EMPTY_MEMBERS: readonly HouseholdMember[] = [];
 
 // GLO-02's "de {HH:MM}" / "último intento {HH:MM}" times are about this device's clock (when the
 // cache was written / the retry was attempted locally), not the household's business timezone —
@@ -62,6 +66,14 @@ type CatalogState =
       readonly categories: readonly Category[];
       readonly paymentSources: readonly PaymentSource[];
     };
+
+// Only used for the INI-02 header avatars and the INI-01 true-first-run heuristic below — neither
+// is critical enough to warrant its own error UI, so a failed fetch just degrades quietly (no
+// avatars, generic empty-month card) the same way mas.tsx's payment-source preview does.
+type MembersState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error' }
+  | { readonly kind: 'loaded'; readonly members: readonly HouseholdMember[] };
 
 type SummaryState =
   | { readonly kind: 'loading' }
@@ -93,8 +105,43 @@ function isEmptyMonth(summary: MonthlySummaryResponse): boolean {
   );
 }
 
+/**
+ * INI-01's true first-run state ("the household has never had any transaction, ever") vs. GLO-03's
+ * generic "this particular month is empty" card. The summary endpoint has no household-lifetime
+ * signal, and this screen intentionally avoids adding a new API call just to get one precisely, so
+ * this is a heuristic built from data already fetched here:
+ *
+ * - The viewed month must be the real current month — an empty *past* month (or a future one,
+ *   which is always empty) says nothing about whether the household is brand new.
+ * - The household must have no other ACTIVE member yet besides the viewer. A household that has
+ *   onboarded a second member has almost certainly used the app for a while (the pending-invite
+ *   case in INI-01 itself has zero other ACTIVE members, which is why this still fires there).
+ *
+ * This can still misfire for a genuinely solo household that has used Nido for months without ever
+ * inviting anyone and happens to have an empty current month — it would see the first-run
+ * checklist again. That's judged an acceptable false positive: the checklist is harmless to show
+ * again (all three items are still valid next actions), unlike showing the generic "no movements"
+ * copy to someone who has truly never used the app.
+ */
+function isTrueFirstRun(
+  month: MonthValue,
+  todayLocal: string,
+  membersState: MembersState,
+): boolean {
+  if (!isCurrentMonth(month, todayLocal)) {
+    return false;
+  }
+  if (membersState.kind !== 'loaded') {
+    return false;
+  }
+  const otherActiveMembers = membersState.members.filter(
+    (member) => member.status === 'ACTIVE',
+  ).length;
+  return otherActiveMembers <= 1;
+}
+
 export default function InicioScreen() {
-  const { catalog, state } = useSession();
+  const { catalog, getMembers, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const summaryCache = useMemo(() => getSummaryCache(), []);
 
@@ -103,6 +150,7 @@ export default function InicioScreen() {
   const [errorDetailsOpen, setErrorDetailsOpen] = useState(false);
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: 'loading' });
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: 'loading' });
+  const [membersState, setMembersState] = useState<MembersState>({ kind: 'loading' });
 
   const loadCatalog = useCallback(async () => {
     if (household === null) return;
@@ -121,6 +169,21 @@ export default function InicioScreen() {
   useEffect(() => {
     queueMicrotask(() => void loadCatalog());
   }, [loadCatalog]);
+
+  const loadMembers = useCallback(async () => {
+    if (household === null) return;
+    setMembersState({ kind: 'loading' });
+    try {
+      const { members } = await getMembers(household.id);
+      setMembersState({ kind: 'loaded', members });
+    } catch {
+      setMembersState({ kind: 'error' });
+    }
+  }, [getMembers, household]);
+
+  useEffect(() => {
+    queueMicrotask(() => void loadMembers());
+  }, [loadMembers]);
 
   const loadSummary = useCallback(
     async (isActive: () => boolean) => {
@@ -179,8 +242,10 @@ export default function InicioScreen() {
   const categories = catalogState.kind === 'loaded' ? catalogState.categories : EMPTY_CATEGORIES;
   const paymentSources =
     catalogState.kind === 'loaded' ? catalogState.paymentSources : EMPTY_PAYMENT_SOURCES;
+  const members = membersState.kind === 'loaded' ? membersState.members : EMPTY_MEMBERS;
   const todayLocal = todayLocalDate();
   const monthSubtitle = futureMonthSubtitle(month, todayLocal);
+  const daysRemaining = daysRemainingInCurrentMonth(month, todayLocal);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
@@ -189,32 +254,41 @@ export default function InicioScreen() {
           <Text style={styles.householdLabel}>{household.name}</Text>
           <Text accessibilityRole="header" style={styles.title}>
             {formatMonthLabel(month)}
+            {daysRemaining === undefined ? null : (
+              <Text style={styles.daysRemaining}>
+                {' '}
+                · quedan {daysRemaining.toString()} {daysRemaining === 1 ? 'día' : 'días'}
+              </Text>
+            )}
           </Text>
           {monthSubtitle === undefined ? null : (
             <Text style={styles.monthSubtitle}>{monthSubtitle}</Text>
           )}
         </View>
-        <View style={styles.monthPill}>
-          <Pressable
-            accessibilityLabel="Mes anterior"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, -1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={16} />
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Mes siguiente"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, 1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={16} />
-          </Pressable>
+        <View style={styles.headerRightGroup}>
+          <HeaderAvatars members={members} />
+          <View style={styles.monthPill}>
+            <Pressable
+              accessibilityLabel="Mes anterior"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => {
+                setMonth((current) => shiftMonth(current, -1));
+              }}
+            >
+              <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={16} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Mes siguiente"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => {
+                setMonth((current) => shiftMonth(current, 1));
+              }}
+            >
+              <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={16} />
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -268,21 +342,28 @@ export default function InicioScreen() {
 
         {summaryState.kind === 'loaded' ? (
           isEmptyMonth(summaryState.summary) ? (
-            <Card>
-              <Text style={m1TextStyles.sectionTitle}>
-                Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
-              </Text>
-              <Text style={m1TextStyles.secondary}>
-                Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para
-                ambos.
-              </Text>
-              <ActionButton
-                label="Cargar un gasto"
-                onPress={() => {
-                  navigateToNewExpense();
-                }}
-              />
-            </Card>
+            isTrueFirstRun(month, todayLocal, membersState) ? (
+              <>
+                <FirstRunBalanceCard month={month} />
+                <FirstRunChecklistCard month={month} />
+              </>
+            ) : (
+              <Card>
+                <Text style={m1TextStyles.sectionTitle}>
+                  Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
+                </Text>
+                <Text style={m1TextStyles.secondary}>
+                  Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para
+                  ambos.
+                </Text>
+                <ActionButton
+                  label="Cargar un gasto"
+                  onPress={() => {
+                    navigateToNewExpense();
+                  }}
+                />
+              </Card>
+            )
           ) : (
             <>
               <BalanceCard
@@ -324,6 +405,153 @@ export default function InicioScreen() {
         </Pressable>
       </View>
     </SafeAreaView>
+  );
+}
+
+/**
+ * INI-02's two header avatar circles, one per ACTIVE household member (a member with a pending,
+ * not-yet-accepted invite doesn't show up in `getMembers` at all, so nothing extra to filter out
+ * there). No per-member color convention exists elsewhere in the app yet, so this alternates
+ * `primary`/`accent` by member order — which happens to match the reference's dark-green "A" /
+ * orange "K" circles exactly.
+ */
+function HeaderAvatars({ members }: { readonly members: readonly HouseholdMember[] }) {
+  const activeMembers = members.filter((member) => member.status === 'ACTIVE');
+  if (activeMembers.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.headerAvatars}>
+      {activeMembers.map((member, index) => (
+        <View
+          accessibilityLabel={member.displayName}
+          key={member.userId}
+          style={[
+            styles.headerAvatar,
+            {
+              backgroundColor:
+                index % 2 === 0 ? themeTokens.colors.primary : themeTokens.colors.accent,
+            },
+          ]}
+        >
+          <Text style={styles.headerAvatarText}>
+            {member.displayName.trim().charAt(0).toUpperCase() || '·'}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * INI-01's true first-run "BALANCE REAL DE {MES}" card — replaces (not adds to) the generic
+ * GLO-03 empty-month card when `isTrueFirstRun` fires. Renders "Gs. 0" directly rather than
+ * through `formatSignedPygAmount` since a true zero has no sign in the reference (no leading "+").
+ */
+function FirstRunBalanceCard({ month }: { readonly month: MonthValue }) {
+  return (
+    <Card>
+      <Text style={styles.cardLabel}>
+        BALANCE REAL DE {formatMonthLabel(month).replace(/\s\d{4}$/u, '').toUpperCase()}
+      </Text>
+      <Text style={styles.balanceAmount}>Gs. 0</Text>
+      <Text style={styles.balanceSubtitle}>Sin movimientos todavía — el nido está esperando.</Text>
+    </Card>
+  );
+}
+
+/** INI-01's "Empezá por acá" 3-item onboarding checklist, shown alongside `FirstRunBalanceCard`. */
+function FirstRunChecklistCard({ month }: { readonly month: MonthValue }) {
+  const monthName = formatMonthLabel(month).replace(/\s\d{4}$/u, '').toLowerCase();
+
+  return (
+    <Card>
+      <Text style={m1TextStyles.sectionTitle}>Empezá por acá</Text>
+      <ChecklistRow
+        emphasized
+        index={1}
+        onPress={() => {
+          navigateToNewExpense();
+        }}
+        subtitle="Tarda menos de 10 segundos"
+        title="Cargá tu primer gasto"
+        trailingLabel="Cargar"
+      />
+      <ChecklistRow
+        index={2}
+        onPress={() => {
+          router.push('/presupuesto');
+        }}
+        subtitle="Un total y límites por categoría"
+        title={`Definí el presupuesto de ${monthName}`}
+      />
+      <ChecklistRow
+        index={3}
+        onPress={() => {
+          router.push('/fijos');
+        }}
+        subtitle="Alquiler, ANDE, ESSAP, internet..."
+        title="Anotá sus gastos fijos"
+      />
+    </Card>
+  );
+}
+
+/**
+ * A single "Empezá por acá" row: a numbered badge (filled/dark for the actionable next step,
+ * lighter for the following previews), title/subtitle, and either a compact "Cargar"-style
+ * trailing label (item 1) or a plain chevron (items 2/3, which land on still-stub tabs today).
+ */
+function ChecklistRow({
+  index,
+  title,
+  subtitle,
+  emphasized = false,
+  trailingLabel,
+  onPress,
+}: {
+  readonly index: number;
+  readonly title: string;
+  readonly subtitle: string;
+  readonly emphasized?: boolean;
+  readonly trailingLabel?: string;
+  readonly onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`${title}. ${subtitle}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.checklistRow, pressed && styles.checklistRowPressed]}
+    >
+      <View
+        style={[
+          styles.checklistBadge,
+          emphasized ? styles.checklistBadgeEmphasized : styles.checklistBadgeMuted,
+        ]}
+      >
+        <Text
+          style={[
+            styles.checklistBadgeText,
+            emphasized ? styles.checklistBadgeTextEmphasized : styles.checklistBadgeTextMuted,
+          ]}
+        >
+          {index.toString()}
+        </Text>
+      </View>
+      <View style={styles.checklistCopy}>
+        <Text style={m1TextStyles.body}>{title}</Text>
+        <Text style={m1TextStyles.secondary}>{subtitle}</Text>
+      </View>
+      {trailingLabel === undefined ? (
+        <Ionicons color={themeTokens.colors.inkSecondary} name="chevron-forward" size={20} />
+      ) : (
+        <View style={styles.checklistButton}>
+          <Text style={styles.checklistButtonLabel}>{trailingLabel}</Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -528,7 +756,19 @@ function RecentTransactionsCard({
 
   return (
     <Card>
-      <Text style={styles.cardLabel}>RECIENTES · {transactions.length.toString()}</Text>
+      <View style={styles.cardHeaderRow}>
+        <Text style={styles.cardLabel}>RECIENTES · {transactions.length.toString()}</Text>
+        <Pressable
+          accessibilityLabel="Ver todos los movimientos"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => {
+            router.push('/movimientos');
+          }}
+        >
+          <Text style={styles.cardLinkLabel}>Ver todos ›</Text>
+        </Pressable>
+      </View>
       {transactions.map((transaction, index) => (
         <RecentMovementRow
           category={categories.find((c) => c.id === transaction.categoryId)}
@@ -638,6 +878,32 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.secondary,
   },
+  daysRemaining: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: themeTokens.spacing.cardGap,
+  },
+  headerAvatars: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatarText: {
+    color: themeTokens.colors.surface,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+  },
   monthPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -660,6 +926,17 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.label,
     letterSpacing: 0.4,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: themeTokens.spacing.cardGap,
+  },
+  cardLinkLabel: {
+    color: themeTokens.colors.primary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
   },
   detailsRow: {
     flexDirection: 'row',
@@ -765,6 +1042,56 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
     backgroundColor: themeTokens.colors.primary,
+  },
+  checklistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: themeTokens.touchTarget.minimum,
+  },
+  checklistRowPressed: {
+    opacity: 0.7,
+  },
+  checklistBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checklistBadgeEmphasized: {
+    backgroundColor: themeTokens.colors.primary,
+  },
+  checklistBadgeMuted: {
+    backgroundColor: themeTokens.colors.primaryTint,
+  },
+  checklistBadgeText: {
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
+  checklistBadgeTextEmphasized: {
+    color: themeTokens.colors.surface,
+  },
+  checklistBadgeTextMuted: {
+    color: themeTokens.colors.primary,
+  },
+  checklistCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  checklistButton: {
+    minHeight: themeTokens.touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: themeTokens.radii.button,
+    backgroundColor: themeTokens.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  checklistButtonLabel: {
+    color: themeTokens.colors.surface,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
   },
   recentRow: {
     flexDirection: 'row',

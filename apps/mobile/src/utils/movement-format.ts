@@ -300,3 +300,26 @@ export function futureMonthSubtitle(month: MonthValue, todayLocal: string): stri
   }
   return undefined;
 }
+
+/** Whether `month` is the real current calendar month (not a past or future one being paged to). */
+export function isCurrentMonth(month: MonthValue, todayLocal: string): boolean {
+  return monthDifference(monthFromLocalDate(todayLocal), month) === 0;
+}
+
+/**
+ * INI-02's "quedan N días" header caption — whole days left in the current calendar month,
+ * counting today itself as already under way (so the last day of the month reads "quedan 0
+ * días"). `undefined` for any month other than the real current one, since the caption only makes
+ * sense next to the month you're actually living in.
+ */
+export function daysRemainingInCurrentMonth(
+  month: MonthValue,
+  todayLocal: string,
+): number | undefined {
+  if (!isCurrentMonth(month, todayLocal)) {
+    return undefined;
+  }
+  const { year, day } = parseLocalDate(todayLocal);
+  const lastDay = new Date(Date.UTC(year, month.month, 0)).getUTCDate();
+  return lastDay - day;
+}
