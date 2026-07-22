@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CategoryRecord } from '../src/categories/category.js';
@@ -15,10 +15,14 @@ import type {
 } from '../src/transactions/transaction.js';
 import {
   TransactionCategoryInvalidError,
+  TransactionIdempotencyKeyCollisionError,
   TransactionPaymentSourceInvalidError,
   type TransactionsRepository,
 } from '../src/transactions/transactions.repository.js';
-import { TransactionsService } from '../src/transactions/transactions.service.js';
+import {
+  computeClientMutationHash,
+  TransactionsService,
+} from '../src/transactions/transactions.service.js';
 
 const Decimal = Prisma.Decimal;
 
@@ -32,6 +36,7 @@ const access: HouseholdAccess = {
 const transactionId = '0d539fa4-e991-41d7-9d31-258b1307ec31';
 const categoryId = '9f8f4a9c-31f0-4b62-9e6c-1a2b3c4d5e6f';
 const paymentSourceId = '7b6a5c4d-3e2f-4a1b-8c9d-0e1f2a3b4c5d';
+const clientMutationId = '1a2b3c4d-5e6f-4708-9a0b-1c2d3e4f5061';
 
 function transactionRecord(overrides: Partial<TransactionRecord> = {}): TransactionRecord {
   return {
@@ -53,6 +58,8 @@ function transactionRecord(overrides: Partial<TransactionRecord> = {}): Transact
     updatedBy: access.actorId,
     createdAt: now,
     updatedAt: now,
+    clientMutationId: null,
+    clientMutationHash: null,
     ...overrides,
   };
 }
@@ -111,6 +118,7 @@ function createTransactionsRepository(
   return {
     list: () => Promise.resolve([]),
     findInHousehold: () => Promise.resolve(null),
+    findByClientMutationId: () => Promise.reject(new Error('not used')),
     create: () => Promise.reject(new Error('not used')),
     update: () => Promise.reject(new Error('not used')),
     deleteById: () => Promise.reject(new Error('not used')),
@@ -462,6 +470,133 @@ describe('TransactionsService create', () => {
         description: 'Supermercado',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+// ADR 0003 idempotency protocol — service-level unit coverage (mocked repository). Integration
+// coverage against real PostgreSQL (the composite unique index, concurrency, replay) lives in
+// transactions-api.integration.spec.ts.
+describe('TransactionsService create idempotency (ADR 0003)', () => {
+  const baseInput = {
+    type: 'EXPENSE' as const,
+    amount: '150000',
+    currency: 'PYG' as const,
+    occurredAt: '2026-07-19T12:00:00.000Z',
+    categoryId,
+    description: 'Supermercado',
+  };
+
+  it('leaves the plain create path untouched when clientMutationId is absent (back-compat)', async () => {
+    const create = vi.fn<(input: CreateTransactionRecordInput) => Promise<TransactionRecord>>(() =>
+      Promise.resolve(transactionRecord()),
+    );
+    const findByClientMutationId = vi.fn();
+    const service = createService({
+      transactionsRepository: { create, findByClientMutationId },
+    });
+
+    await service.createTransaction(access, baseInput);
+
+    const createInput = create.mock.calls[0]?.[0];
+    expect(createInput?.clientMutationId).toBeNull();
+    expect(createInput?.clientMutationHash).toBeNull();
+    expect(findByClientMutationId).not.toHaveBeenCalled();
+  });
+
+  it('computes and sends a hash when clientMutationId is present', async () => {
+    const create = vi.fn<(input: CreateTransactionRecordInput) => Promise<TransactionRecord>>(() =>
+      Promise.resolve(transactionRecord({ clientMutationId, clientMutationHash: 'irrelevant' })),
+    );
+    const service = createService({ transactionsRepository: { create } });
+
+    await service.createTransaction(access, { ...baseInput, clientMutationId });
+
+    const createInput = create.mock.calls[0]?.[0];
+    expect(createInput?.clientMutationId).toBe(clientMutationId);
+    expect(createInput?.clientMutationHash).toBe(
+      computeClientMutationHash({
+        ...baseInput,
+        clientMutationId,
+      }),
+    );
+  });
+
+  it('returns the existing transaction as a replay when the collision hash matches', async () => {
+    const expectedHash = computeClientMutationHash({ ...baseInput, clientMutationId });
+    const create = vi.fn(() => Promise.reject(new TransactionIdempotencyKeyCollisionError()));
+    const findByClientMutationId = vi.fn(() =>
+      Promise.resolve(transactionRecord({ clientMutationId, clientMutationHash: expectedHash })),
+    );
+    const service = createService({
+      transactionsRepository: { create, findByClientMutationId },
+    });
+
+    const response = await service.createTransaction(access, {
+      ...baseInput,
+      clientMutationId,
+    });
+
+    expect(response.transaction.id).toBe(transactionId);
+    expect(findByClientMutationId).toHaveBeenCalledWith(
+      access.actorId,
+      access.householdId,
+      clientMutationId,
+    );
+  });
+
+  it('rejects with 409 when the same key collides with a different stored hash', async () => {
+    const create = vi.fn(() => Promise.reject(new TransactionIdempotencyKeyCollisionError()));
+    const findByClientMutationId = vi.fn(() =>
+      Promise.resolve(
+        transactionRecord({ clientMutationId, clientMutationHash: 'a-different-hash' }),
+      ),
+    );
+    const service = createService({
+      transactionsRepository: { create, findByClientMutationId },
+    });
+
+    await expect(
+      service.createTransaction(access, { ...baseInput, clientMutationId }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects with 409 when the colliding row cannot be re-fetched', async () => {
+    const create = vi.fn(() => Promise.reject(new TransactionIdempotencyKeyCollisionError()));
+    const findByClientMutationId = vi.fn(() => Promise.resolve(null));
+    const service = createService({
+      transactionsRepository: { create, findByClientMutationId },
+    });
+
+    await expect(
+      service.createTransaction(access, { ...baseInput, clientMutationId }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe('computeClientMutationHash', () => {
+  const input = {
+    type: 'EXPENSE' as const,
+    amount: '150000',
+    currency: 'PYG' as const,
+    occurredAt: '2026-07-19T12:00:00.000Z',
+    categoryId,
+    description: 'Supermercado',
+  };
+
+  it('is deterministic for identical semantic input', () => {
+    expect(computeClientMutationHash(input)).toBe(computeClientMutationHash({ ...input }));
+  });
+
+  it('changes when a business field changes', () => {
+    expect(computeClientMutationHash(input)).not.toBe(
+      computeClientMutationHash({ ...input, amount: '150001' }),
+    );
+  });
+
+  it('does not change based on clientMutationId itself (a transport/idempotency field, not business data)', () => {
+    expect(computeClientMutationHash(input)).toBe(
+      computeClientMutationHash({ ...input, clientMutationId }),
+    );
   });
 });
 

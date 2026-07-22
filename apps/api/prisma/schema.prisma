@@ -198,6 +198,7 @@ model Transaction {
   sourceOccurrenceId String?             @unique(map: "transactions_source_occurrence_id_key") @map("source_occurrence_id") @db.Uuid
   externalReference  String?             @map("external_reference")
   clientMutationId   String?             @map("client_mutation_id") @db.Uuid
+  clientMutationHash String?             @map("client_mutation_hash")
   createdBy          String              @map("created_by") @db.Uuid
   updatedBy          String              @map("updated_by") @db.Uuid
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -210,9 +211,12 @@ model Transaction {
   updater       User           @relation("TransactionUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   // DB-level rules added by hand in the migration (Prisma cannot express them):
-  // - transactions_created_by_client_mutation_id_key: partial unique index
-  //   (created_by, client_mutation_id) WHERE client_mutation_id IS NOT NULL, so idempotent
-  //   client retries are deduplicated per author.
+  // - transactions_created_by_household_id_client_mutation_id_key: partial unique index
+  //   (created_by, household_id, client_mutation_id) WHERE client_mutation_id IS NOT NULL, per
+  //   ADR 0003's idempotency tuple (actor_id, household_id, idempotency_key) — an idempotency
+  //   key reused by the same actor against a different household must not collide.
+  //   client_mutation_hash carries the SHA-256 of the semantic request payload so a key reused
+  //   with different data can be told apart from a legitimate replay (ADR 0003).
   // - transactions_household_payment_source_external_reference_key: partial unique index
   //   (household_id, payment_source_id, external_reference) WHERE external_reference IS NOT NULL,
   //   so imports are not double-booked.

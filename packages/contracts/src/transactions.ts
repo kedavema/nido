@@ -147,6 +147,10 @@ export const CreateTransactionRequestSchema = z
     paymentSourceId: UuidSchema.optional(),
     description: TransactionDescriptionSchema,
     notes: TransactionNotesSchema.optional(),
+    // ADR 0003 (idempotencia de movimientos offline): optional so existing/older clients that
+    // do not send it keep behaving exactly as before (plain insert, no idempotency bookkeeping).
+    // When present, the `Idempotency-Key` request header is required and must match it.
+    clientMutationId: UuidSchema.optional(),
   })
   .superRefine(checkAmountCurrencyAndFxRate);
 

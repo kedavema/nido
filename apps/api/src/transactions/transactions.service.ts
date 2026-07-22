@@ -1,4 +1,12 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   CreateTransactionRequest,
   CreateTransactionResponse,
@@ -35,6 +43,7 @@ import type { TransactionRecord, UpdateTransactionRecordChanges } from './transa
 import {
   TRANSACTIONS_REPOSITORY,
   TransactionCategoryInvalidError,
+  TransactionIdempotencyKeyCollisionError,
   TransactionPaymentSourceInvalidError,
   type TransactionsRepository,
 } from './transactions.repository.js';
@@ -45,6 +54,8 @@ const CATEGORY_MUST_MATCH_TYPE =
   'Transaction category must belong to the household and match the transaction type';
 const PAYMENT_SOURCE_MUST_BELONG_TO_HOUSEHOLD =
   'Transaction payment source must belong to the household';
+const IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_DATA =
+  'This idempotency key was already used with different transaction data.';
 
 @Injectable()
 export class TransactionsService {
@@ -112,6 +123,13 @@ export class TransactionsService {
     const occurredAt = new Date(input.occurredAt);
     const localDate = deriveLocalDate(occurredAt, timezone);
 
+    // ADR 0003: idempotency bookkeeping only kicks in when the client opts in by sending
+    // clientMutationId. The controller already enforced that the Idempotency-Key header matches
+    // it before this point. When absent, both stay null and the create path behaves exactly as
+    // it did before this feature existed (plain insert, back-compat with clients that predate it).
+    const clientMutationId = input.clientMutationId ?? null;
+    const clientMutationHash = clientMutationId === null ? null : computeClientMutationHash(input);
+
     try {
       const transaction = await this.transactionsRepository.create({
         householdId: access.householdId,
@@ -128,11 +146,42 @@ export class TransactionsService {
         notes: input.notes ?? null,
         createdBy: access.actorId,
         updatedBy: access.actorId,
+        clientMutationId,
+        clientMutationHash,
       });
       return { transaction: toTransaction(transaction) };
     } catch (error) {
+      // clientMutationId !== null is always true when this error is thrown (it can only come
+      // from the create() call above, which only sets the idempotency columns in that case) —
+      // checked explicitly here so TypeScript narrows it, rather than asserting the type.
+      if (clientMutationId !== null && error instanceof TransactionIdempotencyKeyCollisionError) {
+        return this.resolveIdempotencyCollision(access, clientMutationId, clientMutationHash);
+      }
       throw mapPersistenceError(error);
     }
+  }
+
+  /**
+   * ADR 0003: after a collision on the composite idempotency index, re-fetch the row that won
+   * the race and decide the outcome by comparing hashes — same hash means this request is a
+   * replay of an already-committed mutation (return the existing transaction, do not create a
+   * second row or error); a different hash means the same key was reused with different data
+   * (409, never silently overwrite or duplicate).
+   */
+  private async resolveIdempotencyCollision(
+    access: HouseholdAccess,
+    clientMutationId: string,
+    clientMutationHash: string | null,
+  ): Promise<CreateTransactionResponse> {
+    const existing = await this.transactionsRepository.findByClientMutationId(
+      access.actorId,
+      access.householdId,
+      clientMutationId,
+    );
+    if (existing?.clientMutationHash !== clientMutationHash) {
+      throw new ConflictException(IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_DATA);
+    }
+    return { transaction: toTransaction(existing) };
   }
 
   async updateTransaction(
@@ -282,6 +331,28 @@ export class TransactionsService {
       throw error;
     }
   }
+}
+
+/**
+ * ADR 0003: SHA-256 hex digest over the *semantic* request fields only — not `householdId`,
+ * `createdBy`, transport headers, or anything server-derived (`baseAmountPyg`, `localDate`).
+ * Field order is fixed explicitly as a positional array (rather than relying on an object's key
+ * insertion order, which would still be deterministic in JS but far less obvious to a reader)
+ * so the hashed representation is unambiguous and reviewable.
+ */
+export function computeClientMutationHash(input: CreateTransactionRequest): string {
+  const canonicalPayload = JSON.stringify([
+    input.type,
+    input.amount,
+    input.currency,
+    input.fxRateToBase ?? null,
+    input.occurredAt,
+    input.categoryId,
+    input.paymentSourceId ?? null,
+    input.description,
+    input.notes ?? null,
+  ]);
+  return createHash('sha256').update(canonicalPayload).digest('hex');
 }
 
 function mapPersistenceError(error: unknown): unknown {

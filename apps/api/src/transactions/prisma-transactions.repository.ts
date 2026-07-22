@@ -21,13 +21,16 @@ import type {
 } from './transaction.js';
 import {
   TransactionCategoryInvalidError,
+  TransactionIdempotencyKeyCollisionError,
   TransactionPaymentSourceInvalidError,
   type TransactionsRepository,
 } from './transactions.repository.js';
 
 const CATEGORY_FOREIGN_KEY = 'transactions_category_id_fkey';
 const PAYMENT_SOURCE_FOREIGN_KEY = 'transactions_payment_source_id_fkey';
+const IDEMPOTENCY_KEY_UNIQUE_INDEX = 'transactions_created_by_household_id_client_mutation_id_key';
 const FOREIGN_KEY_VIOLATION_CODE = '23503';
+const UNIQUE_VIOLATION_CODE = '23505';
 const CHECK_VIOLATION_CODE = '23514';
 // The pg driver adapter surfaces trigger RAISE errors with the SQLSTATE and the message text
 // only (no constraint name in some code paths), so match the migration's messages too.
@@ -100,6 +103,17 @@ export class PrismaTransactionsRepository implements TransactionsRepository {
     return transaction === null ? null : toTransactionRecord(transaction);
   }
 
+  async findByClientMutationId(
+    createdBy: string,
+    householdId: string,
+    clientMutationId: string,
+  ): Promise<TransactionRecord | null> {
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { createdBy, householdId, clientMutationId },
+    });
+    return transaction === null ? null : toTransactionRecord(transaction);
+  }
+
   async create(input: CreateTransactionRecordInput): Promise<TransactionRecord> {
     try {
       const transaction = await this.prisma.transaction.create({
@@ -116,6 +130,8 @@ export class PrismaTransactionsRepository implements TransactionsRepository {
           paymentSourceId: input.paymentSourceId,
           description: input.description,
           notes: input.notes,
+          clientMutationId: input.clientMutationId,
+          clientMutationHash: input.clientMutationHash,
           createdBy: input.createdBy,
           updatedBy: input.updatedBy,
         },
@@ -252,6 +268,8 @@ function toTransactionRecord(transaction: {
   readonly updatedBy: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly clientMutationId: string | null;
+  readonly clientMutationHash: string | null;
 }): TransactionRecord {
   return {
     id: transaction.id,
@@ -272,6 +290,8 @@ function toTransactionRecord(transaction: {
     updatedBy: transaction.updatedBy,
     createdAt: transaction.createdAt,
     updatedAt: transaction.updatedAt,
+    clientMutationId: transaction.clientMutationId,
+    clientMutationHash: transaction.clientMutationHash,
   };
 }
 
@@ -303,6 +323,12 @@ function toTransactionOrigin(value: string): TransactionOrigin {
  */
 function translateWriteError(error: unknown): unknown {
   const text = collectErrorText(error);
+
+  if (isIdempotencyKeyCollision(error, text)) {
+    return new TransactionIdempotencyKeyCollisionError(
+      'An idempotency key collision was detected for this actor and household',
+    );
+  }
 
   if (
     CATEGORY_TRIGGER_CONSTRAINTS.some((constraint) => text.includes(constraint)) ||
@@ -337,6 +363,21 @@ function isForeignKeyErrorFor(error: unknown, text: string, foreignKeyName: stri
   return (
     (errorCode(error) === 'P2003' || hasPostgresCode(error, FOREIGN_KEY_VIOLATION_CODE)) &&
     text.includes(foreignKeyName)
+  );
+}
+
+/**
+ * Matches specifically on the idempotency composite index's name (not just any P2002) because
+ * `transactions` also has other unique indexes (`transactions_source_occurrence_id_key`,
+ * `transactions_household_payment_source_external_reference_key`) — neither is reachable from
+ * `create()` today since it never sets `sourceOccurrenceId`/`externalReference`, but matching by
+ * name keeps this correct if that changes later instead of misclassifying every unique violation
+ * on this table as an idempotency collision.
+ */
+function isIdempotencyKeyCollision(error: unknown, text: string): boolean {
+  return (
+    (errorCode(error) === 'P2002' || hasPostgresCode(error, UNIQUE_VIOLATION_CODE)) &&
+    text.includes(IDEMPOTENCY_KEY_UNIQUE_INDEX)
   );
 }
 

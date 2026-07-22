@@ -60,6 +60,8 @@ function transactionRecord(overrides: Partial<TransactionRecord> = {}): Transact
     updatedBy: access.actorId,
     createdAt: now,
     updatedAt: now,
+    clientMutationId: null,
+    clientMutationHash: null,
     ...overrides,
   };
 }
@@ -70,6 +72,7 @@ function createTransactionsRepository(
   return {
     list: () => Promise.reject(new Error('not used')),
     findInHousehold: () => Promise.reject(new Error('not used')),
+    findByClientMutationId: () => Promise.reject(new Error('not used')),
     create: () => Promise.reject(new Error('not used')),
     update: () => Promise.reject(new Error('not used')),
     deleteById: () => Promise.reject(new Error('not used')),
