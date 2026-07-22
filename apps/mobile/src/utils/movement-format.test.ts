@@ -13,6 +13,7 @@ import {
   formatRecentMovementDateLabel,
   formatSignedPygAmount,
   formatTransactionAmount,
+  futureMonthSubtitle,
   groupTransactionsByDay,
   monthFromLocalDate,
   monthLocalDateRange,
@@ -282,6 +283,30 @@ describe('month helpers', () => {
 
   it('formats a month label in Spanish', () => {
     expect(formatMonthLabel({ year: 2026, month: 7 })).toBe('Julio 2026');
+  });
+
+  it('GLO-03: has no future-month subtitle for the current month', () => {
+    expect(futureMonthSubtitle({ year: 2026, month: 7 }, '2026-07-15')).toBeUndefined();
+  });
+
+  it('GLO-03: has no future-month subtitle for a past month', () => {
+    expect(futureMonthSubtitle({ year: 2026, month: 6 }, '2026-07-15')).toBeUndefined();
+  });
+
+  it('GLO-03: labels the immediately-next month "mes siguiente · aún no empezó"', () => {
+    expect(futureMonthSubtitle({ year: 2026, month: 8 }, '2026-07-15')).toBe(
+      'mes siguiente · aún no empezó',
+    );
+  });
+
+  it('GLO-03: labels a month more than one ahead just "aún no empezó"', () => {
+    expect(futureMonthSubtitle({ year: 2026, month: 9 }, '2026-07-15')).toBe('aún no empezó');
+  });
+
+  it('GLO-03: handles the next-month label across a year boundary', () => {
+    expect(futureMonthSubtitle({ year: 2027, month: 1 }, '2026-12-15')).toBe(
+      'mes siguiente · aún no empezó',
+    );
   });
 
   it('formats the yyyy-MM query param for reports/monthly-summary', () => {

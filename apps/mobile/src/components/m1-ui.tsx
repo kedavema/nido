@@ -9,7 +9,9 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextInputProps,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -178,6 +180,66 @@ export function LoadingContent({ label = 'Conectando…' }: { readonly label?: s
     <View accessibilityLiveRegion="polite" accessibilityRole="progressbar" style={styles.loading}>
       <ActivityIndicator color={themeTokens.colors.primary} size="large" />
       <Text style={styles.description}>{label}</Text>
+    </View>
+  );
+}
+
+/** A single muted rounded-rect placeholder block, the base unit of `SummarySkeleton` (GLO-01). */
+function SkeletonBlock({
+  width,
+  height,
+  style,
+}: {
+  readonly width?: number | `${number}%`;
+  readonly height: number;
+  readonly style?: StyleProp<ViewStyle>;
+}) {
+  return <View style={[skeletonStyles.block, { height, width: width ?? '100%' }, style]} />;
+}
+
+/**
+ * GLO-01's loading skeleton for the Inicio dashboard: static muted-gray placeholder blocks shaped
+ * like the real balance card, category-breakdown card, and recent-transactions card, inside the
+ * same white `Card` containers used once the summary actually loads. Deliberately static (no
+ * shimmer) — the design only calls for solid placeholder blocks. Exported so a future
+ * Movimientos loading state (a separate issue) can reuse it; not wired there yet.
+ */
+export function SummarySkeleton() {
+  return (
+    <View
+      accessibilityLabel="Cargando resumen"
+      accessibilityLiveRegion="polite"
+      accessibilityRole="progressbar"
+      style={skeletonStyles.container}
+    >
+      <Card>
+        <SkeletonBlock height={10} width={120} />
+        <SkeletonBlock height={28} width={180} />
+        <View style={skeletonStyles.row}>
+          <SkeletonBlock height={48} style={skeletonStyles.flexBlock} />
+          <SkeletonBlock height={48} style={skeletonStyles.flexBlock} />
+        </View>
+      </Card>
+
+      <Card>
+        <SkeletonBlock height={10} width={140} />
+        <SkeletonBlock height={14} width="70%" />
+        <SkeletonBlock height={8} />
+      </Card>
+
+      <Card>
+        <SkeletonBlock height={10} width={100} />
+        {[0, 1, 2].map((row) => (
+          <View key={row} style={skeletonStyles.recentRow}>
+            <View style={skeletonStyles.avatar} />
+            <View style={skeletonStyles.recentCopy}>
+              <SkeletonBlock height={14} width="80%" />
+              <SkeletonBlock height={11} width="45%" />
+            </View>
+            <SkeletonBlock height={14} width={56} />
+          </View>
+        ))}
+      </Card>
     </View>
   );
 }
@@ -354,5 +416,37 @@ const styles = StyleSheet.create({
   loading: {
     alignItems: 'center',
     gap: themeTokens.spacing.cardGap,
+  },
+});
+
+const skeletonStyles = StyleSheet.create({
+  container: {
+    gap: themeTokens.spacing.cardGap,
+  },
+  block: {
+    borderRadius: themeTokens.radii.button,
+    backgroundColor: themeTokens.colors.surfaceMuted,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: themeTokens.spacing.cardGap,
+  },
+  flexBlock: {
+    flex: 1,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: themeTokens.colors.surfaceMuted,
+  },
+  recentCopy: {
+    flex: 1,
+    gap: 4,
   },
 });
