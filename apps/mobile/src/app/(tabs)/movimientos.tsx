@@ -14,7 +14,14 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, Card, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  Card,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+  SyncStatusPill,
+} from '@/components/m1-ui';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
 import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
@@ -82,7 +89,7 @@ type TransactionsState =
 
 export default function MovimientosScreen() {
   const { catalog, state } = useSession();
-  const { pending, retry, retryAll } = useSyncQueue();
+  const { pending, retry, retryAll, isOnline } = useSyncQueue();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
 
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
@@ -333,6 +340,18 @@ export default function MovimientosScreen() {
       ) : null}
 
       <ScrollView contentContainerStyle={styles.listArea} keyboardShouldPersistTaps="handled">
+        {isOnline || pendingExpenses.length === 0 ? null : (
+          <View accessibilityLiveRegion="polite" style={styles.offlineBanner}>
+            <View style={styles.offlineBannerDot} />
+            <Text style={styles.offlineBannerText}>
+              Sin conexión ·{' '}
+              {pendingExpenses.length === 1
+                ? '1 movimiento esperando sincronizar'
+                : `${pendingExpenses.length.toString()} movimientos esperando sincronizar`}
+            </Text>
+          </View>
+        )}
+
         {transactionsState.kind === 'loading' || catalogState.kind === 'loading' ? (
           <LoadingContent label="Cargando movimientos…" />
         ) : null}
@@ -613,21 +632,6 @@ function formatQueuedExpenseAmount(request: CreateTransactionRequest): {
   return formatSignedPygAmount(-BigInt(baseAmountPyg));
 }
 
-function queuedMutationStatusLabel(status: QueuedMutation['status']): string {
-  switch (status) {
-    case 'pending':
-      return 'Pendiente de sincronizar';
-    case 'syncing':
-      return 'Sincronizando…';
-    case 'error':
-      return 'No se pudo sincronizar · tocá para reintentar';
-    case 'synced':
-      // Never actually rendered — a synced mutation is removed from the queue immediately (see
-      // sync-queue.ts's `replay`), not marked `synced`. Kept for switch exhaustiveness.
-      return 'Sincronizado';
-  }
-}
-
 function PendingMutationRow({
   mutation,
   categories,
@@ -646,7 +650,6 @@ function PendingMutationRow({
   const { request } = mutation.payload;
   const amount = formatQueuedExpenseAmount(request);
   const categoryLabelText = categoryLabel(request.categoryId, categories) ?? 'Sin categoría';
-  const statusLabel = queuedMutationStatusLabel(mutation.status);
   const statusIconName =
     mutation.status === 'syncing'
       ? 'sync'
@@ -663,12 +666,14 @@ function PendingMutationRow({
         <Text numberOfLines={1} style={m1TextStyles.body}>
           {request.description}
         </Text>
-        <Text
-          numberOfLines={1}
-          style={[m1TextStyles.secondary, mutation.status === 'error' && styles.pendingErrorText]}
-        >
-          {categoryLabelText} · {statusLabel}
+        <Text numberOfLines={1} style={m1TextStyles.secondary}>
+          {categoryLabelText}
         </Text>
+        {mutation.status === 'syncing' ? (
+          <Text style={m1TextStyles.secondary}>Sincronizando…</Text>
+        ) : (
+          <SyncStatusPill tone={mutation.status === 'error' ? 'error' : 'pending'} />
+        )}
       </View>
       <Text style={[styles.movementAmount, styles.negativeAmount]}>{amount.text}</Text>
     </View>
@@ -894,8 +899,26 @@ const styles = StyleSheet.create({
   negativeAmount: {
     color: themeTokens.colors.ink,
   },
-  pendingErrorText: {
-    color: themeTokens.semanticColors.danger.foreground,
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: themeTokens.radii.button,
+    backgroundColor: themeTokens.colors.ink,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  offlineBannerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: themeTokens.colors.surface,
+  },
+  offlineBannerText: {
+    flex: 1,
+    color: themeTokens.colors.surface,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
   },
   fabContainer: {
     position: 'absolute',
