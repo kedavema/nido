@@ -30,6 +30,8 @@ interface SyncQueueContextValue {
     request: CreateTransactionRequest,
   ) => Promise<CreateExpenseResult>;
   readonly retry: (mutationId: string) => Promise<void>;
+  /** Replays every currently pending/error mutation — the global banner's manual "retry all". */
+  readonly retryAll: () => Promise<void>;
   /**
    * Removes every pending mutation. Only call this after the UI has already gotten explicit
    * confirmation from the user (see mas.tsx's sign-out warning) — never automatically.
@@ -113,6 +115,11 @@ export function SyncQueueProvider({ children }: PropsWithChildren) {
 
   const retry = useCallback((mutationId: string) => engine.retry(mutationId), [engine]);
 
+  // Reuses `drain` (not `engine.drainPending` directly) so a manual "retry all" tap shares the
+  // same overlap guard as the automatic reconnect/mount drains — two drains racing each other
+  // would otherwise both try to replay the same mutations.
+  const retryAll = useCallback(() => drain(), [drain]);
+
   const discardAllPending = useCallback(() => engine.discardAllPending(), [engine]);
 
   const pending = useMemo(
@@ -121,8 +128,8 @@ export function SyncQueueProvider({ children }: PropsWithChildren) {
   );
 
   const value = useMemo<SyncQueueContextValue>(
-    () => ({ pending, createExpense, retry, discardAllPending }),
-    [pending, createExpense, retry, discardAllPending],
+    () => ({ pending, createExpense, retry, retryAll, discardAllPending }),
+    [pending, createExpense, retry, retryAll, discardAllPending],
   );
 
   return <SyncQueueContext.Provider value={value}>{children}</SyncQueueContext.Provider>;

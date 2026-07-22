@@ -82,7 +82,7 @@ type TransactionsState =
 
 export default function MovimientosScreen() {
   const { catalog, state } = useSession();
-  const { pending, retry } = useSyncQueue();
+  const { pending, retry, retryAll } = useSyncQueue();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
 
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
@@ -354,12 +354,23 @@ export default function MovimientosScreen() {
 
         {pendingExpenses.length === 0 ? null : (
           <Card>
-            <Text style={m1TextStyles.sectionTitle}>Pendientes</Text>
-            <Text style={m1TextStyles.secondary}>
-              {pendingExpenses.length === 1
-                ? '1 movimiento guardado en este teléfono.'
-                : `${pendingExpenses.length.toString()} movimientos guardados en este teléfono.`}
-            </Text>
+            <View style={styles.pendingHeaderRow}>
+              <View style={styles.pendingHeaderCopy}>
+                <Text style={m1TextStyles.sectionTitle}>Pendientes</Text>
+                <Text style={m1TextStyles.secondary}>
+                  {pendingExpenses.length === 1
+                    ? '1 movimiento guardado en este teléfono.'
+                    : `${pendingExpenses.length.toString()} movimientos guardados en este teléfono.`}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void retryAll()}
+                style={styles.pendingRetryAll}
+              >
+                <Text style={styles.pendingRetryAllText}>Reintentar todo</Text>
+              </Pressable>
+            </View>
             {pendingExpenses.map((mutation, index) => (
               <PendingMutationRow
                 categories={categories}
@@ -848,6 +859,26 @@ const styles = StyleSheet.create({
   },
   pendingAvatar: {
     backgroundColor: themeTokens.colors.surfaceMuted,
+  },
+  pendingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  pendingHeaderCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  pendingRetryAll: {
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  pendingRetryAllText: {
+    color: themeTokens.colors.primary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
+    textDecorationLine: 'underline',
   },
   movementCopy: {
     flex: 1,
