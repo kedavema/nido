@@ -127,14 +127,7 @@ export default function PaymentSourcesScreen() {
         description="Son informativos: Nido no calcula saldos por medio."
         title="Medios de pago"
       />
-      {draft === null ? (
-        <ActionButton
-          label="Agregar medio"
-          onPress={() => {
-            setDraft(EMPTY_DRAFT);
-          }}
-        />
-      ) : (
+      {draft === null ? null : (
         <Card>
           <Text style={m1TextStyles.sectionTitle}>
             {draft.id === undefined ? 'Nuevo medio' : 'Editar medio'}
@@ -205,11 +198,12 @@ export default function PaymentSourcesScreen() {
       {loadState.kind === 'loaded' && loadState.sources.length === 0 ? (
         <InlineNotice>Todavía no hay medios de pago.</InlineNotice>
       ) : null}
-      {loadState.kind === 'loaded'
-        ? [...loadState.sources]
+      {loadState.kind === 'loaded' && loadState.sources.length > 0 ? (
+        <Card>
+          {[...loadState.sources]
             .sort((a, b) => Number(b.isActive) - Number(a.isActive))
-            .map((source) => (
-              <Card key={source.id}>
+            .map((source, index) => (
+              <View key={source.id} style={index > 0 && styles.rowDivider}>
                 <View style={styles.row}>
                   <View style={styles.copy}>
                     <Text style={m1TextStyles.body}>{source.name}</Text>
@@ -241,10 +235,45 @@ export default function PaymentSourcesScreen() {
                     </Pressable>
                   ) : null}
                 </View>
-              </Card>
-            ))
-        : null}
+              </View>
+            ))}
+        </Card>
+      ) : null}
+
+      {draft === null ? (
+        <>
+          <OutlinePillButton
+            label="+ Agregar medio de pago"
+            onPress={() => {
+              setDraft(EMPTY_DRAFT);
+            }}
+          />
+          <Text style={m1TextStyles.secondary}>
+            Un medio con movimientos no se borra: se archiva (deja de ofrecerse al cargar, el
+            historial queda intacto).
+          </Text>
+        </>
+      ) : null}
     </AppScreen>
+  );
+}
+
+function OutlinePillButton({
+  label,
+  onPress,
+}: {
+  readonly label: string;
+  readonly onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.outlineButton, pressed && styles.outlineButtonPressed]}
+    >
+      <Text style={styles.outlineButtonLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -281,6 +310,32 @@ function Choice<T extends string | boolean | null>({
 }
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowDivider: {
+    marginTop: themeTokens.spacing.cardGap,
+    paddingTop: themeTokens.spacing.cardGap,
+    borderTopWidth: 1,
+    borderTopColor: themeTokens.colors.border,
+  },
+  outlineButton: {
+    minHeight: themeTokens.touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: themeTokens.colors.primary,
+    borderRadius: themeTokens.radii.button,
+    backgroundColor: 'transparent',
+    paddingHorizontal: themeTokens.spacing.cardPadding,
+    paddingVertical: 10,
+  },
+  outlineButtonPressed: {
+    opacity: 0.78,
+  },
+  outlineButtonLabel: {
+    color: themeTokens.colors.primary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+    textAlign: 'center',
+  },
   copy: { flex: 1 },
   link: {
     color: themeTokens.colors.primary,
