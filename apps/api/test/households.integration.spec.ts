@@ -168,9 +168,9 @@ describe.skipIf(!hasTestDatabase)('M1 API with PostgreSQL', () => {
     expect(categories.rowCount).toBe(35);
     expect(categories.rows).toEqual(
       expect.arrayContaining([
-        { kind: 'EXPENSE', name: 'Housing', parent_name: null },
-        { kind: 'EXPENSE', name: 'Rent', parent_name: 'Housing' },
-        { kind: 'INCOME', name: 'Salary', parent_name: null },
+        { kind: 'EXPENSE', name: 'Vivienda', parent_name: null },
+        { kind: 'EXPENSE', name: 'Alquiler', parent_name: 'Vivienda' },
+        { kind: 'INCOME', name: 'Sueldo', parent_name: null },
       ]),
     );
 

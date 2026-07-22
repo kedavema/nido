@@ -83,8 +83,8 @@ describe.skipIf(!hasTestDatabase)('Monthly summary aggregation with PostgreSQL',
   it('aggregates balance, totals, and category breakdown across mixed PYG/USD transactions', async () => {
     const householdId = await createHousehold();
     const foodCategoryId = await createCategory(householdId, 'Comida', 'EXPENSE');
-    const transportCategoryId = await createCategory(householdId, 'Transporte', 'EXPENSE');
-    const salaryCategoryId = await createCategory(householdId, 'Sueldo', 'INCOME');
+    const transportCategoryId = await createCategory(householdId, 'Traslados', 'EXPENSE');
+    const salaryCategoryId = await createCategory(householdId, 'Salario extra', 'INCOME');
 
     // Two expenses fold into the "Comida" root: a plain PYG amount and a USD amount converted
     // with ADR 0001's worked example (10.01 x 7350 = 73574 PYG half-up).
@@ -154,7 +154,7 @@ describe.skipIf(!hasTestDatabase)('Monthly summary aggregation with PostgreSQL',
       { categoryId: foodCategoryId, categoryName: 'Comida', amount: '173574', percentage: 77.64 },
       {
         categoryId: transportCategoryId,
-        categoryName: 'Transporte',
+        categoryName: 'Traslados',
         amount: '50000',
         percentage: 22.36,
       },
