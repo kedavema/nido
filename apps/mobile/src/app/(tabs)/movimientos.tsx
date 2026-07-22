@@ -1,5 +1,6 @@
 import type {
   Category,
+  CreateTransactionRequest,
   ListTransactionsQuery,
   PaymentSource,
   Transaction,
@@ -15,8 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { ActionButton, Card, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
+import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
+import { useSyncQueue } from '@/sync/sync-queue-provider';
+import type { QueuedMutation } from '@/sync/sync-store.types';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
+import { previewUsdToBasePyg } from '@/utils/expense-form';
 import {
   categoryLabel,
   formatDayHeading,
@@ -77,6 +82,7 @@ type TransactionsState =
 
 export default function MovimientosScreen() {
   const { catalog, state } = useSession();
+  const { pending, retry } = useSyncQueue();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
 
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
@@ -179,6 +185,18 @@ export default function MovimientosScreen() {
         .map((source) => ({ value: source.id, label: source.name }))
         .sort((a, b) => a.label.localeCompare(b.label, 'es')),
     [paymentSources],
+  );
+
+  // Only mutations this screen knows how to render — a "Pendientes" section, not merged into
+  // `dayGroups` (queued items have no server-assigned localDate/baseAmountPyg/id yet).
+  const pendingExpenses = useMemo(
+    () =>
+      pending.filter(
+        (mutation) =>
+          mutation.type === CREATE_TRANSACTION_MUTATION_TYPE &&
+          isCreateTransactionPayload(mutation.payload),
+      ),
+    [pending],
   );
 
   function selectFilter<K extends FilterKey>(key: K, value: Filters[K]): void {
@@ -333,6 +351,26 @@ export default function MovimientosScreen() {
         {catalogState.kind === 'error' ? (
           <InlineNotice tone="error">{catalogState.message}</InlineNotice>
         ) : null}
+
+        {pendingExpenses.length === 0 ? null : (
+          <Card>
+            <Text style={m1TextStyles.sectionTitle}>Pendientes</Text>
+            <Text style={m1TextStyles.secondary}>
+              {pendingExpenses.length === 1
+                ? '1 movimiento guardado en este teléfono.'
+                : `${pendingExpenses.length.toString()} movimientos guardados en este teléfono.`}
+            </Text>
+            {pendingExpenses.map((mutation, index) => (
+              <PendingMutationRow
+                categories={categories}
+                isLast={index === pendingExpenses.length - 1}
+                key={mutation.id}
+                mutation={mutation}
+                onRetry={() => void retry(mutation.id)}
+              />
+            ))}
+          </Card>
+        )}
 
         {transactionsState.kind === 'loaded' && dayGroups.length === 0 ? (
           hasActiveFiltersOrSearch ? (
@@ -547,6 +585,95 @@ function MovementRow({
   );
 }
 
+/**
+ * PYG-equivalent amount for a still-queued expense, formatted like a day-group subtotal (reuses
+ * `formatSignedPygAmount`). The queued request's own `amount` is already PYG-scale for PYG
+ * expenses; for USD it's only a client-side estimate (`previewUsdToBasePyg`) since the
+ * server-computed `baseAmountPyg` doesn't exist yet for an unsynced mutation.
+ */
+function formatQueuedExpenseAmount(request: CreateTransactionRequest): {
+  readonly text: string;
+  readonly isPositive: boolean;
+} {
+  const baseAmountPyg =
+    request.currency === 'PYG'
+      ? request.amount
+      : previewUsdToBasePyg(request.amount, request.fxRateToBase ?? '0');
+  return formatSignedPygAmount(-BigInt(baseAmountPyg));
+}
+
+function queuedMutationStatusLabel(status: QueuedMutation['status']): string {
+  switch (status) {
+    case 'pending':
+      return 'Pendiente de sincronizar';
+    case 'syncing':
+      return 'Sincronizando…';
+    case 'error':
+      return 'No se pudo sincronizar · tocá para reintentar';
+    case 'synced':
+      // Never actually rendered — a synced mutation is removed from the queue immediately (see
+      // sync-queue.ts's `replay`), not marked `synced`. Kept for switch exhaustiveness.
+      return 'Sincronizado';
+  }
+}
+
+function PendingMutationRow({
+  mutation,
+  categories,
+  isLast,
+  onRetry,
+}: {
+  readonly mutation: QueuedMutation;
+  readonly categories: readonly Category[];
+  readonly isLast: boolean;
+  readonly onRetry: () => void;
+}) {
+  if (!isCreateTransactionPayload(mutation.payload)) {
+    return null;
+  }
+
+  const { request } = mutation.payload;
+  const amount = formatQueuedExpenseAmount(request);
+  const categoryLabelText = categoryLabel(request.categoryId, categories) ?? 'Sin categoría';
+  const statusLabel = queuedMutationStatusLabel(mutation.status);
+  const statusIconName =
+    mutation.status === 'syncing'
+      ? 'sync'
+      : mutation.status === 'error'
+        ? 'alert-circle'
+        : 'time-outline';
+
+  const row = (
+    <View style={[styles.movementRow, !isLast && styles.movementRowDivider]}>
+      <View style={[styles.avatar, styles.pendingAvatar]}>
+        <Ionicons color={themeTokens.colors.inkSecondary} name={statusIconName} size={18} />
+      </View>
+      <View style={styles.movementCopy}>
+        <Text numberOfLines={1} style={m1TextStyles.body}>
+          {request.description}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[m1TextStyles.secondary, mutation.status === 'error' && styles.pendingErrorText]}
+        >
+          {categoryLabelText} · {statusLabel}
+        </Text>
+      </View>
+      <Text style={[styles.movementAmount, styles.negativeAmount]}>{amount.text}</Text>
+    </View>
+  );
+
+  if (mutation.status !== 'error') {
+    return row;
+  }
+
+  return (
+    <Pressable accessibilityRole="button" onPress={onRetry}>
+      {row}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -719,6 +846,9 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
   },
+  pendingAvatar: {
+    backgroundColor: themeTokens.colors.surfaceMuted,
+  },
   movementCopy: {
     flex: 1,
     gap: 2,
@@ -732,6 +862,9 @@ const styles = StyleSheet.create({
   },
   negativeAmount: {
     color: themeTokens.colors.ink,
+  },
+  pendingErrorText: {
+    color: themeTokens.semanticColors.danger.foreground,
   },
   fabContainer: {
     position: 'absolute',

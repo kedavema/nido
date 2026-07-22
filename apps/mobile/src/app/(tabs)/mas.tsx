@@ -1,7 +1,7 @@
 import type { CreateHouseholdInviteResponse, HouseholdMember } from '@nido/contracts';
 import { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
@@ -15,6 +15,7 @@ import {
   m1TextStyles,
 } from '@/components/m1-ui';
 import { createInvitationRequestGuard } from '@/invitations/invitation-request-guard';
+import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { themeTokens } from '@/theme/tokens';
 
 type MembersState =
@@ -32,6 +33,7 @@ function formatExpiration(value: string): string {
 
 export default function MasScreen() {
   const { createInvitation, getMembers, signOut, state } = useSession();
+  const { pending, discardAllPending } = useSyncQueue();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [membersState, setMembersState] = useState<MembersState>({
     kind: 'loading',
@@ -42,6 +44,7 @@ export default function MasScreen() {
   const [inviteError, setInviteError] = useState<string>();
   const [sendingInvite, setSendingInvite] = useState(false);
   const [createdInvite, setCreatedInvite] = useState<CreateHouseholdInviteResponse>();
+  const [showPendingSyncWarning, setShowPendingSyncWarning] = useState(false);
   const inviteRequestGuard = useRef(createInvitationRequestGuard()).current;
 
   useFocusEffect(
@@ -122,6 +125,22 @@ export default function MasScreen() {
   function retryMembers(): void {
     setMembersState({ kind: 'loading', requestGeneration: membersRequest + 1 });
     setMembersRequest((value) => value + 1);
+  }
+
+  function handleSignOutPress(): void {
+    // §11 / ADR 0008: a queued mutation is tied to whoever is signed in when it finally syncs,
+    // so signing out with pending mutations must warn explicitly instead of discarding silently.
+    if (pending.length > 0) {
+      setShowPendingSyncWarning(true);
+      return;
+    }
+    void signOut();
+  }
+
+  async function discardPendingAndSignOut(): Promise<void> {
+    setShowPendingSyncWarning(false);
+    await discardAllPending();
+    await signOut();
   }
 
   return (
@@ -217,7 +236,16 @@ export default function MasScreen() {
         </Card>
       ) : null}
 
-      <ActionButton label="Cerrar sesión" onPress={() => void signOut()} variant="danger" />
+      <ActionButton label="Cerrar sesión" onPress={handleSignOutPress} variant="danger" />
+
+      <PendingSyncSignOutModal
+        onCancel={() => {
+          setShowPendingSyncWarning(false);
+        }}
+        onConfirm={() => void discardPendingAndSignOut()}
+        pendingCount={pending.length}
+        visible={showPendingSyncWarning}
+      />
     </AppScreen>
   );
 }
@@ -263,6 +291,49 @@ function InviteReceipt({
       </Text>
       <ActionButton label="Crear otra invitación" onPress={onClear} variant="secondary" />
     </>
+  );
+}
+
+function PendingSyncSignOutModal({
+  visible,
+  pendingCount,
+  onCancel,
+  onConfirm,
+}: {
+  readonly visible: boolean;
+  readonly pendingCount: number;
+  readonly onCancel: () => void;
+  readonly onConfirm: () => void;
+}) {
+  return (
+    <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
+          <Text accessibilityRole="header" style={styles.modalTitle}>
+            Tenés movimientos sin sincronizar
+          </Text>
+          <Text style={m1TextStyles.secondary}>
+            {pendingCount === 1
+              ? 'Este teléfono guardó 1 movimiento'
+              : `Este teléfono guardó ${pendingCount.toString()} movimientos`}{' '}
+            que todavía no se sincronizaron. Quedaron guardados con esta cuenta: si cerrás sesión
+            ahora, no van a sincronizar y se pierden.
+          </Text>
+          <View style={styles.modalActions}>
+            <View style={styles.actionColumn}>
+              <ActionButton label="Seguir con la sesión" onPress={onCancel} variant="secondary" />
+            </View>
+            <View style={styles.actionColumn}>
+              <ActionButton
+                label="Descartar y cerrar sesión"
+                onPress={onConfirm}
+                variant="danger"
+              />
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -312,5 +383,31 @@ const styles = StyleSheet.create({
     borderRadius: themeTokens.radii.button,
     backgroundColor: themeTokens.colors.surfaceMuted,
     padding: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(38, 48, 44, 0.55)',
+  },
+  modalSheet: {
+    width: '100%',
+    gap: themeTokens.spacing.cardGap,
+    borderTopLeftRadius: themeTokens.radii.modal,
+    borderTopRightRadius: themeTokens.radii.modal,
+    backgroundColor: themeTokens.colors.surface,
+    padding: themeTokens.spacing.screen,
+  },
+  modalTitle: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.displaySemibold,
+    fontSize: themeTokens.typography.scale.cardTitle,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: themeTokens.spacing.cardGap,
+  },
+  actionColumn: {
+    flex: 1,
   },
 });

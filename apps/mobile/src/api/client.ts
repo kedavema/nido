@@ -226,6 +226,12 @@ export function createNidoApiClient({
     options: {
       readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
       readonly body?: Readonly<Record<string, unknown>>;
+      /**
+       * Extra request headers beyond the always-sent `Accept`/`Authorization`/`Content-Type`.
+       * Kept narrow and call-site-specific (e.g. `Idempotency-Key` for `createTransaction`)
+       * rather than exposing a generic arbitrary-headers parameter on every method.
+       */
+      readonly extraHeaders?: Readonly<Record<string, string>> | undefined;
     } = {},
   ): Promise<T> {
     return withRequestDeadline(requestTimeoutMilliseconds, async (signal) => {
@@ -249,6 +255,7 @@ export function createNidoApiClient({
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
             ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+            ...options.extraHeaders,
           },
           signal,
           ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -396,7 +403,16 @@ export function createNidoApiClient({
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/transactions`,
         CreateTransactionResponseSchema,
-        { method: 'POST', body },
+        {
+          method: 'POST',
+          body,
+          // ADR 0003: the API requires `Idempotency-Key` to be present and equal to the body's
+          // `clientMutationId` whenever that field is set.
+          extraHeaders:
+            input.clientMutationId === undefined
+              ? undefined
+              : { 'Idempotency-Key': input.clientMutationId },
+        },
       );
     },
     updateTransaction(householdId, transactionId, input) {
