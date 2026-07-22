@@ -539,6 +539,64 @@ describe.skipIf(!hasTestDatabase)('Transactions API with PostgreSQL', () => {
       expect(stored.rows).toEqual([]);
     });
 
+    it('a create rejected before it reaches the database leaves no idempotency artifact and does not block a corrected retry with the same key', async () => {
+      const householdId = await createHousehold('owner');
+      const otherHouseholdId = await createHousehold('outsider');
+      const category = await createCategory('owner', householdId, { name: 'Comida' });
+      const foreignCategory = await createCategory('outsider', otherHouseholdId, {
+        name: 'Comida ajena',
+      });
+      const key = randomUUID();
+
+      // First attempt fails validation (foreign category) before any DB write, still carrying
+      // the idempotency key/header pair.
+      const rejected = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body: {
+          ...validTransactionBody({ categoryId: foreignCategory.category.id }),
+          clientMutationId: key,
+        },
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(rejected.status).toBe(400);
+
+      const afterRejection = await pool.query(
+        'SELECT id FROM transactions WHERE household_id = $1',
+        [householdId],
+      );
+      expect(afterRejection.rows).toEqual([]);
+
+      // A corrected retry reusing the exact same key must succeed and create exactly one row —
+      // proving the failed attempt left no orphaned claim on the idempotency tuple that would
+      // otherwise wrongly block (or need to be reconciled with) a legitimate later use of it.
+      const retried = await request(`/v1/households/${householdId}/transactions`, {
+        method: 'POST',
+        token: 'owner',
+        body: {
+          ...validTransactionBody({ categoryId: category.category.id }),
+          clientMutationId: key,
+        },
+        headers: { 'Idempotency-Key': key },
+      });
+      expect(retried.status).toBe(201);
+
+      const stored = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+        householdId,
+      ]);
+      expect(stored.rows).toHaveLength(1);
+    });
+
+    // ADR 0003 item 5 ("un rollback no deja movimiento ni recibo huérfano") is inherently
+    // satisfied by this implementation's design, not just by the test above: idempotency
+    // bookkeeping (client_mutation_id/client_mutation_hash) lives on the *same row* as the
+    // transaction itself, written by a single `INSERT` (see prisma-transactions.repository.ts's
+    // `create()`), rather than in a separate idempotency-ledger table alongside a multi-statement
+    // transaction. There is no "receipt" distinct from the movement that a partial failure could
+    // leave behind out of sync with it — a single-statement INSERT is atomic by construction, so
+    // any rejection (pre-insert validation, or a DB-level constraint/trigger failure) leaves
+    // exactly zero rows, never a movement without its receipt or a receipt without its movement.
+    //
     // ADR 0003 item 6 ("un reinicio del proceso conserva la deduplicacion") is inherently
     // satisfied by this design and not separately tested by restarting the process: idempotency
     // state lives entirely in durable PostgreSQL rows (client_mutation_id/client_mutation_hash
