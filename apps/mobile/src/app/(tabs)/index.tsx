@@ -453,7 +453,10 @@ function FirstRunBalanceCard({ month }: { readonly month: MonthValue }) {
   return (
     <Card>
       <Text style={styles.cardLabel}>
-        BALANCE REAL DE {formatMonthLabel(month).replace(/\s\d{4}$/u, '').toUpperCase()}
+        BALANCE REAL DE{' '}
+        {formatMonthLabel(month)
+          .replace(/\s\d{4}$/u, '')
+          .toUpperCase()}
       </Text>
       <Text style={styles.balanceAmount}>Gs. 0</Text>
       <Text style={styles.balanceSubtitle}>Sin movimientos todavía — el nido está esperando.</Text>
@@ -463,7 +466,9 @@ function FirstRunBalanceCard({ month }: { readonly month: MonthValue }) {
 
 /** INI-01's "Empezá por acá" 3-item onboarding checklist, shown alongside `FirstRunBalanceCard`. */
 function FirstRunChecklistCard({ month }: { readonly month: MonthValue }) {
-  const monthName = formatMonthLabel(month).replace(/\s\d{4}$/u, '').toLowerCase();
+  const monthName = formatMonthLabel(month)
+    .replace(/\s\d{4}$/u, '')
+    .toLowerCase();
 
   return (
     <Card>
