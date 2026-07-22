@@ -1,44 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ActionButton, AppScreen, Card, m1TextStyles } from '@/components/m1-ui';
+import { AppScreen, Card, m1TextStyles } from '@/components/m1-ui';
 import { useSession } from '@/auth/session-provider';
-import { getFirebaseAuthClient } from '@/auth/auth-client';
-import { getPublicEnvironment } from '@/config/public-environment';
 import { themeTokens } from '@/theme/tokens';
-
-// DEV-ONLY QA SCAFFOLDING (T-DEV-EMULATOR): temporary Firebase Auth Emulator bypass for a headless
-// Playwright visual QA session. Only renders when EXPO_PUBLIC_USE_AUTH_EMULATOR is on (never true in
-// a real build) and only on web. Does NOT touch the real "Continuar con Google" button above it.
-// Revert this whole block (and auth-client.web.ts / auth-client.types.ts / public-environment.ts)
-// once the audit is done.
-const isDevEmulatorUiEnabled = Platform.OS === 'web' && getPublicEnvironment().useAuthEmulator;
-
-function DevEmulatorSignIn() {
-  const signInAs = (email: string, displayName: string) => {
-    void getFirebaseAuthClient().signInWithTestAccount?.(email, displayName);
-  };
-
-  return (
-    <Card>
-      <Text style={m1TextStyles.secondary}>
-        DEV: bypass de Google vía Firebase Auth Emulator (no usar en producción).
-      </Text>
-      <ActionButton
-        accessibilityHint="Inicia sesión como Ale usando el emulador de Firebase Auth"
-        label="Dev: entrar como Ale"
-        onPress={() => signInAs('ale@example.com', 'Ale')}
-        variant="secondary"
-      />
-      <ActionButton
-        accessibilityHint="Inicia sesión como Kevin usando el emulador de Firebase Auth"
-        label="Dev: entrar como Kevin"
-        onPress={() => signInAs('kevin.dev@example.com', 'Kevin')}
-        variant="secondary"
-      />
-    </Card>
-  );
-}
 
 interface ChecklistItem {
   readonly key: string;
@@ -126,8 +91,6 @@ export default function SignInScreen() {
       </Card>
 
       <GoogleSignInButton onPress={() => void signIn()} />
-
-      {isDevEmulatorUiEnabled ? <DevEmulatorSignIn /> : null}
 
       <View style={styles.legal}>
         <Text style={styles.legalPrimary}>
