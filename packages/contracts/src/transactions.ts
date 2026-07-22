@@ -71,18 +71,30 @@ export const FxRateToBaseSchema = DecimalAmountSchema.refine(
 // Currency-scale (PYG0 vs USD2) and the USD-only fxRateToBase requirement are cross-field
 // rules — they depend on which currency was chosen — so they are enforced together via
 // superRefine rather than on the individual field schemas.
-function checkAmountCurrencyAndFxRate(
+// Exported because recurring-items.ts/occurrences.ts persist the same amount/currency/
+// fxRateToBase triple (Occurrence.amount and Transaction.amount are both decimal(18,2), and both
+// use the same PYG-integral / USD-2-decimal + USD-requires-fx-rate rule) — reused wherever this
+// money triple appears. `fieldNames` lets callers whose field names don't line up exactly with
+// `amount`/`fxRateToBase` (e.g. RecurringItem's `estimatedAmount`/`plannedFxRateToBase`) attribute
+// the resulting Zod issues to their own field names instead of misreporting a path that doesn't
+// exist on their schema; it defaults to `amount`/`fxRateToBase` so existing call sites
+// (transactions.ts, occurrences.ts) are unaffected.
+export function checkAmountCurrencyAndFxRate(
   data: {
     currency: z.infer<typeof TransactionCurrencySchema>;
     amount: string;
     fxRateToBase?: string | null | undefined;
   },
   ctx: z.RefinementCtx,
+  fieldNames: { amount: string; fxRateToBase: string } = {
+    amount: 'amount',
+    fxRateToBase: 'fxRateToBase',
+  },
 ): void {
   if (!matchesCurrencyScale(data.currency, data.amount)) {
     ctx.addIssue({
       code: 'custom',
-      path: ['amount'],
+      path: [fieldNames.amount],
       message:
         data.currency === 'PYG'
           ? 'PYG amounts must be integral (scale 0)'
@@ -94,14 +106,14 @@ function checkAmountCurrencyAndFxRate(
   if (data.currency === 'USD' && !hasFxRate) {
     ctx.addIssue({
       code: 'custom',
-      path: ['fxRateToBase'],
+      path: [fieldNames.fxRateToBase],
       message: 'fxRateToBase is required for USD transactions',
     });
   }
   if (data.currency === 'PYG' && hasFxRate) {
     ctx.addIssue({
       code: 'custom',
-      path: ['fxRateToBase'],
+      path: [fieldNames.fxRateToBase],
       message: 'fxRateToBase must be absent for PYG transactions',
     });
   }
