@@ -1,7 +1,8 @@
 import type { CreateHouseholdInviteResponse, HouseholdMember } from '@nido/contracts';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
@@ -19,6 +20,12 @@ import { decideSignOutFlow } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { themeTokens } from '@/theme/tokens';
 
+/** MAS-01's "CONFIGURACIÓN FINANCIERA" only lists rows that map to a real, working screen today —
+ * Informes / Importar movimientos / Moneda y tipo de cambio / Dispositivos y notificaciones are
+ * future milestones, so a dead-end row would be worse than omitting them. */
+type PaymentSourceNamesState =
+  { readonly kind: 'loading' } | { readonly kind: 'loaded'; readonly names: readonly string[] };
+
 type MembersState =
   | { readonly kind: 'loading'; readonly requestGeneration: number }
   | { readonly kind: 'loaded'; readonly members: readonly HouseholdMember[] }
@@ -33,7 +40,7 @@ function formatExpiration(value: string): string {
 }
 
 export default function MasScreen() {
-  const { createInvitation, getMembers, signOut, state } = useSession();
+  const { catalog, createInvitation, getMembers, signOut, state } = useSession();
   const { pending, discardAllPending } = useSyncQueue();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [membersState, setMembersState] = useState<MembersState>({
@@ -41,6 +48,9 @@ export default function MasScreen() {
     requestGeneration: 0,
   });
   const [membersRequest, setMembersRequest] = useState(0);
+  const [paymentSourceNamesState, setPaymentSourceNamesState] = useState<PaymentSourceNamesState>({
+    kind: 'loading',
+  });
   const [email, setEmail] = useState('');
   const [inviteError, setInviteError] = useState<string>();
   const [sendingInvite, setSendingInvite] = useState(false);
@@ -87,6 +97,40 @@ export default function MasScreen() {
     }, [getMembers, household, membersRequest]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (household === null) {
+        return undefined;
+      }
+
+      let active = true;
+      void catalog
+        .listPaymentSources(household.id)
+        .then(({ paymentSources }) => {
+          if (active) {
+            setPaymentSourceNamesState({
+              kind: 'loaded',
+              names: paymentSources
+                .filter((source) => source.isActive)
+                .map((source) => source.name),
+            });
+          }
+        })
+        .catch(() => {
+          // The "Medios de pago" row subtitle is a nice-to-have preview, not the source of truth
+          // (that's payment-sources.tsx itself) — on failure just leave the row without a subtitle
+          // rather than surfacing a second error UI on this screen.
+          if (active) {
+            setPaymentSourceNamesState({ kind: 'loaded', names: [] });
+          }
+        });
+
+      return () => {
+        active = false;
+      };
+    }, [catalog, household]),
+  );
+
   if (household === null) {
     return (
       <AppScreen centered>
@@ -94,6 +138,17 @@ export default function MasScreen() {
       </AppScreen>
     );
   }
+
+  const userInitial =
+    state.kind === 'authenticated'
+      ? state.profile.user.displayName.trim().charAt(0).toUpperCase()
+      : '';
+  const paymentSourcesSubtitle =
+    paymentSourceNamesState.kind === 'loading'
+      ? 'Cargando…'
+      : paymentSourceNamesState.names.length === 0
+        ? 'Todavía no hay medios de pago'
+        : paymentSourceNamesState.names.join(' · ');
 
   async function invite(): Promise<void> {
     if (household === null) {
@@ -147,7 +202,17 @@ export default function MasScreen() {
 
   return (
     <AppScreen>
-      <PageHeader description="Identidad, hogar e integrantes." title="Más" />
+      <View style={styles.headerRow}>
+        <View style={styles.headerCopy}>
+          <PageHeader description="Identidad, hogar e integrantes." title="Más" />
+        </View>
+        <View
+          accessibilityLabel={`Sesión de ${state.kind === 'authenticated' ? state.profile.user.displayName : ''}`}
+          style={styles.avatarChip}
+        >
+          <Text style={styles.avatarChipLabel}>{userInitial}</Text>
+        </View>
+      </View>
       <Card>
         <Text style={m1TextStyles.sectionTitle}>{household.name}</Text>
         <View style={styles.detailRow}>
@@ -164,22 +229,20 @@ export default function MasScreen() {
 
       <Card>
         <Text style={m1TextStyles.sectionTitle}>Configuración financiera</Text>
-        <Text style={m1TextStyles.secondary}>
-          Organizá las categorías y los medios compartidos de {household.name}.
-        </Text>
-        <ActionButton
-          label="Categorías"
+        <ConfigRow
+          isFirst
           onPress={() => {
             router.push('/categories');
           }}
-          variant="secondary"
+          subtitle="7 raíces fijas · subcategorías editables"
+          title="Categorías y subcategorías"
         />
-        <ActionButton
-          label="Medios de pago"
+        <ConfigRow
           onPress={() => {
             router.push('/payment-sources');
           }}
-          variant="secondary"
+          subtitle={paymentSourcesSubtitle}
+          title="Medios de pago"
         />
       </Card>
 
@@ -249,6 +312,37 @@ export default function MasScreen() {
         visible={showPendingSyncWarning}
       />
     </AppScreen>
+  );
+}
+
+/** A "CONFIGURACIÓN DEL HOGAR"-style tappable row: title + subtitle + trailing chevron. Only used
+ * for rows that map to a real, working screen (see the module-level comment on why the reference's
+ * Informes/Importar/Moneda/Dispositivos rows are intentionally omitted). */
+function ConfigRow({
+  title,
+  subtitle,
+  onPress,
+  isFirst = false,
+}: {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly onPress: () => void;
+  readonly isFirst?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.configRow, !isFirst && styles.configRowDivider]}
+    >
+      <View style={styles.configCopy}>
+        <Text style={m1TextStyles.body}>{title}</Text>
+        <Text numberOfLines={1} style={m1TextStyles.secondary}>
+          {subtitle}
+        </Text>
+      </View>
+      <Ionicons color={themeTokens.colors.inkSecondary} name="chevron-forward" size={20} />
+    </Pressable>
   );
 }
 
@@ -340,6 +434,41 @@ function PendingSyncSignOutModal({
 }
 
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: themeTokens.spacing.cardGap,
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  avatarChip: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: themeTokens.colors.primary,
+  },
+  avatarChipLabel: {
+    color: themeTokens.colors.surface,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+  },
+  configRow: {
+    minHeight: themeTokens.touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: themeTokens.spacing.cardGap,
+  },
+  configRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: themeTokens.colors.border,
+    paddingTop: themeTokens.spacing.cardGap,
+  },
+  configCopy: {
+    flex: 1,
+  },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,4 +1,5 @@
 import type { Category, CategoryKind } from '@nido/contracts';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -16,35 +17,45 @@ import {
 } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
 
+// MAS-03 caption, binding product rule: root categories keep budget/report comparability across
+// households, so they can never be renamed, archived, or created from this screen — only their
+// subcategories can.
+const ROOT_RULE_NOTICE =
+  'Las 7 categorías raíz no se pueden renombrar ni borrar: mantienen comparables presupuesto e informes.';
+
 type LoadState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'loaded'; readonly categories: readonly Category[] };
 
-interface Draft {
-  readonly id?: string;
+/** Editing an existing subcategory: reuses the full form, but `parentId` is never `null` — only
+ * root categories may have a null parent, and roots aren't editable from here. */
+interface EditDraft {
+  readonly id: string;
   readonly kind: CategoryKind;
   readonly name: string;
   readonly icon: string;
   readonly color: string;
-  readonly parentId: string | null;
+  readonly parentId: string;
   readonly isActive: boolean;
 }
 
-const EMPTY_DRAFT: Draft = {
-  kind: 'EXPENSE',
-  name: '',
-  icon: 'pricetag',
-  color: '#6D5BD0',
-  parentId: null,
-  isActive: true,
-};
+/** Creating a subcategory via a root's "+ Nueva" chip: per initial-categories.ts, subcategories
+ * don't carry their own icon/color — they inherit the parent root's at creation time — so this is
+ * just a name field, not the full draft form. */
+interface NewSubcategoryDraft {
+  readonly rootId: string;
+  readonly kind: CategoryKind;
+  readonly name: string;
+}
 
 export default function CategoriesScreen() {
   const { catalog, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [expandedRoots, setExpandedRoots] = useState<Record<string, boolean>>({});
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [newSubcategory, setNewSubcategory] = useState<NewSubcategoryDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string>();
 
@@ -71,35 +82,46 @@ export default function CategoriesScreen() {
     );
   }
   const householdId = household.id;
-
   const categories = loadState.kind === 'loaded' ? loadState.categories : [];
-  const roots = categories.filter(
-    (category) => category.parentId === null && category.kind === (draft?.kind ?? 'EXPENSE'),
-  );
+  const roots = categories.filter((category) => category.parentId === null);
 
-  async function save(): Promise<void> {
-    if (draft === null) return;
+  function toggleRoot(rootId: string): void {
+    setExpandedRoots((current) => ({ ...current, [rootId]: current[rootId] !== true }));
+  }
+
+  function openEdit(category: Category): void {
+    setNewSubcategory(null);
+    setFormError(undefined);
+    setEditDraft({
+      id: category.id,
+      kind: category.kind,
+      name: category.name,
+      icon: category.icon,
+      color: category.color,
+      parentId: category.parentId ?? category.id,
+      isActive: category.isActive,
+    });
+  }
+
+  function openCreate(rootId: string, kind: CategoryKind): void {
+    setEditDraft(null);
+    setFormError(undefined);
+    setNewSubcategory({ rootId, kind, name: '' });
+  }
+
+  async function saveEdit(): Promise<void> {
+    if (editDraft === null) return;
     setSaving(true);
     setFormError(undefined);
     try {
-      if (draft.id === undefined) {
-        await catalog.createCategory(householdId, {
-          kind: draft.kind,
-          name: draft.name,
-          icon: draft.icon,
-          color: draft.color,
-          ...(draft.parentId === null ? {} : { parentId: draft.parentId }),
-        });
-      } else {
-        await catalog.updateCategory(householdId, draft.id, {
-          name: draft.name,
-          icon: draft.icon,
-          color: draft.color,
-          parentId: draft.parentId,
-          isActive: draft.isActive,
-        });
-      }
-      setDraft(null);
+      await catalog.updateCategory(householdId, editDraft.id, {
+        name: editDraft.name,
+        icon: editDraft.icon,
+        color: editDraft.color,
+        parentId: editDraft.parentId,
+        isActive: editDraft.isActive,
+      });
+      setEditDraft(null);
       await load();
     } catch (error) {
       setFormError(messageForActionError(error));
@@ -108,12 +130,42 @@ export default function CategoriesScreen() {
     }
   }
 
-  async function archive(category: Category): Promise<void> {
+  async function archiveEditing(): Promise<void> {
+    if (editDraft === null) return;
+    setSaving(true);
+    setFormError(undefined);
     try {
-      await catalog.deleteCategory(householdId, category.id);
+      await catalog.deleteCategory(householdId, editDraft.id);
+      setEditDraft(null);
       await load();
     } catch (error) {
       setFormError(messageForActionError(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createSubcategory(): Promise<void> {
+    if (newSubcategory === null) return;
+    const parentRoot = roots.find((root) => root.id === newSubcategory.rootId);
+    if (parentRoot === undefined) return;
+    setSaving(true);
+    setFormError(undefined);
+    try {
+      await catalog.createCategory(householdId, {
+        kind: newSubcategory.kind,
+        name: newSubcategory.name,
+        icon: parentRoot.icon,
+        color: parentRoot.color,
+        parentId: newSubcategory.rootId,
+      });
+      setNewSubcategory(null);
+      await load();
+      setExpandedRoots((current) => ({ ...current, [newSubcategory.rootId]: true }));
+    } catch (error) {
+      setFormError(messageForActionError(error));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -126,106 +178,7 @@ export default function CategoriesScreen() {
         }}
         variant="secondary"
       />
-      <PageHeader
-        description="Categorías y subcategorías compartidas del hogar."
-        title="Categorías"
-      />
-      {draft === null ? (
-        <ActionButton
-          label="Agregar categoría"
-          onPress={() => {
-            setDraft(EMPTY_DRAFT);
-          }}
-        />
-      ) : (
-        <Card>
-          <Text style={m1TextStyles.sectionTitle}>
-            {draft.id === undefined ? 'Nueva categoría' : 'Editar categoría'}
-          </Text>
-          {draft.id === undefined ? (
-            <ChoiceRow
-              label="Tipo"
-              options={[
-                ['EXPENSE', 'Egreso'],
-                ['INCOME', 'Ingreso'],
-              ]}
-              selected={draft.kind}
-              onSelect={(kind) => {
-                setDraft({ ...draft, kind, parentId: null });
-              }}
-            />
-          ) : null}
-          <FormField
-            label="Nombre"
-            maxLength={100}
-            onChangeText={(name) => {
-              setDraft({ ...draft, name });
-            }}
-            value={draft.name}
-          />
-          <FormField
-            label="Ícono"
-            maxLength={50}
-            onChangeText={(icon) => {
-              setDraft({ ...draft, icon });
-            }}
-            value={draft.icon}
-          />
-          <FormField
-            autoCapitalize="characters"
-            label="Color hexadecimal"
-            maxLength={7}
-            onChangeText={(color) => {
-              setDraft({ ...draft, color });
-            }}
-            value={draft.color}
-          />
-          <ChoiceRow
-            label="Nivel"
-            options={[
-              [null, 'Categoría principal'],
-              ...roots
-                .filter((root) => root.id !== draft.id)
-                .map((root) => [root.id, root.name] as const),
-            ]}
-            selected={draft.parentId}
-            onSelect={(parentId) => {
-              setDraft({ ...draft, parentId });
-            }}
-          />
-          {draft.id === undefined ? null : (
-            <ChoiceRow
-              label="Estado"
-              options={[
-                [true, 'Activa'],
-                [false, 'Archivada'],
-              ]}
-              selected={draft.isActive}
-              onSelect={(isActive) => {
-                setDraft({ ...draft, isActive });
-              }}
-            />
-          )}
-          {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
-          <ActionButton
-            disabled={
-              draft.name.trim() === '' ||
-              draft.icon.trim() === '' ||
-              !/^#[0-9A-Fa-f]{6}$/u.test(draft.color)
-            }
-            label="Guardar"
-            loading={saving}
-            onPress={() => void save()}
-          />
-          <ActionButton
-            label="Cancelar"
-            onPress={() => {
-              setDraft(null);
-            }}
-            variant="secondary"
-          />
-        </Card>
-      )}
+      <PageHeader description="7 raíces fijas · subcategorías del hogar" title="Categorías" />
 
       {loadState.kind === 'loading' ? <LoadingContent label="Cargando categorías…" /> : null}
       {loadState.kind === 'error' ? (
@@ -234,89 +187,215 @@ export default function CategoriesScreen() {
           <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
         </>
       ) : null}
-      {loadState.kind === 'loaded' && categories.length === 0 ? (
-        <InlineNotice>Todavía no hay categorías.</InlineNotice>
-      ) : null}
-      {(['EXPENSE', 'INCOME'] as const).map((kind) => (
-        <View key={kind} style={styles.section}>
-          <Text style={m1TextStyles.sectionTitle}>
-            {kind === 'EXPENSE' ? 'Egresos' : 'Ingresos'}
-          </Text>
-          {categories
-            .filter((category) => category.kind === kind && category.parentId === null)
-            .map((root) => (
-              <CategoryRow key={root.id} category={root} onArchive={archive} onEdit={setDraft}>
-                {categories
-                  .filter((child) => child.parentId === root.id)
-                  .map((child) => (
-                    <CategoryRow
-                      child
-                      key={child.id}
-                      category={child}
-                      onArchive={archive}
-                      onEdit={setDraft}
-                    />
-                  ))}
-              </CategoryRow>
-            ))}
-        </View>
-      ))}
+
+      {editDraft === null ? null : (
+        <Card>
+          <Text style={m1TextStyles.sectionTitle}>Editar subcategoría</Text>
+          <FormField
+            label="Nombre"
+            maxLength={100}
+            onChangeText={(name) => {
+              setEditDraft({ ...editDraft, name });
+            }}
+            value={editDraft.name}
+          />
+          <FormField
+            label="Ícono"
+            maxLength={50}
+            onChangeText={(icon) => {
+              setEditDraft({ ...editDraft, icon });
+            }}
+            value={editDraft.icon}
+          />
+          <FormField
+            autoCapitalize="characters"
+            label="Color hexadecimal"
+            maxLength={7}
+            onChangeText={(color) => {
+              setEditDraft({ ...editDraft, color });
+            }}
+            value={editDraft.color}
+          />
+          <ChoiceRow
+            label="Raíz"
+            onSelect={(parentId) => {
+              setEditDraft({ ...editDraft, parentId });
+            }}
+            options={roots
+              .filter((root) => root.kind === editDraft.kind)
+              .map((root) => [root.id, root.name] as const)}
+            selected={editDraft.parentId}
+          />
+          <ChoiceRow
+            label="Estado"
+            onSelect={(isActive) => {
+              setEditDraft({ ...editDraft, isActive });
+            }}
+            options={[
+              [true, 'Activa'],
+              [false, 'Archivada'],
+            ]}
+            selected={editDraft.isActive}
+          />
+          {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+          <ActionButton
+            disabled={
+              editDraft.name.trim() === '' ||
+              editDraft.icon.trim() === '' ||
+              !/^#[0-9A-Fa-f]{6}$/u.test(editDraft.color)
+            }
+            label="Guardar"
+            loading={saving}
+            onPress={() => void saveEdit()}
+          />
+          {editDraft.isActive ? (
+            <ActionButton
+              label="Archivar"
+              loading={saving}
+              onPress={() => void archiveEditing()}
+              variant="danger"
+            />
+          ) : null}
+          <ActionButton
+            label="Cancelar"
+            onPress={() => {
+              setEditDraft(null);
+            }}
+            variant="secondary"
+          />
+        </Card>
+      )}
+
+      {newSubcategory === null ? null : (
+        <Card>
+          <Text style={m1TextStyles.sectionTitle}>Nueva subcategoría</Text>
+          <FormField
+            autoFocus
+            label="Nombre"
+            maxLength={100}
+            onChangeText={(name) => {
+              setNewSubcategory({ ...newSubcategory, name });
+            }}
+            value={newSubcategory.name}
+          />
+          {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+          <ActionButton
+            disabled={newSubcategory.name.trim() === ''}
+            label="Guardar"
+            loading={saving}
+            onPress={() => void createSubcategory()}
+          />
+          <ActionButton
+            label="Cancelar"
+            onPress={() => {
+              setNewSubcategory(null);
+            }}
+            variant="secondary"
+          />
+        </Card>
+      )}
+
+      {(['EXPENSE', 'INCOME'] as const).map((kind) => {
+        const kindRoots = roots.filter((root) => root.kind === kind);
+        if (loadState.kind !== 'loaded' || kindRoots.length === 0) return null;
+
+        return (
+          <View key={kind} style={styles.section}>
+            <Text style={m1TextStyles.sectionTitle}>
+              {kind === 'EXPENSE' ? 'Egresos' : 'Ingresos'}
+            </Text>
+            <Card>
+              {kindRoots.map((root, index) => (
+                <RootAccordion
+                  isExpanded={expandedRoots[root.id] === true}
+                  isFirst={index === 0}
+                  key={root.id}
+                  onAddChild={() => {
+                    openCreate(root.id, root.kind);
+                  }}
+                  onEditChild={openEdit}
+                  onToggle={() => {
+                    toggleRoot(root.id);
+                  }}
+                  root={root}
+                  subcategories={categories.filter((child) => child.parentId === root.id)}
+                />
+              ))}
+            </Card>
+          </View>
+        );
+      })}
+
+      <InlineNotice tone="success">{ROOT_RULE_NOTICE}</InlineNotice>
     </AppScreen>
   );
 }
 
-function CategoryRow({
-  category,
-  child = false,
-  children,
-  onArchive,
-  onEdit,
+function RootAccordion({
+  root,
+  subcategories,
+  isExpanded,
+  isFirst,
+  onToggle,
+  onEditChild,
+  onAddChild,
 }: {
-  readonly category: Category;
-  readonly child?: boolean;
-  readonly children?: React.ReactNode;
-  readonly onArchive: (category: Category) => Promise<void>;
-  readonly onEdit: (draft: Draft) => void;
+  readonly root: Category;
+  readonly subcategories: readonly Category[];
+  readonly isExpanded: boolean;
+  readonly isFirst: boolean;
+  readonly onToggle: () => void;
+  readonly onEditChild: (category: Category) => void;
+  readonly onAddChild: () => void;
 }) {
   return (
-    <View style={[styles.rowGroup, child && styles.child]}>
-      <Card>
-        <View style={styles.row}>
-          <View style={styles.copy}>
-            <Text style={m1TextStyles.body}>{category.name}</Text>
-            <Text style={m1TextStyles.secondary}>
-              {category.isActive ? category.icon : `${category.icon} · Archivada`}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              onEdit({
-                id: category.id,
-                kind: category.kind,
-                name: category.name,
-                icon: category.icon,
-                color: category.color,
-                parentId: category.parentId,
-                isActive: category.isActive,
-              });
-            }}
-          >
-            <Text style={styles.link}>Editar</Text>
-          </Pressable>
-          {category.isActive ? (
-            <Pressable accessibilityRole="button" onPress={() => void onArchive(category)}>
-              <Text style={styles.danger}>Archivar</Text>
-            </Pressable>
-          ) : null}
+    <View style={!isFirst && styles.rootDivider}>
+      <Pressable accessibilityRole="button" onPress={onToggle} style={styles.rootRow}>
+        <View style={[styles.avatar, { backgroundColor: `${root.color}26` }]}>
+          <Text style={[styles.avatarText, { color: root.color }]}>
+            {root.name.charAt(0).toUpperCase()}
+          </Text>
         </View>
-      </Card>
-      {children}
+        <View style={styles.rootCopy}>
+          <Text style={m1TextStyles.body}>{root.name}</Text>
+          <Text style={m1TextStyles.secondary}>
+            {subcategories.length === 1
+              ? '1 subcategoría'
+              : `${subcategories.length.toString()} subcategorías`}
+          </Text>
+        </View>
+        <Ionicons
+          color={themeTokens.colors.inkSecondary}
+          name={isExpanded ? 'chevron-down' : 'chevron-forward'}
+          size={20}
+        />
+      </Pressable>
+      {isExpanded ? (
+        <View style={styles.chipWrap}>
+          {subcategories.map((child) => (
+            <Pressable
+              accessibilityRole="button"
+              key={child.id}
+              onPress={() => {
+                onEditChild(child);
+              }}
+              style={styles.chip}
+            >
+              <Text style={[styles.chipLabel, !child.isActive && styles.chipLabelArchived]}>
+                {child.isActive ? child.name : `${child.name} · Archivada`}
+              </Text>
+            </Pressable>
+          ))}
+          <Pressable accessibilityRole="button" onPress={onAddChild} style={styles.chipDashed}>
+            <Text style={styles.chipDashedLabel}>+ Nueva</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function ChoiceRow<T extends string | boolean | null>({
+function ChoiceRow<T extends string | boolean>({
   label,
   options,
   selected,
@@ -350,17 +429,66 @@ function ChoiceRow<T extends string | boolean | null>({
 
 const styles = StyleSheet.create({
   section: { gap: themeTokens.spacing.cardGap },
-  rowGroup: { gap: themeTokens.spacing.base },
-  child: { marginLeft: themeTokens.spacing.cardPadding },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  copy: { flex: 1 },
-  link: {
+  rootDivider: {
+    marginTop: themeTokens.spacing.cardGap,
+    paddingTop: themeTokens.spacing.cardGap,
+    borderTopWidth: 1,
+    borderTopColor: themeTokens.colors.border,
+  },
+  rootRow: {
+    minHeight: themeTokens.touchTarget.minimum,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+  },
+  rootCopy: { flex: 1 },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: themeTokens.spacing.base,
+    paddingLeft: 52,
+  },
+  chip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: themeTokens.colors.borderStrong,
+    borderRadius: themeTokens.radii.chip,
+    paddingHorizontal: 14,
+  },
+  chipLabel: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.bodyMedium,
+    fontSize: themeTokens.typography.scale.body,
+  },
+  chipLabelArchived: {
+    color: themeTokens.colors.inkSecondary,
+  },
+  chipDashed: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: themeTokens.colors.primary,
+    borderRadius: themeTokens.radii.chip,
+    paddingHorizontal: 14,
+  },
+  chipDashedLabel: {
     color: themeTokens.colors.primary,
     fontFamily: themeTokens.typography.families.bodySemibold,
-  },
-  danger: {
-    color: themeTokens.semanticColors.danger.foreground,
-    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
   },
   choices: { gap: 8 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
