@@ -110,6 +110,9 @@ export default function FijosScreen() {
       .map((occurrence): FijoRow | null => {
         const item = itemsById.get(occurrence.recurringItemId);
         if (item === undefined) return null;
+        // Fijos lists fixed EXPENSES only; income recurring items live in Ingresos esperados
+        // (ING-01), reached from the Inicio Balance card.
+        if (item.kind !== 'EXPENSE') return null;
         const status = deriveOccurrenceDisplayStatus(occurrence, todayLocal);
         if (status === 'SKIPPED') return null;
         const responsibleUserId = occurrence.responsibleUserId ?? item.responsibleUserId;
@@ -134,7 +137,22 @@ export default function FijosScreen() {
   const upcomingRows = rows.filter((row) => row.status === 'UPCOMING' || row.status === 'PENDING');
   const settledRows = rows.filter((row) => row.status === 'SETTLED');
 
-  const occurrences = loadState.kind === 'loaded' ? loadState.occurrences : [];
+  // Totals count expense occurrences only (income is excluded from Fijos, matching the rows above).
+  const expenseItemIds = useMemo(
+    () =>
+      loadState.kind === 'loaded'
+        ? new Set(
+            loadState.recurringItems
+              .filter((item) => item.kind === 'EXPENSE')
+              .map((item) => item.id),
+          )
+        : new Set<string>(),
+    [loadState],
+  );
+  const occurrences =
+    loadState.kind === 'loaded'
+      ? loadState.occurrences.filter((occurrence) => expenseItemIds.has(occurrence.recurringItemId))
+      : [];
   const pendingTotal = sumPendingEstimatedPyg(occurrences);
   const pendingCount = occurrences.filter((occurrence) => isPending(occurrence.status)).length;
   const totalCount = occurrences.filter((occurrence) => occurrence.status !== 'SKIPPED').length;
