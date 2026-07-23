@@ -95,6 +95,9 @@ function SessionStack() {
         <Stack.Screen name="payment-sources" />
         <Stack.Screen name="movimiento/[id]" />
         <Stack.Screen name="nuevo-gasto" />
+        <Stack.Screen name="fijo/[id]" />
+        <Stack.Screen name="nuevo-fijo" />
+        <Stack.Screen name="pagar-fijo/[id]" />
       </Stack.Protected>
     </Stack>
   );

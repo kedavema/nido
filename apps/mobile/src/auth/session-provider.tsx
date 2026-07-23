@@ -55,6 +55,12 @@ interface SessionContextValue {
     | 'updateTransaction'
     | 'deleteTransaction'
     | 'getMonthlySummary'
+    | 'listRecurringItems'
+    | 'createRecurringItem'
+    | 'updateRecurringItem'
+    | 'deleteRecurringItem'
+    | 'listOccurrences'
+    | 'settleOccurrence'
   >;
 }
 
@@ -425,6 +431,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
       deleteTransaction: (householdId, transactionId) =>
         api().deleteTransaction(householdId, transactionId),
       getMonthlySummary: (householdId, query) => api().getMonthlySummary(householdId, query),
+      listRecurringItems: (householdId) => api().listRecurringItems(householdId),
+      createRecurringItem: (householdId, input) => api().createRecurringItem(householdId, input),
+      updateRecurringItem: (householdId, recurringItemId, input) =>
+        api().updateRecurringItem(householdId, recurringItemId, input),
+      deleteRecurringItem: (householdId, recurringItemId) =>
+        api().deleteRecurringItem(householdId, recurringItemId),
+      listOccurrences: (householdId, query) => api().listOccurrences(householdId, query),
+      settleOccurrence: (householdId, occurrenceId, input) =>
+        api().settleOccurrence(householdId, occurrenceId, input),
     };
   }, []);
 

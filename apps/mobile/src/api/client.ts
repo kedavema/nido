@@ -8,21 +8,30 @@ import {
   CreateHouseholdResponseSchema,
   CreatePaymentSourceRequestSchema,
   CreatePaymentSourceResponseSchema,
+  CreateRecurringItemRequestSchema,
+  CreateRecurringItemResponseSchema,
   CreateTransactionRequestSchema,
   CreateTransactionResponseSchema,
   GetHouseholdMembersResponseSchema,
   GetMeResponseSchema,
   InviteTokenSchema,
   ListCategoriesResponseSchema,
+  ListOccurrencesQuerySchema,
+  ListOccurrencesResponseSchema,
   ListPaymentSourcesResponseSchema,
+  ListRecurringItemsResponseSchema,
   ListTransactionsQuerySchema,
   ListTransactionsResponseSchema,
   MonthlySummaryQuerySchema,
   MonthlySummaryResponseSchema,
+  SettleOccurrenceRequestSchema,
+  SettleOccurrenceResponseSchema,
   UpdateCategoryRequestSchema,
   UpdateCategoryResponseSchema,
   UpdatePaymentSourceRequestSchema,
   UpdatePaymentSourceResponseSchema,
+  UpdateRecurringItemRequestSchema,
+  UpdateRecurringItemResponseSchema,
   UpdateTransactionRequestSchema,
   UpdateTransactionResponseSchema,
   type AcceptHouseholdInviteResponse,
@@ -32,20 +41,29 @@ import {
   type CreateHouseholdResponse,
   type CreatePaymentSourceRequest,
   type CreatePaymentSourceResponse,
+  type CreateRecurringItemRequest,
+  type CreateRecurringItemResponse,
   type CreateTransactionRequest,
   type CreateTransactionResponse,
   type GetHouseholdMembersResponse,
   type GetMeResponse,
   type ListCategoriesResponse,
+  type ListOccurrencesQuery,
+  type ListOccurrencesResponse,
   type ListPaymentSourcesResponse,
+  type ListRecurringItemsResponse,
   type ListTransactionsQuery,
   type ListTransactionsResponse,
   type MonthlySummaryQuery,
   type MonthlySummaryResponse,
+  type SettleOccurrenceRequest,
+  type SettleOccurrenceResponse,
   type UpdateCategoryRequest,
   type UpdateCategoryResponse,
   type UpdatePaymentSourceRequest,
   type UpdatePaymentSourceResponse,
+  type UpdateRecurringItemRequest,
+  type UpdateRecurringItemResponse,
   type UpdateTransactionRequest,
   type UpdateTransactionResponse,
 } from '@nido/contracts';
@@ -212,6 +230,26 @@ export interface NidoApiClient {
     householdId: string,
     query: MonthlySummaryQuery,
   ): Promise<MonthlySummaryResponse>;
+  listRecurringItems(householdId: string): Promise<ListRecurringItemsResponse>;
+  createRecurringItem(
+    householdId: string,
+    input: CreateRecurringItemRequest,
+  ): Promise<CreateRecurringItemResponse>;
+  updateRecurringItem(
+    householdId: string,
+    recurringItemId: string,
+    input: UpdateRecurringItemRequest,
+  ): Promise<UpdateRecurringItemResponse>;
+  deleteRecurringItem(householdId: string, recurringItemId: string): Promise<void>;
+  listOccurrences(
+    householdId: string,
+    query?: ListOccurrencesQuery,
+  ): Promise<ListOccurrencesResponse>;
+  settleOccurrence(
+    householdId: string,
+    occurrenceId: string,
+    input: SettleOccurrenceRequest,
+  ): Promise<SettleOccurrenceResponse>;
 }
 
 export function createNidoApiClient({
@@ -436,6 +474,59 @@ export function createNidoApiClient({
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/reports/monthly-summary${queryString}`,
         MonthlySummaryResponseSchema,
+      );
+    },
+    listRecurringItems(householdId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/recurring-items`,
+        ListRecurringItemsResponseSchema,
+      );
+    },
+    createRecurringItem(householdId, input) {
+      const body = CreateRecurringItemRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/recurring-items`,
+        CreateRecurringItemResponseSchema,
+        { method: 'POST', body },
+      );
+    },
+    updateRecurringItem(householdId, recurringItemId, input) {
+      const body = UpdateRecurringItemRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/recurring-items/${encodeURIComponent(recurringItemId)}`,
+        UpdateRecurringItemResponseSchema,
+        { method: 'PATCH', body },
+      );
+    },
+    deleteRecurringItem(householdId, recurringItemId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/recurring-items/${encodeURIComponent(recurringItemId)}`,
+        z.void(),
+        { method: 'DELETE' },
+      );
+    },
+    listOccurrences(householdId, query = {}) {
+      const validQuery = ListOccurrencesQuerySchema.parse(query);
+      // `status` normalizes to an array and repeats as `?status=A&status=B` (Express parses
+      // repeated keys back into an array); `from`/`to` are plain scalars.
+      const searchParams = new URLSearchParams();
+      for (const status of validQuery.status ?? []) {
+        searchParams.append('status', status);
+      }
+      if (validQuery.from !== undefined) searchParams.set('from', validQuery.from);
+      if (validQuery.to !== undefined) searchParams.set('to', validQuery.to);
+      const queryString = searchParams.toString();
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/occurrences${queryString === '' ? '' : `?${queryString}`}`,
+        ListOccurrencesResponseSchema,
+      );
+    },
+    settleOccurrence(householdId, occurrenceId, input) {
+      const body = SettleOccurrenceRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/occurrences/${encodeURIComponent(occurrenceId)}/settle`,
+        SettleOccurrenceResponseSchema,
+        { method: 'POST', body },
       );
     },
   };
