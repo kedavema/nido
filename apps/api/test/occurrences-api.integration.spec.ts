@@ -5,6 +5,7 @@ import {
   CreateHouseholdResponseSchema,
   CreateRecurringItemResponseSchema,
   ListOccurrencesResponseSchema,
+  MonthlySummaryResponseSchema,
   SettleOccurrenceResponseSchema,
   SkipOccurrenceResponseSchema,
 } from '@nido/contracts';
@@ -459,6 +460,77 @@ describe.skipIf(!hasTestDatabase)('Occurrences API with PostgreSQL', () => {
     expect(transactions.rows).toEqual([]);
   });
 
+  // docs/system-design.md §6.4 "evita que se contabilice dos veces": the full lifecycle
+  // (rule → occurrence → settle → linked transaction → monthly summary) must count each settled
+  // amount EXACTLY ONCE. The occurrence itself is never a movement — only its linked RECURRING
+  // transaction contributes to the totals — and the rule's other (still PENDING) occurrences
+  // contribute nothing. This ties the T-504/505/506 slices together end to end.
+  it('counts a settled recurring amount exactly once in the monthly summary (no double counting)', async () => {
+    const householdId = await createHousehold('owner');
+    const expenseCategory = await createCategory('owner', householdId, { name: 'Comida' });
+    const incomeCategory = await createCategory('owner', householdId, {
+      name: 'Freelance',
+      kind: 'INCOME',
+    });
+
+    const expenseRule = await createRecurringItem('owner', householdId, {
+      categoryId: expenseCategory.category.id,
+      firstDueDate: '2026-07-10',
+      frequency: 'MONTHLY',
+      estimatedAmount: '200000',
+    });
+    const incomeRule = await createRecurringItem('owner', householdId, {
+      categoryId: incomeCategory.category.id,
+      firstDueDate: '2026-07-05',
+      frequency: 'MONTHLY',
+      kind: 'INCOME',
+      estimatedAmount: '9500000',
+      name: 'Salario',
+    });
+
+    // Settle exactly one occurrence of each, both dated inside July 2026, with real amounts that
+    // differ from the estimates.
+    const settleExpense = await request(
+      `/v1/households/${householdId}/occurrences/${await occurrenceIdAt(expenseRule.recurringItem.id, '2026-07-10')}/settle`,
+      {
+        method: 'POST',
+        token: 'owner',
+        body: { amount: '198500', settledAt: '2026-07-10T13:00:00.000Z' },
+      },
+    );
+    expect(settleExpense.status).toBe(200);
+    const settleIncome = await request(
+      `/v1/households/${householdId}/occurrences/${await occurrenceIdAt(incomeRule.recurringItem.id, '2026-07-05')}/settle`,
+      {
+        method: 'POST',
+        token: 'owner',
+        body: { amount: '9600000', settledAt: '2026-07-05T13:00:00.000Z' },
+      },
+    );
+    expect(settleIncome.status).toBe(200);
+
+    // Both rules generated a full 12-month horizon of occurrences, but only the two settled ones
+    // became transactions — so the July totals reflect each settled amount once and nothing else.
+    const summaryResponse = await request(
+      `/v1/households/${householdId}/reports/monthly-summary?month=2026-07`,
+      { token: 'owner' },
+    );
+    expect(summaryResponse.status).toBe(200);
+    const summary = MonthlySummaryResponseSchema.parse(await summaryResponse.json());
+    expect(summary.incomeTotal).toBe('9600000');
+    expect(summary.expenseTotal).toBe('198500');
+    expect(summary.balance).toBe('9401500');
+
+    // And there are exactly two transactions total, both RECURRING and linked to their occurrence.
+    const transactions = await pool.query<{ origin: string; source_occurrence_id: string | null }>(
+      'SELECT origin, source_occurrence_id FROM transactions WHERE household_id = $1',
+      [householdId],
+    );
+    expect(transactions.rows).toHaveLength(2);
+    expect(transactions.rows.every((row) => row.origin === 'RECURRING')).toBe(true);
+    expect(transactions.rows.every((row) => row.source_occurrence_id !== null)).toBe(true);
+  });
+
   async function occurrenceIdAt(recurringItemId: string, dueDate: string): Promise<string> {
     const result = await pool.query<{ id: string }>(
       'SELECT id FROM occurrences WHERE recurring_item_id = $1 AND due_date = $2',
@@ -475,12 +547,15 @@ describe.skipIf(!hasTestDatabase)('Occurrences API with PostgreSQL', () => {
     readonly categoryId: string;
     readonly firstDueDate?: string;
     readonly frequency?: 'ONE_TIME' | 'MONTHLY' | 'YEARLY' | 'EVERY_N_MONTHS';
+    readonly kind?: 'EXPENSE' | 'INCOME';
+    readonly estimatedAmount?: string;
+    readonly name?: string;
   }): Record<string, unknown> {
     return {
-      kind: 'EXPENSE',
-      name: 'Internet',
+      kind: overrides.kind ?? 'EXPENSE',
+      name: overrides.name ?? 'Internet',
       categoryId: overrides.categoryId,
-      estimatedAmount: '200000',
+      estimatedAmount: overrides.estimatedAmount ?? '200000',
       currency: 'PYG',
       frequency: overrides.frequency ?? 'MONTHLY',
       firstDueDate: overrides.firstDueDate ?? '2026-07-10',
@@ -500,12 +575,12 @@ describe.skipIf(!hasTestDatabase)('Occurrences API with PostgreSQL', () => {
   async function createCategory(
     token: keyof typeof identities,
     householdId: string,
-    input: { readonly name: string },
+    input: { readonly name: string; readonly kind?: 'EXPENSE' | 'INCOME' },
   ) {
     const response = await request(`/v1/households/${householdId}/categories`, {
       method: 'POST',
       token,
-      body: { kind: 'EXPENSE', name: input.name, icon: 'wifi', color: '#AABBCC' },
+      body: { kind: input.kind ?? 'EXPENSE', name: input.name, icon: 'wifi', color: '#AABBCC' },
     });
     expect(response.status).toBe(201);
     return CreateCategoryResponseSchema.parse(await response.json());
@@ -518,6 +593,9 @@ describe.skipIf(!hasTestDatabase)('Occurrences API with PostgreSQL', () => {
       readonly categoryId: string;
       readonly firstDueDate?: string;
       readonly frequency?: 'ONE_TIME' | 'MONTHLY' | 'YEARLY' | 'EVERY_N_MONTHS';
+      readonly kind?: 'EXPENSE' | 'INCOME';
+      readonly estimatedAmount?: string;
+      readonly name?: string;
     },
   ) {
     const response = await request(`/v1/households/${householdId}/recurring-items`, {
