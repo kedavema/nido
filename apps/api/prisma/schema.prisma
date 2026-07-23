@@ -115,6 +115,11 @@ model Household {
   createdByUserId String   @map("created_by") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  // Local calendar day (America/Asuncion) the lazy-on-read occurrence sweep last ran for this
+  // household (ADR 0009 point 3). Null until the first sweep. The sweep only runs when this is
+  // not today, so it fires at most once per household per day — "la primera apertura autenticada
+  // del día". Re-checked under the advisory lock so concurrent first requests sweep only once.
+  lastSweptOn     DateTime? @map("last_swept_on") @db.Date
 
   creator        User              @relation("HouseholdCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   memberships    HouseholdMember[]

@@ -8,6 +8,7 @@ import { validateEnvironment } from './config/environment.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HouseholdsModule } from './households/households.module.js';
+import { OccurrencesModule } from './occurrences/occurrences.module.js';
 import { PaymentSourcesModule } from './payment-sources/payment-sources.module.js';
 import { RecurringItemsModule } from './recurring-items/recurring-items.module.js';
 import { TransactionsModule } from './transactions/transactions.module.js';
@@ -30,6 +31,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
     DatabaseModule,
     HealthModule,
     HouseholdsModule,
+    OccurrencesModule,
     PaymentSourcesModule,
     RecurringItemsModule,
     TransactionsModule,

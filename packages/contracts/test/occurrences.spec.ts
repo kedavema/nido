@@ -103,12 +103,22 @@ describe('M5 occurrence contracts', () => {
         to: '2026-08-31',
       }),
     ).toEqual({
-      status: 'PENDING',
+      status: ['PENDING'],
       from: '2026-08-01',
       to: '2026-08-31',
     });
     expect(ListOccurrencesQuerySchema.parse({})).toEqual({});
     expect(ListOccurrencesQuerySchema.safeParse({ status: 'CANCELLED' }).success).toBe(false);
+  });
+
+  it('normalizes one-or-more statuses (repeated query keys arrive as an array) to an array', () => {
+    expect(ListOccurrencesQuerySchema.parse({ status: ['PENDING', 'OVERDUE'] })).toEqual({
+      status: ['PENDING', 'OVERDUE'],
+    });
+    expect(ListOccurrencesQuerySchema.safeParse({ status: [] }).success).toBe(false);
+    expect(ListOccurrencesQuerySchema.safeParse({ status: ['PENDING', 'CANCELLED'] }).success).toBe(
+      false,
+    );
   });
 
   it('settles as-planned with an empty body', () => {

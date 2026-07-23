@@ -42,9 +42,15 @@ export const ListOccurrencesResponseSchema = z.strictObject({
   occurrences: z.array(OccurrenceSchema),
 });
 
-// Filters mirrored minimally from ListTransactionsQuerySchema: status and a due-date range.
+// Filters mirrored minimally from ListTransactionsQuerySchema: status (one or more) and a
+// due-date range. `status` accepts either a single value (`?status=PENDING`) or several — Express
+// parses repeated query keys (`?status=PENDING&status=OVERDUE`) into an array on its own — and is
+// always normalized to a non-empty array so callers never branch on the query shape.
 export const ListOccurrencesQuerySchema = z.strictObject({
-  status: OccurrenceStatusSchema.optional(),
+  status: z
+    .union([OccurrenceStatusSchema, z.array(OccurrenceStatusSchema).min(1)])
+    .transform((value) => (Array.isArray(value) ? value : [value]))
+    .optional(),
   from: LocalDateSchema.optional(),
   to: LocalDateSchema.optional(),
 });
