@@ -249,7 +249,7 @@ export class PrismaTransactionsRepository implements TransactionsRepository {
   }
 }
 
-function toTransactionRecord(transaction: {
+export function toTransactionRecord(transaction: {
   readonly id: string;
   readonly householdId: string;
   readonly type: string;

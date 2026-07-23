@@ -1,8 +1,13 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ListOccurrencesQuerySchema,
+  SettleOccurrenceRequestSchema,
+  UuidSchema,
   type ListOccurrencesQuery,
   type ListOccurrencesResponse,
+  type SettleOccurrenceRequest,
+  type SettleOccurrenceResponse,
+  type SkipOccurrenceResponse,
 } from '@nido/contracts';
 
 import { AuthenticationGuard } from '../auth/authentication.guard.js';
@@ -25,5 +30,24 @@ export class OccurrencesController {
     @Query(new ZodValidationPipe(ListOccurrencesQuerySchema)) query: ListOccurrencesQuery,
   ): Promise<ListOccurrencesResponse> {
     return this.occurrences.listOccurrences(access, query);
+  }
+
+  @Post(':occurrenceId/settle')
+  @HttpCode(200)
+  settleOccurrence(
+    @CurrentHouseholdAccess() access: HouseholdAccess,
+    @Param('occurrenceId', new ZodValidationPipe(UuidSchema)) occurrenceId: string,
+    @Body(new ZodValidationPipe(SettleOccurrenceRequestSchema)) request: SettleOccurrenceRequest,
+  ): Promise<SettleOccurrenceResponse> {
+    return this.occurrences.settleOccurrence(access, occurrenceId, request);
+  }
+
+  @Post(':occurrenceId/skip')
+  @HttpCode(200)
+  skipOccurrence(
+    @CurrentHouseholdAccess() access: HouseholdAccess,
+    @Param('occurrenceId', new ZodValidationPipe(UuidSchema)) occurrenceId: string,
+  ): Promise<SkipOccurrenceResponse> {
+    return this.occurrences.skipOccurrence(access, occurrenceId);
   }
 }

@@ -38,7 +38,7 @@ export class PrismaOccurrencesRepository implements OccurrencesRepository {
   }
 }
 
-function toOccurrenceRecord(occurrence: {
+export function toOccurrenceRecord(occurrence: {
   readonly id: string;
   readonly recurringItemId: string;
   readonly householdId: string;
