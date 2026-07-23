@@ -4,6 +4,11 @@ import type { Clock } from '../src/common/clock.js';
 import { Prisma } from '../src/generated/prisma/client.js';
 import type { HouseholdAccess } from '../src/households/household.js';
 import type { OccurrenceListFilters, OccurrenceRecord } from '../src/occurrences/occurrence.js';
+import type {
+  OccurrenceSettlementRepository,
+  SettleOccurrenceResult,
+  SkipOccurrenceResult,
+} from '../src/occurrences/occurrence-settlement.repository.js';
 import type { OccurrenceSweepRepository } from '../src/occurrences/occurrence-sweep.repository.js';
 import type { OccurrencesRepository } from '../src/occurrences/occurrences.repository.js';
 import { OccurrencesService } from '../src/occurrences/occurrences.service.js';
@@ -60,13 +65,23 @@ class FakeSweepRepository implements OccurrenceSweepRepository {
   }
 }
 
+class FakeSettlementRepository implements OccurrenceSettlementRepository {
+  settle(): Promise<SettleOccurrenceResult> {
+    return Promise.resolve({ kind: 'not_found' });
+  }
+  skip(): Promise<SkipOccurrenceResult> {
+    return Promise.resolve({ kind: 'not_found' });
+  }
+}
+
 const clock: Clock = { now: () => now };
+const settlement = new FakeSettlementRepository();
 
 describe('OccurrencesService', () => {
   it('triggers the sweep for the household before listing, at the current UTC calendar day', async () => {
     const repository = new FakeOccurrencesRepository([]);
     const sweep = new FakeSweepRepository(repository);
-    const service = new OccurrencesService(repository, sweep, clock);
+    const service = new OccurrencesService(repository, sweep, settlement, clock);
 
     await service.listOccurrences(access, {});
 
@@ -79,7 +94,7 @@ describe('OccurrencesService', () => {
   it('passes status and parsed date-range filters through to the repository', async () => {
     const repository = new FakeOccurrencesRepository([]);
     const sweep = new FakeSweepRepository(repository);
-    const service = new OccurrencesService(repository, sweep, clock);
+    const service = new OccurrencesService(repository, sweep, settlement, clock);
 
     await service.listOccurrences(access, {
       status: ['PENDING', 'OVERDUE'],
@@ -95,7 +110,7 @@ describe('OccurrencesService', () => {
   it('omits filters entirely when the query carries none', async () => {
     const repository = new FakeOccurrencesRepository([]);
     const sweep = new FakeSweepRepository(repository);
-    const service = new OccurrencesService(repository, sweep, clock);
+    const service = new OccurrencesService(repository, sweep, settlement, clock);
 
     await service.listOccurrences(access, {});
 
@@ -115,7 +130,7 @@ describe('OccurrencesService', () => {
       }),
     ]);
     const sweep = new FakeSweepRepository(repository);
-    const service = new OccurrencesService(repository, sweep, clock);
+    const service = new OccurrencesService(repository, sweep, settlement, clock);
 
     const response = await service.listOccurrences(access, {});
 

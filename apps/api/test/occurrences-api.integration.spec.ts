@@ -5,6 +5,8 @@ import {
   CreateHouseholdResponseSchema,
   CreateRecurringItemResponseSchema,
   ListOccurrencesResponseSchema,
+  SettleOccurrenceResponseSchema,
+  SkipOccurrenceResponseSchema,
 } from '@nido/contracts';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -285,6 +287,189 @@ describe.skipIf(!hasTestDatabase)('Occurrences API with PostgreSQL', () => {
     expect(occurrences.rows).toHaveLength(13);
     expect(new Set(occurrences.rows.map((row) => row.due_date.toISOString())).size).toBe(13);
   });
+
+  // docs/system-design.md §10 "Pagar un gasto fijo": settling creates a real transaction linked 1:1
+  // to the occurrence and flips it to SETTLED, atomically.
+  it('settles a due occurrence into a linked RECURRING transaction and marks it SETTLED', async () => {
+    const householdId = await createHousehold('owner');
+    const category = await createCategory('owner', householdId, { name: 'Comida' });
+    const created = await createRecurringItem('owner', householdId, {
+      categoryId: category.category.id,
+      firstDueDate: '2026-07-10',
+      frequency: 'MONTHLY',
+    });
+    const occurrenceId = await occurrenceIdAt(created.recurringItem.id, '2026-07-10');
+
+    // Settle with a real amount that differs from the estimate.
+    const response = await request(
+      `/v1/households/${householdId}/occurrences/${occurrenceId}/settle`,
+      { method: 'POST', token: 'owner', body: { amount: '198500' } },
+    );
+    expect(response.status).toBe(200);
+    const settled = SettleOccurrenceResponseSchema.parse(await response.json());
+    expect(settled.occurrence.status).toBe('SETTLED');
+    expect(settled.occurrence.settledAt).not.toBeNull();
+    expect(settled.transaction.origin).toBe('RECURRING');
+    expect(settled.transaction.type).toBe('EXPENSE');
+    expect(settled.transaction.amount).toBe('198500');
+    expect(settled.transaction.categoryId).toBe(category.category.id);
+
+    // Exactly one transaction, linked back to the occurrence.
+    const stored = await pool.query<{ source_occurrence_id: string | null; origin: string }>(
+      'SELECT source_occurrence_id, origin FROM transactions WHERE household_id = $1',
+      [householdId],
+    );
+    expect(stored.rows).toEqual([{ source_occurrence_id: occurrenceId, origin: 'RECURRING' }]);
+  });
+
+  it('skips an occurrence without creating any transaction', async () => {
+    const householdId = await createHousehold('owner');
+    const category = await createCategory('owner', householdId, { name: 'Comida' });
+    const created = await createRecurringItem('owner', householdId, {
+      categoryId: category.category.id,
+      firstDueDate: '2026-07-10',
+      frequency: 'MONTHLY',
+    });
+    const occurrenceId = await occurrenceIdAt(created.recurringItem.id, '2026-07-10');
+
+    const response = await request(
+      `/v1/households/${householdId}/occurrences/${occurrenceId}/skip`,
+      { method: 'POST', token: 'owner' },
+    );
+    expect(response.status).toBe(200);
+    const skipped = SkipOccurrenceResponseSchema.parse(await response.json());
+    expect(skipped.occurrence.status).toBe('SKIPPED');
+
+    const transactions = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+      householdId,
+    ]);
+    expect(transactions.rows).toEqual([]);
+  });
+
+  it('rejects settling an occurrence that is already SETTLED or SKIPPED with 409', async () => {
+    const householdId = await createHousehold('owner');
+    const category = await createCategory('owner', householdId, { name: 'Comida' });
+    const created = await createRecurringItem('owner', householdId, {
+      categoryId: category.category.id,
+      firstDueDate: '2026-07-10',
+      frequency: 'MONTHLY',
+    });
+    const settleId = await occurrenceIdAt(created.recurringItem.id, '2026-07-10');
+    const skipId = await occurrenceIdAt(created.recurringItem.id, '2026-08-10');
+
+    expect(
+      (
+        await request(`/v1/households/${householdId}/occurrences/${settleId}/settle`, {
+          method: 'POST',
+          token: 'owner',
+          body: {},
+        })
+      ).status,
+    ).toBe(200);
+    // Second settle of the same occurrence is a conflict, and creates no second transaction.
+    expect(
+      (
+        await request(`/v1/households/${householdId}/occurrences/${settleId}/settle`, {
+          method: 'POST',
+          token: 'owner',
+          body: {},
+        })
+      ).status,
+    ).toBe(409);
+
+    expect(
+      (
+        await request(`/v1/households/${householdId}/occurrences/${skipId}/skip`, {
+          method: 'POST',
+          token: 'owner',
+        })
+      ).status,
+    ).toBe(200);
+    // A SKIPPED occurrence cannot then be settled.
+    expect(
+      (
+        await request(`/v1/households/${householdId}/occurrences/${skipId}/settle`, {
+          method: 'POST',
+          token: 'owner',
+          body: {},
+        })
+      ).status,
+    ).toBe(409);
+
+    const transactions = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+      householdId,
+    ]);
+    expect(transactions.rows).toHaveLength(1);
+  });
+
+  // The atomicity guarantee: two concurrent settles of the same occurrence must produce exactly one
+  // transaction (the row lock serializes them; the loser sees SETTLED and is rejected).
+  it('creates only one transaction when the same occurrence is settled twice concurrently', async () => {
+    const householdId = await createHousehold('owner');
+    const category = await createCategory('owner', householdId, { name: 'Comida' });
+    const created = await createRecurringItem('owner', householdId, {
+      categoryId: category.category.id,
+      firstDueDate: '2026-07-10',
+      frequency: 'MONTHLY',
+    });
+    const occurrenceId = await occurrenceIdAt(created.recurringItem.id, '2026-07-10');
+
+    const [first, second] = await Promise.all([
+      request(`/v1/households/${householdId}/occurrences/${occurrenceId}/settle`, {
+        method: 'POST',
+        token: 'owner',
+        body: {},
+      }),
+      request(`/v1/households/${householdId}/occurrences/${occurrenceId}/settle`, {
+        method: 'POST',
+        token: 'owner',
+        body: {},
+      }),
+    ]);
+    const statuses = [first.status, second.status].sort();
+    // One wins (200), the other conflicts (409) — never two successes.
+    expect(statuses).toEqual([200, 409]);
+
+    const transactions = await pool.query('SELECT id FROM transactions WHERE household_id = $1', [
+      householdId,
+    ]);
+    expect(transactions.rows).toHaveLength(1);
+  });
+
+  it("cannot settle another household's occurrence with 404", async () => {
+    const ownHouseholdId = await createHousehold('owner');
+    const otherHouseholdId = await createHousehold('outsider');
+    const category = await createCategory('outsider', otherHouseholdId, { name: 'Comida' });
+    const foreign = await createRecurringItem('outsider', otherHouseholdId, {
+      categoryId: category.category.id,
+      firstDueDate: '2026-07-10',
+      frequency: 'MONTHLY',
+    });
+    const foreignOccurrenceId = await occurrenceIdAt(foreign.recurringItem.id, '2026-07-10');
+
+    expect(
+      (
+        await request(
+          `/v1/households/${ownHouseholdId}/occurrences/${foreignOccurrenceId}/settle`,
+          { method: 'POST', token: 'owner', body: {} },
+        )
+      ).status,
+    ).toBe(404);
+    const transactions = await pool.query('SELECT id FROM transactions');
+    expect(transactions.rows).toEqual([]);
+  });
+
+  async function occurrenceIdAt(recurringItemId: string, dueDate: string): Promise<string> {
+    const result = await pool.query<{ id: string }>(
+      'SELECT id FROM occurrences WHERE recurring_item_id = $1 AND due_date = $2',
+      [recurringItemId, dueDate],
+    );
+    const id = result.rows[0]?.id;
+    if (id === undefined) {
+      throw new Error(`expected an occurrence at ${dueDate}`);
+    }
+    return id;
+  }
 
   function validRecurringItemBody(overrides: {
     readonly categoryId: string;
