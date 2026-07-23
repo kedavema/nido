@@ -151,9 +151,7 @@ export default function FijosScreen() {
   );
   const occurrences =
     loadState.kind === 'loaded'
-      ? loadState.occurrences.filter((occurrence) =>
-          expenseItemIds.has(occurrence.recurringItemId),
-        )
+      ? loadState.occurrences.filter((occurrence) => expenseItemIds.has(occurrence.recurringItemId))
       : [];
   const pendingTotal = sumPendingEstimatedPyg(occurrences);
   const pendingCount = occurrences.filter((occurrence) => isPending(occurrence.status)).length;
