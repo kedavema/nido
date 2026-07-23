@@ -23,6 +23,7 @@ import {
   m1TextStyles,
   SummarySkeleton,
 } from '@/components/m1-ui';
+import { navigateToIngresos } from '@/navigation/ingresos-routes';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
@@ -321,6 +322,9 @@ export default function InicioScreen() {
               status={summaryState.status}
             />
             <BalanceCard
+              onPressIncome={() => {
+                navigateToIngresos(formatMonthQueryParam(month));
+              }}
               onToggleTooltip={() => {
                 setTooltipOpen((current) => !current);
               }}
@@ -367,6 +371,9 @@ export default function InicioScreen() {
           ) : (
             <>
               <BalanceCard
+                onPressIncome={() => {
+                  navigateToIngresos(formatMonthQueryParam(month));
+                }}
                 onToggleTooltip={() => {
                   setTooltipOpen((current) => !current);
                 }}
@@ -564,10 +571,12 @@ function BalanceCard({
   summary,
   tooltipOpen,
   onToggleTooltip,
+  onPressIncome,
 }: {
   readonly summary: MonthlySummaryResponse;
   readonly tooltipOpen: boolean;
   readonly onToggleTooltip: () => void;
+  readonly onPressIncome: () => void;
 }) {
   const balance = formatSignedPygAmount(BigInt(summary.balance));
   // Reuses the same signed-amount formatter as a day's net (movement-format.ts) so the
@@ -613,7 +622,13 @@ function BalanceCard({
       <View style={styles.divider} />
 
       <View style={styles.subtotalsRow}>
-        <View style={styles.subtotalColumn}>
+        <Pressable
+          accessibilityHint="Abre la lista de ingresos esperados del mes"
+          accessibilityLabel="Ingresos recibidos"
+          accessibilityRole="button"
+          onPress={onPressIncome}
+          style={styles.subtotalColumn}
+        >
           <View style={styles.subtotalLabelRow}>
             <View
               style={[
@@ -622,9 +637,10 @@ function BalanceCard({
               ]}
             />
             <Text style={styles.subtotalLabel}>Ingresos recibidos</Text>
+            <Ionicons color={themeTokens.colors.inkSecondary} name="chevron-forward" size={14} />
           </View>
           <Text style={[styles.subtotalAmount, styles.positiveAmount]}>{income.text}</Text>
-        </View>
+        </Pressable>
         <View style={styles.subtotalColumn}>
           <View style={styles.subtotalLabelRow}>
             <View style={[styles.dot, { backgroundColor: themeTokens.colors.ink }]} />

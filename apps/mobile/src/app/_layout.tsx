@@ -98,6 +98,10 @@ function SessionStack() {
         <Stack.Screen name="fijo/[id]" />
         <Stack.Screen name="nuevo-fijo" />
         <Stack.Screen name="pagar-fijo/[id]" />
+        <Stack.Screen name="ingresos" />
+        <Stack.Screen name="ingreso/[id]" />
+        <Stack.Screen name="nuevo-ingreso" />
+        <Stack.Screen name="recibir-ingreso/[id]" />
       </Stack.Protected>
     </Stack>
   );
