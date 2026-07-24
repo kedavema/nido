@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 const LOCAL_API_HOSTS = new Set(['localhost', '127.0.0.1', '10.0.2.2', '[::1]']);
 
+// Private LAN IPv4 ranges (RFC 1918). Allowed over http so a physical device can
+// reach a dev server running on another machine on the same network.
+const PRIVATE_LAN_IPV4 =
+  /^(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})$/;
+
+function isLocalHttpHost(hostname: string): boolean {
+  return LOCAL_API_HOSTS.has(hostname) || PRIVATE_LAN_IPV4.test(hostname);
+}
+
 const PublicEnvironmentSchema = z.strictObject({
   apiUrl: z
     .url()
@@ -9,8 +18,7 @@ const PublicEnvironmentSchema = z.strictObject({
       try {
         const url = new URL(value);
         return (
-          url.protocol === 'https:' ||
-          (url.protocol === 'http:' && LOCAL_API_HOSTS.has(url.hostname))
+          url.protocol === 'https:' || (url.protocol === 'http:' && isLocalHttpHost(url.hostname))
         );
       } catch {
         return false;
