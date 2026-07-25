@@ -4,6 +4,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { BricolageGrotesque_500Medium } from '@expo-google-fonts/bricolage-grotesque/500Medium';
@@ -48,18 +50,22 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <Head>
-        <title>Nido</title>
-        <meta content="Finanzas del hogar para dos" name="description" />
-      </Head>
-      <StatusBar style="dark" />
-      <SessionProvider>
-        <SyncQueueProvider>
-          <SessionStack />
-        </SyncQueueProvider>
-      </SessionProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider statusBarTranslucent>
+        <SafeAreaProvider>
+          <Head>
+            <title>Nido</title>
+            <meta content="Finanzas del hogar para dos" name="description" />
+          </Head>
+          <StatusBar style="dark" />
+          <SessionProvider>
+            <SyncQueueProvider>
+              <SessionStack />
+            </SyncQueueProvider>
+          </SessionProvider>
+        </SafeAreaProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }
 
