@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import * as densityWeb from './density';
+import * as densityNative from './density.native';
 import { themeTokens } from './tokens';
 
 describe('canonical Nido v0.3 theme tokens', () => {
@@ -36,7 +38,8 @@ describe('canonical Nido v0.3 theme tokens', () => {
     });
   });
 
-  it('keeps the canonical type, spacing, shape, shadow, and touch scales', () => {
+  it('keeps the canonical web type, spacing, shape, shadow, and touch scales', () => {
+    // themeTokens resolves the web/node density baseline (density.ts).
     expect(themeTokens.typography.scale).toEqual({
       hero: 28,
       screenTitle: 20,
@@ -50,6 +53,9 @@ describe('canonical Nido v0.3 theme tokens', () => {
       cardGap: 12,
       screen: 16,
       cardPadding: 16,
+      lg: 20,
+      xl: 24,
+      xxl: 32,
     });
     expect(themeTokens.radii).toEqual({
       card: 16,
@@ -64,5 +70,20 @@ describe('canonical Nido v0.3 theme tokens', () => {
       opacity: 0.05,
     });
     expect(themeTokens.touchTarget.minimum).toBe(44);
+  });
+
+  it('gives the native density scale the same shape with roomier values', () => {
+    // Metro resolves density.native.ts on device; assert its shape matches the
+    // web baseline (same keys) while density-sensitive values are larger.
+    expect(Object.keys(densityNative.typographyScale)).toEqual(
+      Object.keys(densityWeb.typographyScale),
+    );
+    expect(Object.keys(densityNative.spacingScale)).toEqual(Object.keys(densityWeb.spacingScale));
+    expect(densityNative.typographyScale.body).toBeGreaterThan(densityWeb.typographyScale.body);
+    expect(densityNative.typographyScale.label).toBeGreaterThan(densityWeb.typographyScale.label);
+    expect(densityNative.typographyScale.secondary).toBeGreaterThan(
+      densityWeb.typographyScale.secondary,
+    );
+    expect(densityNative.touchTargetMinimum).toBeGreaterThan(densityWeb.touchTargetMinimum);
   });
 });

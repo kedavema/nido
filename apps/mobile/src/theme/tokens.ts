@@ -1,3 +1,5 @@
+import { spacingScale, touchTargetMinimum, typographyScale } from './density';
+
 export const themeTokens = {
   colors: {
     primary: '#1C4F47',
@@ -66,21 +68,9 @@ export const themeTokens = {
       bodySemibold: 'IBMPlexSans_600SemiBold',
       bodyBold: 'IBMPlexSans_700Bold',
     },
-    scale: {
-      hero: 28,
-      screenTitle: 20,
-      cardTitle: 17,
-      body: 15,
-      secondary: 13,
-      label: 11,
-    },
+    scale: typographyScale,
   },
-  spacing: {
-    base: 4,
-    cardGap: 12,
-    screen: 16,
-    cardPadding: 16,
-  },
+  spacing: spacingScale,
   radii: {
     card: 16,
     modal: 28,
@@ -98,7 +88,7 @@ export const themeTokens = {
     },
   },
   touchTarget: {
-    minimum: 44,
+    minimum: touchTargetMinimum,
   },
 } as const;
 
