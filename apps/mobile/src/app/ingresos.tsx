@@ -2,11 +2,17 @@ import type { Category, HouseholdMember, Occurrence, RecurringItem } from '@nido
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, Card, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  AppScreen,
+  Card,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+} from '@/components/m1-ui';
 import {
   navigateToExpectedIncomeForm,
   navigateToIngresoDetail,
@@ -61,11 +67,12 @@ export default function IngresosScreen() {
   const todayLocal = todayLocalDate();
   const month = useMemo(() => monthFromParam(monthParam, todayLocal), [monthParam, todayLocal]);
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(
-    async (isActive: () => boolean) => {
+    async (isActive: () => boolean, silent = false) => {
       if (household === null) return;
-      setLoadState({ kind: 'loading' });
+      if (!silent) setLoadState({ kind: 'loading' });
       const { from, to } = monthLocalDateRange(month);
       try {
         // Listing occurrences triggers the server's lazy-on-read sweep (T-505), so this is also what
@@ -98,6 +105,15 @@ export default function IngresosScreen() {
       };
     }, [load]),
   );
+
+  // Pull-to-refresh reuses the same fetch silently so the visible list isn't replaced by the
+  // full-screen spinner mid-pull — the RefreshControl is the only progress affordance.
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load(() => true, true).finally(() => {
+      setRefreshing(false);
+    });
+  }, [load]);
 
   // Occurrences carry no `kind`, so the income list is the join of every occurrence whose recurring
   // item is `kind === 'INCOME'` — the exact inverse of what the Fijos list does for EXPENSE.
@@ -159,14 +175,14 @@ export default function IngresosScreen() {
 
   if (household === null) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <AppScreen centered>
         <LoadingContent />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+    <AppScreen onRefresh={onRefresh} refreshing={refreshing}>
       <View style={styles.headerRow}>
         <Pressable
           accessibilityLabel="Volver"
@@ -187,78 +203,73 @@ export default function IngresosScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listArea}>
-        {loadState.kind === 'loading' ? <LoadingContent label="Cargando ingresos…" /> : null}
+      {loadState.kind === 'loading' ? <LoadingContent label="Cargando ingresos…" /> : null}
 
-        {loadState.kind === 'error' ? (
-          <>
-            <InlineNotice tone="error">{loadState.message}</InlineNotice>
-            <ActionButton
-              label="Reintentar"
-              onPress={() => void load(() => true)}
-              variant="secondary"
-            />
-          </>
-        ) : null}
-
-        {loadState.kind === 'loaded' ? (
-          <Card>
-            <Text style={styles.summaryEyebrow}>Recibidos</Text>
-            <Text style={styles.summaryAmount}>+Gs. {formatPygMagnitude(receivedTotal)}</Text>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${percentage.toString()}%` as `${number}%` },
-                ]}
-              />
-            </View>
-            <Text style={m1TextStyles.secondary}>
-              de Gs. {formatPygMagnitude(expectedTotal)} esperados · {percentage.toString()} % · el
-              Balance del mes solo cuenta lo recibido
-            </Text>
-          </Card>
-        ) : null}
-
-        {loadState.kind === 'loaded' && rows.length === 0 ? (
-          <Card>
-            <Text style={m1TextStyles.sectionTitle}>Todavía no hay ingresos esperados</Text>
-            <Text style={m1TextStyles.secondary}>
-              Anotá lo que esperás cobrar —sueldos, trabajos, reembolsos— y marcalo recibido cuando
-              llegue para que sume al balance del mes.
-            </Text>
-          </Card>
-        ) : null}
-
-        {rows.length > 0 ? (
-          <Card>
-            <Text style={styles.sectionEyebrow}>Este mes</Text>
-            {rows.map((row, index) => (
-              <IngresoListRow
-                isFirst={index === 0}
-                key={row.occurrence.id}
-                onPress={() => {
-                  navigateToIngresoDetail(row.occurrence.id);
-                }}
-                onReceive={() => {
-                  navigateToReceiveOccurrence(row.occurrence.id);
-                }}
-                row={row}
-              />
-            ))}
-          </Card>
-        ) : null}
-
-        {loadState.kind === 'loaded' ? (
-          <OutlineButton
-            label="+ Agregar ingreso esperado"
-            onPress={() => {
-              navigateToExpectedIncomeForm();
-            }}
+      {loadState.kind === 'error' ? (
+        <>
+          <InlineNotice tone="error">{loadState.message}</InlineNotice>
+          <ActionButton
+            label="Reintentar"
+            onPress={() => void load(() => true)}
+            variant="secondary"
           />
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+        </>
+      ) : null}
+
+      {loadState.kind === 'loaded' ? (
+        <Card>
+          <Text style={styles.summaryEyebrow}>Recibidos</Text>
+          <Text style={styles.summaryAmount}>+Gs. {formatPygMagnitude(receivedTotal)}</Text>
+          <View style={styles.progressTrack}>
+            <View
+              style={[styles.progressFill, { width: `${percentage.toString()}%` as `${number}%` }]}
+            />
+          </View>
+          <Text style={m1TextStyles.secondary}>
+            de Gs. {formatPygMagnitude(expectedTotal)} esperados · {percentage.toString()} % · el
+            Balance del mes solo cuenta lo recibido
+          </Text>
+        </Card>
+      ) : null}
+
+      {loadState.kind === 'loaded' && rows.length === 0 ? (
+        <Card>
+          <Text style={m1TextStyles.sectionTitle}>Todavía no hay ingresos esperados</Text>
+          <Text style={m1TextStyles.secondary}>
+            Anotá lo que esperás cobrar —sueldos, trabajos, reembolsos— y marcalo recibido cuando
+            llegue para que sume al balance del mes.
+          </Text>
+        </Card>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <Card>
+          <Text style={styles.sectionEyebrow}>Este mes</Text>
+          {rows.map((row, index) => (
+            <IngresoListRow
+              isFirst={index === 0}
+              key={row.occurrence.id}
+              onPress={() => {
+                navigateToIngresoDetail(row.occurrence.id);
+              }}
+              onReceive={() => {
+                navigateToReceiveOccurrence(row.occurrence.id);
+              }}
+              row={row}
+            />
+          ))}
+        </Card>
+      ) : null}
+
+      {loadState.kind === 'loaded' ? (
+        <OutlineButton
+          label="+ Agregar ingreso esperado"
+          onPress={() => {
+            navigateToExpectedIncomeForm();
+          }}
+        />
+      ) : null}
+    </AppScreen>
   );
 }
 
@@ -343,17 +354,10 @@ function OutlineButton({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-    paddingBottom: themeTokens.spacing.cardGap,
   },
   backButton: {
     width: 40,
@@ -371,12 +375,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.displaySemibold,
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
-  },
-  listArea: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    padding: themeTokens.spacing.screen,
-    paddingBottom: 32,
   },
   summaryEyebrow: {
     color: themeTokens.colors.inkSecondary,

@@ -2,11 +2,17 @@ import type { Category, HouseholdMember, Occurrence, RecurringItem } from '@nido
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, Card, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  AppScreen,
+  Card,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+} from '@/components/m1-ui';
 import {
   navigateToFijoDetail,
   navigateToRecurringItemForm,
@@ -60,11 +66,12 @@ export default function FijosScreen() {
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(
-    async (isActive: () => boolean) => {
+    async (isActive: () => boolean, silent = false) => {
       if (household === null) return;
-      setLoadState({ kind: 'loading' });
+      if (!silent) setLoadState({ kind: 'loading' });
       const { from, to } = monthLocalDateRange(month);
       try {
         // Listing occurrences triggers the server's lazy-on-read sweep (T-505), so this is also
@@ -97,6 +104,15 @@ export default function FijosScreen() {
       };
     }, [load]),
   );
+
+  // Pull-to-refresh reuses the same fetch silently so the visible list isn't replaced by the
+  // full-screen spinner mid-pull — the RefreshControl is the only progress affordance.
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load(() => true, true).finally(() => {
+      setRefreshing(false);
+    });
+  }, [load]);
 
   const todayLocal = todayLocalDate();
 
@@ -161,14 +177,14 @@ export default function FijosScreen() {
 
   if (household === null) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <AppScreen centered>
         <LoadingContent />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+    <AppScreen onRefresh={onRefresh} refreshing={refreshing}>
       <View style={styles.headerRow}>
         <Text accessibilityRole="header" style={styles.title}>
           Fijos
@@ -198,103 +214,101 @@ export default function FijosScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listArea}>
-        {loadState.kind === 'loading' ? <LoadingContent label="Cargando fijos…" /> : null}
+      {loadState.kind === 'loading' ? <LoadingContent label="Cargando fijos…" /> : null}
 
-        {loadState.kind === 'error' ? (
-          <>
-            <InlineNotice tone="error">{loadState.message}</InlineNotice>
-            <ActionButton
-              label="Reintentar"
-              onPress={() => void load(() => true)}
-              variant="secondary"
+      {loadState.kind === 'error' ? (
+        <>
+          <InlineNotice tone="error">{loadState.message}</InlineNotice>
+          <ActionButton
+            label="Reintentar"
+            onPress={() => void load(() => true)}
+            variant="secondary"
+          />
+        </>
+      ) : null}
+
+      {loadState.kind === 'loaded' && totalCount === 0 ? (
+        <Card>
+          <Text style={m1TextStyles.sectionTitle}>Todavía no hay gastos fijos</Text>
+          <Text style={m1TextStyles.secondary}>
+            Cargá tus gastos que se repiten —alquiler, servicios, seguros— y Nido te avisa antes de
+            cada vencimiento.
+          </Text>
+        </Card>
+      ) : null}
+
+      {loadState.kind === 'loaded' && totalCount > 0 ? (
+        <Card>
+          <Text style={styles.summaryEyebrow}>Compromisos pendientes</Text>
+          <View style={styles.summaryAmountRow}>
+            <Text style={styles.summaryAmount}>Gs. {formatPygMagnitude(pendingTotal)}</Text>
+            <Text style={m1TextStyles.secondary}>
+              {' · '}
+              {pendingCount.toString()} de {totalCount.toString()} fijos
+            </Text>
+          </View>
+          <Text style={m1TextStyles.secondary}>
+            Todavía no son gasto real: recién al marcarlos pagados entran en Movimientos.
+          </Text>
+        </Card>
+      ) : null}
+
+      {overdueRows.map((row) => (
+        <OverdueCard
+          key={row.occurrence.id}
+          onMarkPaid={() => {
+            navigateToSettleOccurrence(row.occurrence.id);
+          }}
+          onPress={() => {
+            navigateToFijoDetail(row.occurrence.id);
+          }}
+          row={row}
+        />
+      ))}
+
+      {upcomingRows.length > 0 ? (
+        <Card>
+          <Text style={styles.sectionEyebrow}>Este mes</Text>
+          {upcomingRows.map((row, index) => (
+            <FijoListRow
+              isFirst={index === 0}
+              key={row.occurrence.id}
+              onPress={() => {
+                navigateToFijoDetail(row.occurrence.id);
+              }}
+              row={row}
+              todayLocal={todayLocal}
             />
-          </>
-        ) : null}
+          ))}
+        </Card>
+      ) : null}
 
-        {loadState.kind === 'loaded' && totalCount === 0 ? (
-          <Card>
-            <Text style={m1TextStyles.sectionTitle}>Todavía no hay gastos fijos</Text>
-            <Text style={m1TextStyles.secondary}>
-              Cargá tus gastos que se repiten —alquiler, servicios, seguros— y Nido te avisa antes
-              de cada vencimiento.
-            </Text>
-          </Card>
-        ) : null}
+      {settledRows.length > 0 ? (
+        <Card>
+          <Text style={styles.sectionEyebrow}>Pagados en {monthNameLower}</Text>
+          {settledRows.map((row, index) => (
+            <FijoListRow
+              isFirst={index === 0}
+              key={row.occurrence.id}
+              onPress={() => {
+                navigateToFijoDetail(row.occurrence.id);
+              }}
+              row={row}
+              todayLocal={todayLocal}
+            />
+          ))}
+        </Card>
+      ) : null}
 
-        {loadState.kind === 'loaded' && totalCount > 0 ? (
-          <Card>
-            <Text style={styles.summaryEyebrow}>Compromisos pendientes</Text>
-            <View style={styles.summaryAmountRow}>
-              <Text style={styles.summaryAmount}>Gs. {formatPygMagnitude(pendingTotal)}</Text>
-              <Text style={m1TextStyles.secondary}>
-                {' · '}
-                {pendingCount.toString()} de {totalCount.toString()} fijos
-              </Text>
-            </View>
-            <Text style={m1TextStyles.secondary}>
-              Todavía no son gasto real: recién al marcarlos pagados entran en Movimientos.
-            </Text>
-          </Card>
-        ) : null}
-
-        {overdueRows.map((row) => (
-          <OverdueCard
-            key={row.occurrence.id}
-            onMarkPaid={() => {
-              navigateToSettleOccurrence(row.occurrence.id);
-            }}
-            onPress={() => {
-              navigateToFijoDetail(row.occurrence.id);
-            }}
-            row={row}
-          />
-        ))}
-
-        {upcomingRows.length > 0 ? (
-          <Card>
-            <Text style={styles.sectionEyebrow}>Este mes</Text>
-            {upcomingRows.map((row, index) => (
-              <FijoListRow
-                isFirst={index === 0}
-                key={row.occurrence.id}
-                onPress={() => {
-                  navigateToFijoDetail(row.occurrence.id);
-                }}
-                row={row}
-                todayLocal={todayLocal}
-              />
-            ))}
-          </Card>
-        ) : null}
-
-        {settledRows.length > 0 ? (
-          <Card>
-            <Text style={styles.sectionEyebrow}>Pagados en {monthNameLower}</Text>
-            {settledRows.map((row, index) => (
-              <FijoListRow
-                isFirst={index === 0}
-                key={row.occurrence.id}
-                onPress={() => {
-                  navigateToFijoDetail(row.occurrence.id);
-                }}
-                row={row}
-                todayLocal={todayLocal}
-              />
-            ))}
-          </Card>
-        ) : null}
-
-        {loadState.kind === 'loaded' ? (
-          <OutlineButton
-            label="+ Agregar gasto fijo"
-            onPress={() => {
-              navigateToRecurringItemForm();
-            }}
-          />
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+      {loadState.kind === 'loaded' ? (
+        <OutlineButton
+          label="+ Agregar gasto fijo"
+          onPress={() => {
+            navigateToRecurringItemForm();
+          }}
+        />
+      ) : null}
+    </AppScreen>
   );
 }
 
@@ -422,16 +436,10 @@ function OutlineButton({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
   },
   title: {
     color: themeTokens.colors.ink,
@@ -454,12 +462,6 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.secondary,
-  },
-  listArea: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    padding: themeTokens.spacing.screen,
-    paddingBottom: 32,
   },
   summaryEyebrow: {
     color: themeTokens.colors.inkSecondary,

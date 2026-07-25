@@ -8,11 +8,17 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, Card, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  AppScreen,
+  Card,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+} from '@/components/m1-ui';
 import { navigateToRecurringItemForm, navigateToSettleOccurrence } from '@/navigation/fijos-routes';
 import { themeTokens } from '@/theme/tokens';
 import {
@@ -143,7 +149,7 @@ export default function FijoDetailScreen() {
   );
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+    <AppScreen>
       <View style={styles.headerRow}>
         <Pressable
           accessibilityLabel="Volver"
@@ -171,7 +177,7 @@ export default function FijoDetailScreen() {
       {detailState.kind === 'loading' ? <LoadingContent label="Cargando fijo…" /> : null}
 
       {detailState.kind === 'error' ? (
-        <View style={styles.content}>
+        <>
           <InlineNotice tone="error">{detailState.message}</InlineNotice>
           <ActionButton
             label="Reintentar"
@@ -185,7 +191,7 @@ export default function FijoDetailScreen() {
             }}
             variant="secondary"
           />
-        </View>
+        </>
       ) : null}
 
       {detailState.kind === 'loaded' ? (
@@ -199,7 +205,7 @@ export default function FijoDetailScreen() {
           state={detailState}
         />
       ) : null}
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
@@ -237,7 +243,7 @@ function DetailBody({
       : `Importe ${item.kind === 'INCOME' ? 'esperado' : 'estimado'} · responsable: ${responsibleName} · todavía no es gasto real`;
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <>
       <View style={[styles.heroCard, tone.card]}>
         <View style={styles.heroChip}>
           {chip.tone === 'danger' ? (
@@ -295,7 +301,7 @@ function DetailBody({
         )}
         <ActionButton label="Editar fijo" onPress={onEdit} variant="secondary" />
       </View>
-    </ScrollView>
+    </>
   );
 }
 
@@ -322,17 +328,10 @@ function heroChipToneStyle(tone: FijoTone): object {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-    paddingBottom: themeTokens.spacing.cardGap,
   },
   backButton: {
     width: 40,
@@ -350,12 +349,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.displaySemibold,
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
-  },
-  content: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingBottom: themeTokens.spacing.screen,
   },
   heroCard: {
     gap: 8,

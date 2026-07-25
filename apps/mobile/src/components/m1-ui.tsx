@@ -64,9 +64,31 @@ interface AppScreenProps extends PropsWithChildren {
    * of `children`. Folds in the former standalone `EmptyTabScreen`.
    */
   readonly empty?: EmptyStateContent;
+  /**
+   * Pull-to-refresh. When `onRefresh` is set the scroll view gets a native
+   * `RefreshControl`; `refreshing` drives its spinner. Web renders the control
+   * but the pull gesture is inert (react-native-web has no touch pull), so a
+   * refresh path should always also exist elsewhere on web.
+   */
+  readonly refreshing?: boolean;
+  readonly onRefresh?: () => void;
+  /**
+   * A floating overlay (e.g. a FAB) pinned to the bottom-right, rendered as a
+   * sibling of the scroll view inside the safe area so it never scrolls and sits
+   * above the tab bar via `useScreenBottomInset`.
+   */
+  readonly floatingAction?: ReactNode;
 }
 
-export function AppScreen({ children, centered = false, testID, empty }: AppScreenProps) {
+export function AppScreen({
+  children,
+  centered = false,
+  testID,
+  empty,
+  refreshing,
+  onRefresh,
+  floatingAction,
+}: AppScreenProps) {
   const bottomInset = useScreenBottomInset();
 
   return (
@@ -79,10 +101,43 @@ export function AppScreen({ children, centered = false, testID, empty }: AppScre
           { paddingBottom: themeTokens.spacing.screen + bottomInset },
         ]}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh === undefined ? undefined : (
+            <RefreshControl
+              onRefresh={onRefresh}
+              refreshing={refreshing ?? false}
+              tintColor={themeTokens.colors.primary}
+            />
+          )
+        }
       >
         {empty === undefined ? children : <EmptyState {...empty} />}
       </ScreenScrollView>
+      <FloatingActionSlot bottomInset={bottomInset}>{floatingAction}</FloatingActionSlot>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Bottom-right overlay host shared by `AppScreen` and `AppListScreen`. Renders
+ * nothing when there is no action, so both variants keep a stable tree. The
+ * container is `box-none` so taps pass through the empty area to the content
+ * (or list) underneath; only the action itself is interactive.
+ */
+function FloatingActionSlot({
+  children,
+  bottomInset,
+}: {
+  readonly children: ReactNode;
+  readonly bottomInset: number;
+}) {
+  if (children === undefined || children === null) {
+    return null;
+  }
+  return (
+    <View pointerEvents="box-none" style={[styles.floatingAction, { bottom: bottomInset }]}>
+      {children}
+    </View>
   );
 }
 
@@ -99,18 +154,34 @@ type AppListScreenProps<ItemT> = Omit<
   readonly testID?: string;
   readonly refreshing?: boolean;
   readonly onRefresh?: () => void;
+  /**
+   * A fixed header rendered inside the safe area *above* the list — it never
+   * scrolls, unlike the FlatList's own `ListHeaderComponent`. Use it for
+   * interactive controls that must stay put (a search box, filter chips whose
+   * absolute dropdowns would be clipped by later list cells on Android).
+   */
+  readonly header?: ReactNode;
+  /**
+   * A floating overlay (e.g. a FAB) pinned bottom-right, rendered as a sibling
+   * of the list so it never scrolls and clears the tab bar. The list itself
+   * fills the screen, so a FAB must live here rather than in `contentContainer`.
+   */
+  readonly floatingAction?: ReactNode;
 };
 
 export function AppListScreen<ItemT>({
   testID,
   refreshing,
   onRefresh,
+  header,
+  floatingAction,
   ...listProps
 }: AppListScreenProps<ItemT>) {
   const bottomInset = useScreenBottomInset();
 
   return (
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
+      {header}
       <FlatList
         contentContainerStyle={[
           styles.listContent,
@@ -129,6 +200,7 @@ export function AppListScreen<ItemT>({
         }
         {...listProps}
       />
+      <FloatingActionSlot bottomInset={bottomInset}>{floatingAction}</FloatingActionSlot>
     </SafeAreaView>
   );
 }
@@ -465,6 +537,10 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     padding: themeTokens.spacing.screen,
+  },
+  floatingAction: {
+    position: 'absolute',
+    right: themeTokens.spacing.screen,
   },
   centeredContent: {
     justifyContent: 'center',

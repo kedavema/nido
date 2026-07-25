@@ -9,14 +9,14 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { getSummaryCache } from '@/cache/summary-cache';
 import {
   ActionButton,
+  AppScreen,
   Card,
   InlineNotice,
   LoadingContent,
@@ -152,44 +152,51 @@ export default function InicioScreen() {
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: 'loading' });
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: 'loading' });
   const [membersState, setMembersState] = useState<MembersState>({ kind: 'loading' });
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadCatalog = useCallback(async () => {
-    if (household === null) return;
-    setCatalogState({ kind: 'loading' });
-    try {
-      const [{ categories }, { paymentSources }] = await Promise.all([
-        catalog.listCategories(household.id),
-        catalog.listPaymentSources(household.id),
-      ]);
-      setCatalogState({ kind: 'loaded', categories, paymentSources });
-    } catch (error) {
-      setCatalogState({ kind: 'error', message: messageForActionError(error) });
-    }
-  }, [catalog, household]);
+  const loadCatalog = useCallback(
+    async (silent = false) => {
+      if (household === null) return;
+      if (!silent) setCatalogState({ kind: 'loading' });
+      try {
+        const [{ categories }, { paymentSources }] = await Promise.all([
+          catalog.listCategories(household.id),
+          catalog.listPaymentSources(household.id),
+        ]);
+        setCatalogState({ kind: 'loaded', categories, paymentSources });
+      } catch (error) {
+        setCatalogState({ kind: 'error', message: messageForActionError(error) });
+      }
+    },
+    [catalog, household],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void loadCatalog());
   }, [loadCatalog]);
 
-  const loadMembers = useCallback(async () => {
-    if (household === null) return;
-    setMembersState({ kind: 'loading' });
-    try {
-      const { members } = await getMembers(household.id);
-      setMembersState({ kind: 'loaded', members });
-    } catch {
-      setMembersState({ kind: 'error' });
-    }
-  }, [getMembers, household]);
+  const loadMembers = useCallback(
+    async (silent = false) => {
+      if (household === null) return;
+      if (!silent) setMembersState({ kind: 'loading' });
+      try {
+        const { members } = await getMembers(household.id);
+        setMembersState({ kind: 'loaded', members });
+      } catch {
+        setMembersState({ kind: 'error' });
+      }
+    },
+    [getMembers, household],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void loadMembers());
   }, [loadMembers]);
 
   const loadSummary = useCallback(
-    async (isActive: () => boolean) => {
+    async (isActive: () => boolean, silent = false) => {
       if (household === null) return;
-      setSummaryState({ kind: 'loading' });
+      if (!silent) setSummaryState({ kind: 'loading' });
       setErrorDetailsOpen(false);
       const monthParam = formatMonthQueryParam(month);
       try {
@@ -232,11 +239,22 @@ export default function InicioScreen() {
     }, [loadSummary]),
   );
 
+  // Pull-to-refresh refetches the summary (and the catalog/members it renders with) silently, so
+  // the dashboard cards stay put instead of collapsing to the skeleton mid-pull.
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void Promise.all([loadSummary(() => true, true), loadCatalog(true), loadMembers(true)]).finally(
+      () => {
+        setRefreshing(false);
+      },
+    );
+  }, [loadSummary, loadCatalog, loadMembers]);
+
   if (household === null) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <AppScreen centered>
         <LoadingContent />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
@@ -249,7 +267,22 @@ export default function InicioScreen() {
   const daysRemaining = daysRemainingInCurrentMonth(month, todayLocal);
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+    <AppScreen
+      floatingAction={
+        <Pressable
+          accessibilityLabel="Nuevo gasto"
+          accessibilityRole="button"
+          onPress={() => {
+            navigateToNewExpense();
+          }}
+          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+        >
+          <Text style={styles.fabLabel}>+ Nuevo gasto</Text>
+        </Pressable>
+      }
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+    >
       <View style={styles.headerRow}>
         <View style={styles.headerText}>
           <Text style={styles.householdLabel}>{household.name}</Text>
@@ -293,34 +326,82 @@ export default function InicioScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listArea}>
-        {summaryState.kind === 'loading' || catalogState.kind === 'loading' ? (
-          <SummarySkeleton />
-        ) : null}
+      {summaryState.kind === 'loading' || catalogState.kind === 'loading' ? (
+        <SummarySkeleton />
+      ) : null}
 
-        {summaryState.kind === 'error' ? (
-          <>
-            <InlineNotice tone="error">{summaryState.message}</InlineNotice>
-            <ActionButton
-              label="Reintentar"
-              onPress={() => void loadSummary(() => true)}
-              variant="secondary"
-            />
-          </>
-        ) : null}
+      {summaryState.kind === 'error' ? (
+        <>
+          <InlineNotice tone="error">{summaryState.message}</InlineNotice>
+          <ActionButton
+            label="Reintentar"
+            onPress={() => void loadSummary(() => true)}
+            variant="secondary"
+          />
+        </>
+      ) : null}
 
-        {summaryState.kind === 'error-with-cache' ? (
+      {summaryState.kind === 'error-with-cache' ? (
+        <>
+          <CachedSummaryNotice
+            cachedAt={summaryState.cachedAt}
+            detailsOpen={errorDetailsOpen}
+            lastAttemptAt={summaryState.lastAttemptAt}
+            onRetry={() => void loadSummary(() => true)}
+            onToggleDetails={() => {
+              setErrorDetailsOpen((current) => !current);
+            }}
+            status={summaryState.status}
+          />
+          <BalanceCard
+            onPressIncome={() => {
+              navigateToIngresos(formatMonthQueryParam(month));
+            }}
+            onToggleTooltip={() => {
+              setTooltipOpen((current) => !current);
+            }}
+            summary={summaryState.summary}
+            tooltipOpen={tooltipOpen}
+          />
+          <RecentTransactionsCard
+            categories={categories}
+            paymentSources={paymentSources}
+            todayLocal={todayLocal}
+            transactions={summaryState.summary.recentTransactions}
+          />
+        </>
+      ) : null}
+
+      {catalogState.kind === 'error' ? (
+        <InlineNotice tone="error">{catalogState.message}</InlineNotice>
+      ) : null}
+
+      {summaryState.kind === 'loaded' ? (
+        isEmptyMonth(summaryState.summary) ? (
+          isTrueFirstRun(month, todayLocal, membersState) ? (
+            <>
+              <FirstRunBalanceCard month={month} />
+              <FirstRunChecklistCard month={month} />
+            </>
+          ) : (
+            <Card>
+              <Text style={m1TextStyles.sectionTitle}>
+                Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
+              </Text>
+              <Text style={m1TextStyles.secondary}>
+                Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para
+                ambos.
+              </Text>
+              <ActionButton
+                label="Cargar un gasto"
+                onPress={() => {
+                  navigateToNewExpense();
+                }}
+              />
+            </Card>
+          )
+        ) : (
           <>
-            <CachedSummaryNotice
-              cachedAt={summaryState.cachedAt}
-              detailsOpen={errorDetailsOpen}
-              lastAttemptAt={summaryState.lastAttemptAt}
-              onRetry={() => void loadSummary(() => true)}
-              onToggleDetails={() => {
-                setErrorDetailsOpen((current) => !current);
-              }}
-              status={summaryState.status}
-            />
             <BalanceCard
               onPressIncome={() => {
                 navigateToIngresos(formatMonthQueryParam(month));
@@ -331,6 +412,14 @@ export default function InicioScreen() {
               summary={summaryState.summary}
               tooltipOpen={tooltipOpen}
             />
+
+            {summaryState.summary.categoryBreakdown.length > 0 ? (
+              <CategoryBreakdownCard
+                categories={categories}
+                items={summaryState.summary.categoryBreakdown}
+              />
+            ) : null}
+
             <RecentTransactionsCard
               categories={categories}
               paymentSources={paymentSources}
@@ -338,80 +427,9 @@ export default function InicioScreen() {
               transactions={summaryState.summary.recentTransactions}
             />
           </>
-        ) : null}
-
-        {catalogState.kind === 'error' ? (
-          <InlineNotice tone="error">{catalogState.message}</InlineNotice>
-        ) : null}
-
-        {summaryState.kind === 'loaded' ? (
-          isEmptyMonth(summaryState.summary) ? (
-            isTrueFirstRun(month, todayLocal, membersState) ? (
-              <>
-                <FirstRunBalanceCard month={month} />
-                <FirstRunChecklistCard month={month} />
-              </>
-            ) : (
-              <Card>
-                <Text style={m1TextStyles.sectionTitle}>
-                  Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
-                </Text>
-                <Text style={m1TextStyles.secondary}>
-                  Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para
-                  ambos.
-                </Text>
-                <ActionButton
-                  label="Cargar un gasto"
-                  onPress={() => {
-                    navigateToNewExpense();
-                  }}
-                />
-              </Card>
-            )
-          ) : (
-            <>
-              <BalanceCard
-                onPressIncome={() => {
-                  navigateToIngresos(formatMonthQueryParam(month));
-                }}
-                onToggleTooltip={() => {
-                  setTooltipOpen((current) => !current);
-                }}
-                summary={summaryState.summary}
-                tooltipOpen={tooltipOpen}
-              />
-
-              {summaryState.summary.categoryBreakdown.length > 0 ? (
-                <CategoryBreakdownCard
-                  categories={categories}
-                  items={summaryState.summary.categoryBreakdown}
-                />
-              ) : null}
-
-              <RecentTransactionsCard
-                categories={categories}
-                paymentSources={paymentSources}
-                todayLocal={todayLocal}
-                transactions={summaryState.summary.recentTransactions}
-              />
-            </>
-          )
-        ) : null}
-      </ScrollView>
-
-      <View pointerEvents="box-none" style={styles.fabContainer}>
-        <Pressable
-          accessibilityLabel="Nuevo gasto"
-          accessibilityRole="button"
-          onPress={() => {
-            navigateToNewExpense();
-          }}
-          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        >
-          <Text style={styles.fabLabel}>+ Nuevo gasto</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+        )
+      ) : null}
+    </AppScreen>
   );
 }
 
@@ -869,16 +887,10 @@ function CachedSummaryNotice({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
   },
   headerText: {
     gap: 2,
@@ -935,12 +947,6 @@ const styles = StyleSheet.create({
     borderColor: themeTokens.colors.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
-  },
-  listArea: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    padding: themeTokens.spacing.screen,
-    paddingBottom: 96,
   },
   cardLabel: {
     color: themeTokens.colors.inkSecondary,
@@ -1158,11 +1164,6 @@ const styles = StyleSheet.create({
   },
   negativeAmount: {
     color: themeTokens.colors.ink,
-  },
-  fabContainer: {
-    position: 'absolute',
-    right: themeTokens.spacing.screen,
-    bottom: themeTokens.spacing.screen,
   },
   fab: {
     minHeight: themeTokens.touchTarget.minimum,
