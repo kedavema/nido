@@ -11,22 +11,14 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
   ActionButton,
+  AppFormScreen,
+  AppScreen,
   InlineNotice,
   LoadingContent,
   m1TextStyles,
@@ -333,27 +325,25 @@ export default function NuevoGastoScreen() {
 
   if (household === null || screenState.kind === 'loading' || draft === null) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <AppScreen centered>
         <LoadingContent label="Cargando…" />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   if (screenState.kind === 'error') {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-        <View style={styles.content}>
-          <InlineNotice tone="error">{screenState.message}</InlineNotice>
-          <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
-          <ActionButton
-            label="Volver"
-            onPress={() => {
-              router.back();
-            }}
-            variant="secondary"
-          />
-        </View>
-      </SafeAreaView>
+      <AppScreen>
+        <InlineNotice tone="error">{screenState.message}</InlineNotice>
+        <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
+        <ActionButton
+          label="Volver"
+          onPress={() => {
+            router.back();
+          }}
+          variant="secondary"
+        />
+      </AppScreen>
     );
   }
 
@@ -514,201 +504,195 @@ export default function NuevoGastoScreen() {
     .join(' · ');
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
-      >
-        <View style={styles.headerRow}>
-          <Pressable
-            accessibilityLabel="Cerrar"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={handleClose}
-            style={styles.closeButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="close" size={20} />
-          </Pressable>
-          <Text accessibilityRole="header" style={styles.headerTitle}>
-            {title}
-          </Text>
-          <CurrencyToggle onSelect={selectCurrency} selected={draft.currency} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <AmountField
-            currency={draft.currency}
-            onChangeText={(amount) => {
-              updateDraft({ amount });
-            }}
-            value={draft.amount}
-          />
-
-          {draft.currency === 'USD' ? (
-            <View style={styles.fxCard}>
-              <View style={styles.fxRow}>
-                <View style={styles.fxCopy}>
-                  <Text style={m1TextStyles.body}>Tipo de cambio (manual)</Text>
-                  {defaultUsdRate === undefined ? null : (
-                    <Text style={m1TextStyles.secondary}>
-                      Último usado:{' '}
-                      {formatFullLocalDate(defaultUsdRate.localDate).replace(/\s\d{4}$/u, '')}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.fxRateInputWrap}>
-                  <Text style={m1TextStyles.secondary}>Gs.</Text>
-                  <TextInput
-                    accessibilityLabel="Tipo de cambio manual"
-                    keyboardType="decimal-pad"
-                    onChangeText={(text) => {
-                      updateDraft({ fxRate: sanitizeFxRateInput(text) });
-                    }}
-                    style={styles.fxRateInput}
-                    value={formatFxRateDisplay(draft.fxRate)}
-                  />
-                </View>
-              </View>
-              {usdPreview === undefined ? null : (
-                <Text style={styles.fxPreview}>≈ Gs. {formatPygMagnitude(usdPreview)}</Text>
-              )}
-            </View>
-          ) : null}
-
-          <Section
-            label="Categoría"
-            onSeeAll={() => {
-              setShowCategoryPicker(true);
-            }}
-            sublabel={
-              rootCategoryChips.length > 0 && selectedRootId !== undefined ? 'recientes' : undefined
-            }
-          >
-            <ChipRow>
-              {rootCategoryChips.map((category) => (
-                <Chip
-                  key={category.id}
-                  label={category.name}
-                  onPress={() => {
-                    selectCategory(category);
-                  }}
-                  selected={selectedRootId === category.id}
-                />
-              ))}
-            </ChipRow>
-          </Section>
-
-          {subcategoryChips.length === 0 ? null : (
-            <Section label="Subcategoría (opcional)">
-              <ChipRow>
-                {subcategoryChips.map((child) => (
-                  <Chip
-                    key={child.id}
-                    label={child.name}
-                    onPress={() => {
-                      selectCategory(child);
-                    }}
-                    selected={draft.categoryId === child.id}
-                  />
-                ))}
-              </ChipRow>
-            </Section>
-          )}
-
-          <Section
-            label="Pagado con"
-            onSeeAll={() => {
-              setShowPaymentSourcePicker(true);
-            }}
-            sublabel={paymentSourceChips.length > 0 ? 'favoritos' : undefined}
-          >
-            <ChipRow>
-              {paymentSourceChips.map((source) => (
-                <Chip
-                  key={source.id}
-                  label={source.name}
-                  onPress={() => {
-                    selectPaymentSource(source.id);
-                  }}
-                  selected={draft.paymentSourceId === source.id}
-                />
-              ))}
-            </ChipRow>
-          </Section>
-
-          <View style={styles.row}>
-            <View style={styles.rowColumn}>
-              <Text style={styles.fieldLabel}>Fecha</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setShowDatePicker(true);
-                }}
-                style={styles.dateField}
-              >
-                <Text style={m1TextStyles.body}>
-                  {draft.localDate === todayLocal ? 'Hoy · ' : ''}
-                  {formatFullLocalDate(draft.localDate)}
-                </Text>
-                <Ionicons color={themeTokens.colors.inkSecondary} name="chevron-down" size={16} />
-              </Pressable>
-            </View>
-            <View style={styles.rowColumn}>
-              <Text style={styles.fieldLabel}>Comercio</Text>
-              <TextInput
-                accessibilityLabel="Comercio"
-                maxLength={200}
-                onChangeText={(description) => {
-                  updateDraft({ description });
-                }}
-                placeholder="¿Dónde fue?"
-                placeholderTextColor={themeTokens.colors.inkSecondary}
-                style={styles.textField}
-                value={draft.description}
-              />
-            </View>
-          </View>
-
-          {notesExpanded ? (
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Nota (opcional)</Text>
-              <TextInput
-                accessibilityLabel="Nota"
-                maxLength={2000}
-                multiline
-                onChangeText={(notes) => {
-                  updateDraft({ notes });
-                }}
-                style={[styles.textField, styles.notesField]}
-                value={draft.notes}
-              />
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setNotesExpanded(true);
-              }}
-              style={styles.addNote}
-            >
-              <Text style={styles.addNoteText}>+ Agregar nota (opcional)</Text>
-            </Pressable>
-          )}
-
-          {submitError === undefined ? null : (
-            <InlineNotice tone="error">{submitError}</InlineNotice>
-          )}
-        </ScrollView>
-
-        <View style={styles.footer}>
+    <>
+      <AppFormScreen
+        footer={
           <ActionButton
             disabled={!canSubmit}
             label={submitLabel}
             loading={saving}
             onPress={() => void submit()}
           />
+        }
+        header={
+          <View style={styles.headerRow}>
+            <Pressable
+              accessibilityLabel="Cerrar"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={handleClose}
+              style={styles.closeButton}
+            >
+              <Ionicons color={themeTokens.colors.ink} name="close" size={20} />
+            </Pressable>
+            <Text accessibilityRole="header" style={styles.headerTitle}>
+              {title}
+            </Text>
+            <CurrencyToggle onSelect={selectCurrency} selected={draft.currency} />
+          </View>
+        }
+      >
+        <AmountField
+          currency={draft.currency}
+          onChangeText={(amount) => {
+            updateDraft({ amount });
+          }}
+          value={draft.amount}
+        />
+
+        {draft.currency === 'USD' ? (
+          <View style={styles.fxCard}>
+            <View style={styles.fxRow}>
+              <View style={styles.fxCopy}>
+                <Text style={m1TextStyles.body}>Tipo de cambio (manual)</Text>
+                {defaultUsdRate === undefined ? null : (
+                  <Text style={m1TextStyles.secondary}>
+                    Último usado:{' '}
+                    {formatFullLocalDate(defaultUsdRate.localDate).replace(/\s\d{4}$/u, '')}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.fxRateInputWrap}>
+                <Text style={m1TextStyles.secondary}>Gs.</Text>
+                <TextInput
+                  accessibilityLabel="Tipo de cambio manual"
+                  keyboardType="decimal-pad"
+                  onChangeText={(text) => {
+                    updateDraft({ fxRate: sanitizeFxRateInput(text) });
+                  }}
+                  style={styles.fxRateInput}
+                  value={formatFxRateDisplay(draft.fxRate)}
+                />
+              </View>
+            </View>
+            {usdPreview === undefined ? null : (
+              <Text style={styles.fxPreview}>≈ Gs. {formatPygMagnitude(usdPreview)}</Text>
+            )}
+          </View>
+        ) : null}
+
+        <Section
+          label="Categoría"
+          onSeeAll={() => {
+            setShowCategoryPicker(true);
+          }}
+          sublabel={
+            rootCategoryChips.length > 0 && selectedRootId !== undefined ? 'recientes' : undefined
+          }
+        >
+          <ChipRow>
+            {rootCategoryChips.map((category) => (
+              <Chip
+                key={category.id}
+                label={category.name}
+                onPress={() => {
+                  selectCategory(category);
+                }}
+                selected={selectedRootId === category.id}
+              />
+            ))}
+          </ChipRow>
+        </Section>
+
+        {subcategoryChips.length === 0 ? null : (
+          <Section label="Subcategoría (opcional)">
+            <ChipRow>
+              {subcategoryChips.map((child) => (
+                <Chip
+                  key={child.id}
+                  label={child.name}
+                  onPress={() => {
+                    selectCategory(child);
+                  }}
+                  selected={draft.categoryId === child.id}
+                />
+              ))}
+            </ChipRow>
+          </Section>
+        )}
+
+        <Section
+          label="Pagado con"
+          onSeeAll={() => {
+            setShowPaymentSourcePicker(true);
+          }}
+          sublabel={paymentSourceChips.length > 0 ? 'favoritos' : undefined}
+        >
+          <ChipRow>
+            {paymentSourceChips.map((source) => (
+              <Chip
+                key={source.id}
+                label={source.name}
+                onPress={() => {
+                  selectPaymentSource(source.id);
+                }}
+                selected={draft.paymentSourceId === source.id}
+              />
+            ))}
+          </ChipRow>
+        </Section>
+
+        <View style={styles.row}>
+          <View style={styles.rowColumn}>
+            <Text style={styles.fieldLabel}>Fecha</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setShowDatePicker(true);
+              }}
+              style={styles.dateField}
+            >
+              <Text style={m1TextStyles.body}>
+                {draft.localDate === todayLocal ? 'Hoy · ' : ''}
+                {formatFullLocalDate(draft.localDate)}
+              </Text>
+              <Ionicons color={themeTokens.colors.inkSecondary} name="chevron-down" size={16} />
+            </Pressable>
+          </View>
+          <View style={styles.rowColumn}>
+            <Text style={styles.fieldLabel}>Comercio</Text>
+            <TextInput
+              accessibilityLabel="Comercio"
+              maxLength={200}
+              onChangeText={(description) => {
+                updateDraft({ description });
+              }}
+              placeholder="¿Dónde fue?"
+              placeholderTextColor={themeTokens.colors.inkSecondary}
+              style={styles.textField}
+              value={draft.description}
+            />
+          </View>
         </View>
-      </KeyboardAvoidingView>
+
+        {notesExpanded ? (
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>Nota (opcional)</Text>
+            <TextInput
+              accessibilityLabel="Nota"
+              maxLength={2000}
+              multiline
+              onChangeText={(notes) => {
+                updateDraft({ notes });
+              }}
+              style={[styles.textField, styles.notesField]}
+              value={draft.notes}
+            />
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setNotesExpanded(true);
+            }}
+            style={styles.addNote}
+          >
+            <Text style={styles.addNoteText}>+ Agregar nota (opcional)</Text>
+          </Pressable>
+        )}
+
+        {submitError === undefined ? null : <InlineNotice tone="error">{submitError}</InlineNotice>}
+      </AppFormScreen>
 
       <CategoryPickerModal
         categories={categories.filter(
@@ -760,7 +744,7 @@ export default function NuevoGastoScreen() {
         summary={discardSummary}
         visible={showDiscardModal}
       />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -1145,12 +1129,15 @@ function DatePickerModal({
   readonly onClose: () => void;
 }) {
   const [manualDate, setManualDate] = useState('');
+  const insets = useSafeAreaInsets();
   const yesterdayLocal = shiftLocalDate(todayLocal, -1);
 
   return (
     <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalSheet}>
+        <View
+          style={[styles.modalSheet, { paddingBottom: themeTokens.spacing.screen + insets.bottom }]}
+        >
           <Text accessibilityRole="header" style={styles.modalTitle}>
             Elegir fecha
           </Text>
@@ -1208,10 +1195,14 @@ function DiscardConfirmModal({
   readonly onCancel: () => void;
   readonly onDiscard: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalSheet}>
+        <View
+          style={[styles.modalSheet, { paddingBottom: themeTokens.spacing.screen + insets.bottom }]}
+        >
           <Text accessibilityRole="header" style={styles.modalTitle}>
             ¿Descartar este {noun}?
           </Text>
@@ -1330,9 +1321,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: themeTokens.colors.background,
   },
-  flex: {
-    flex: 1,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1381,12 +1369,6 @@ const styles = StyleSheet.create({
   },
   currencyOptionTextActive: {
     color: themeTokens.colors.ink,
-  },
-  content: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingBottom: themeTokens.spacing.screen,
   },
   amountRow: {
     flexDirection: 'row',
