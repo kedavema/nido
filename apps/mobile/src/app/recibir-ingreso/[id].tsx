@@ -7,20 +7,17 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  AppFormScreen,
+  AppScreen,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+} from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
 import {
   amountToWireDecimal,
@@ -95,26 +92,24 @@ export default function RecibirIngresoScreen() {
 
   if (household === null || screenState.kind === 'loading') {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <AppScreen centered>
         <LoadingContent label="Cargando…" />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   if (screenState.kind === 'error') {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-        <View style={styles.content}>
-          <InlineNotice tone="error">{screenState.message}</InlineNotice>
-          <ActionButton
-            label="Volver"
-            onPress={() => {
-              router.back();
-            }}
-            variant="secondary"
-          />
-        </View>
-      </SafeAreaView>
+      <AppScreen>
+        <InlineNotice tone="error">{screenState.message}</InlineNotice>
+        <ActionButton
+          label="Volver"
+          onPress={() => {
+            router.back();
+          }}
+          variant="secondary"
+        />
+      </AppScreen>
     );
   }
 
@@ -145,11 +140,16 @@ export default function RecibirIngresoScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
-      >
+    <AppFormScreen
+      footer={
+        <ActionButton
+          disabled={!canConfirm}
+          label="Confirmar ingreso"
+          loading={submitting}
+          onPress={() => void confirm()}
+        />
+      }
+      header={
         <View style={styles.headerRow}>
           <Pressable
             accessibilityLabel="Cerrar"
@@ -171,87 +171,71 @@ export default function RecibirIngresoScreen() {
             </Text>
           </View>
         </View>
+      }
+    >
+      <Text style={styles.amountLabel}>Importe real recibido</Text>
+      <View style={styles.amountRow}>
+        <Text style={styles.amountPrefix}>{currency === 'PYG' ? 'Gs.' : 'USD'}</Text>
+        <TextInput
+          accessibilityLabel="Importe real recibido"
+          autoFocus
+          keyboardType={currency === 'PYG' ? 'number-pad' : 'decimal-pad'}
+          onChangeText={(text) => {
+            setAmount(sanitizeAmountInput(text, currency));
+          }}
+          placeholder="0"
+          placeholderTextColor={themeTokens.colors.inkSecondary}
+          style={styles.amountInput}
+          value={formatAmountDisplay(amount, currency)}
+        />
+      </View>
+      <Text style={styles.amountHint}>
+        Esperado: {formatOccurrenceAmount(occurrence.amount, currency)} · editá si llegó otro monto
+      </Text>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.amountLabel}>Importe real recibido</Text>
-          <View style={styles.amountRow}>
-            <Text style={styles.amountPrefix}>{currency === 'PYG' ? 'Gs.' : 'USD'}</Text>
-            <TextInput
-              accessibilityLabel="Importe real recibido"
-              autoFocus
-              keyboardType={currency === 'PYG' ? 'number-pad' : 'decimal-pad'}
-              onChangeText={(text) => {
-                setAmount(sanitizeAmountInput(text, currency));
-              }}
-              placeholder="0"
-              placeholderTextColor={themeTokens.colors.inkSecondary}
-              style={styles.amountInput}
-              value={formatAmountDisplay(amount, currency)}
-            />
-          </View>
-          <Text style={styles.amountHint}>
-            Esperado: {formatOccurrenceAmount(occurrence.amount, currency)} · editá si llegó otro
-            monto
-          </Text>
-
-          <Text style={styles.fieldLabel}>Fecha</Text>
-          <View style={styles.chipRow}>
-            <Chip
-              label={`Hoy · ${formatFullLocalDate(todayLocal).replace(/\s\d{4}$/u, '')}`}
-              onPress={() => {
-                setPayDate(todayLocal);
-                setChoosingDate(false);
-              }}
-              selected={payDate === todayLocal && !choosingDate}
-            />
-            <Chip
-              label={
-                choosingDate ? formatFullLocalDate(payDate).replace(/\s\d{4}$/u, '') : 'Elegir…'
+      <Text style={styles.fieldLabel}>Fecha</Text>
+      <View style={styles.chipRow}>
+        <Chip
+          label={`Hoy · ${formatFullLocalDate(todayLocal).replace(/\s\d{4}$/u, '')}`}
+          onPress={() => {
+            setPayDate(todayLocal);
+            setChoosingDate(false);
+          }}
+          selected={payDate === todayLocal && !choosingDate}
+        />
+        <Chip
+          label={choosingDate ? formatFullLocalDate(payDate).replace(/\s\d{4}$/u, '') : 'Elegir…'}
+          onPress={() => {
+            setChoosingDate(true);
+          }}
+          selected={choosingDate || payDate !== todayLocal}
+        />
+      </View>
+      {choosingDate ? (
+        <View style={styles.field}>
+          <TextInput
+            accessibilityLabel="Otra fecha (aaaa-mm-dd)"
+            onChangeText={(text) => {
+              setManualDate(text);
+              if (isValidLocalDateString(text)) {
+                setPayDate(text);
               }
-              onPress={() => {
-                setChoosingDate(true);
-              }}
-              selected={choosingDate || payDate !== todayLocal}
-            />
-          </View>
-          {choosingDate ? (
-            <View style={styles.field}>
-              <TextInput
-                accessibilityLabel="Otra fecha (aaaa-mm-dd)"
-                onChangeText={(text) => {
-                  setManualDate(text);
-                  if (isValidLocalDateString(text)) {
-                    setPayDate(text);
-                  }
-                }}
-                placeholder="2026-07-15"
-                placeholderTextColor={themeTokens.colors.inkSecondary}
-                style={styles.dateInput}
-                value={manualDate}
-              />
-            </View>
-          ) : null}
-
-          <InlineNotice tone="success">
-            Se crea el ingreso real en Movimientos y el Balance del mes lo suma al instante. Se
-            recibe completo — no hay cobros parciales.
-          </InlineNotice>
-
-          {submitError === undefined ? null : (
-            <InlineNotice tone="error">{submitError}</InlineNotice>
-          )}
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <ActionButton
-            disabled={!canConfirm}
-            label="Confirmar ingreso"
-            loading={submitting}
-            onPress={() => void confirm()}
+            }}
+            placeholder="2026-07-15"
+            placeholderTextColor={themeTokens.colors.inkSecondary}
+            style={styles.dateInput}
+            value={manualDate}
           />
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      ) : null}
+
+      <InlineNotice tone="success">
+        Se crea el ingreso real en Movimientos y el Balance del mes lo suma al instante. Se recibe
+        completo — no hay cobros parciales.
+      </InlineNotice>
+
+      {submitError === undefined ? null : <InlineNotice tone="error">{submitError}</InlineNotice>}
+    </AppFormScreen>
   );
 }
 
@@ -279,13 +263,6 @@ function Chip({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -310,12 +287,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.displaySemibold,
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
-  },
-  content: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingBottom: themeTokens.spacing.screen,
   },
   amountLabel: {
     color: themeTokens.colors.inkSecondary,
@@ -395,13 +366,5 @@ const styles = StyleSheet.create({
     fontSize: themeTokens.typography.scale.body,
     paddingHorizontal: 12,
     paddingVertical: 10,
-  },
-  footer: {
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.cardGap,
-    paddingBottom: themeTokens.spacing.cardGap,
-    borderTopWidth: 1,
-    borderTopColor: themeTokens.colors.border,
-    backgroundColor: themeTokens.colors.background,
   },
 });

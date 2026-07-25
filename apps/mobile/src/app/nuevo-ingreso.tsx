@@ -9,20 +9,17 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  AppFormScreen,
+  AppScreen,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+} from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
 import {
   amountToWireDecimal,
@@ -171,27 +168,25 @@ export default function NuevoIngresoScreen() {
 
   if (household === null || screenState.kind === 'loading' || draft === null) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <AppScreen centered>
         <LoadingContent label="Cargando…" />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   if (screenState.kind === 'error') {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-        <View style={styles.content}>
-          <InlineNotice tone="error">{screenState.message}</InlineNotice>
-          <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
-          <ActionButton
-            label="Volver"
-            onPress={() => {
-              router.back();
-            }}
-            variant="secondary"
-          />
-        </View>
-      </SafeAreaView>
+      <AppScreen>
+        <InlineNotice tone="error">{screenState.message}</InlineNotice>
+        <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
+        <ActionButton
+          label="Volver"
+          onPress={() => {
+            router.back();
+          }}
+          variant="secondary"
+        />
+      </AppScreen>
     );
   }
 
@@ -265,11 +260,20 @@ export default function NuevoIngresoScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
-      >
+    <AppFormScreen
+      footer={
+        <>
+          <ActionButton
+            label="Guardar ingreso esperado"
+            loading={saving}
+            onPress={() => void save()}
+          />
+          <Text style={styles.footerHint}>
+            Aparece en Ingresos como “esperado”, sin tocar el balance
+          </Text>
+        </>
+      }
+      header={
         <View style={styles.headerRow}>
           <Pressable
             accessibilityLabel="Cerrar"
@@ -289,138 +293,123 @@ export default function NuevoIngresoScreen() {
             <Text style={m1TextStyles.secondary}>Se suma al balance recién al recibirse</Text>
           </View>
         </View>
+      }
+    >
+      <Field
+        label="Nombre"
+        error={showValidation && !nameValid ? 'Completá este campo' : undefined}
+      >
+        <TextInput
+          accessibilityLabel="Nombre"
+          maxLength={100}
+          onChangeText={(name) => {
+            update({ name });
+          }}
+          placeholder="Freelance Ale"
+          placeholderTextColor={themeTokens.colors.inkSecondary}
+          style={[styles.input, showValidation && !nameValid && styles.inputError]}
+          value={draft.name}
+        />
+      </Field>
 
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Field
-            label="Nombre"
-            error={showValidation && !nameValid ? 'Completá este campo' : undefined}
-          >
-            <TextInput
-              accessibilityLabel="Nombre"
-              maxLength={100}
-              onChangeText={(name) => {
-                update({ name });
-              }}
-              placeholder="Freelance Ale"
-              placeholderTextColor={themeTokens.colors.inkSecondary}
-              style={[styles.input, showValidation && !nameValid && styles.inputError]}
-              value={draft.name}
-            />
-          </Field>
-
-          <Field
-            label="Importe estimado"
-            error={showValidation && !amountValid ? 'Completá este campo' : undefined}
-          >
-            <View style={[styles.amountField, showValidation && !amountValid && styles.inputError]}>
-              <Text style={styles.amountPrefix}>Gs.</Text>
-              <TextInput
-                accessibilityLabel="Importe estimado"
-                keyboardType="number-pad"
-                onChangeText={(text) => {
-                  update({ amount: sanitizeAmountInput(text, 'PYG') });
-                }}
-                placeholder="0"
-                placeholderTextColor={themeTokens.colors.inkSecondary}
-                style={styles.amountInput}
-                value={formatAmountDisplay(draft.amount, 'PYG')}
-              />
-            </View>
-            <Text style={m1TextStyles.secondary}>
-              Al marcarlo recibido confirmás el importe real de ese mes.
-            </Text>
-          </Field>
-
-          <Field label="Recurrencia">
-            <View style={styles.chipRow}>
-              {FREQUENCY_OPTIONS.map(([value, label]) => (
-                <Chip
-                  key={value}
-                  label={label}
-                  onPress={() => {
-                    update({ frequency: value });
-                  }}
-                  selected={draft.frequency === value}
-                />
-              ))}
-            </View>
-            {draft.frequency === 'EVERY_N_MONTHS' ? (
-              <Stepper
-                label="cada"
-                onDecrement={() => {
-                  update({ intervalMonths: Math.max(1, draft.intervalMonths - 1) });
-                }}
-                onIncrement={() => {
-                  update({ intervalMonths: draft.intervalMonths + 1 });
-                }}
-                unit="meses"
-                value={draft.intervalMonths}
-              />
-            ) : null}
-          </Field>
-
-          <Field label="Fecha esperada">
-            {usesDayOfMonth ? (
-              <Stepper
-                label="El día"
-                onDecrement={() => {
-                  update({ dayOfMonth: Math.max(1, draft.dayOfMonth - 1) });
-                }}
-                onIncrement={() => {
-                  update({ dayOfMonth: Math.min(28, draft.dayOfMonth + 1) });
-                }}
-                unit="de cada mes"
-                value={draft.dayOfMonth}
-              />
-            ) : (
-              <TextInput
-                accessibilityLabel="Fecha esperada (aaaa-mm-dd)"
-                onChangeText={(firstDueDate) => {
-                  update({ firstDueDate });
-                }}
-                placeholder="2026-07-28"
-                placeholderTextColor={themeTokens.colors.inkSecondary}
-                style={[styles.input, showValidation && !dateValid && styles.inputError]}
-                value={draft.firstDueDate}
-              />
-            )}
-          </Field>
-
-          <Field label="Lo recibe">
-            <View style={styles.chipRow}>
-              {members.map((member) => (
-                <Chip
-                  key={member.userId}
-                  label={member.displayName}
-                  onPress={() => {
-                    update({
-                      responsibleUserId:
-                        draft.responsibleUserId === member.userId ? null : member.userId,
-                    });
-                  }}
-                  selected={draft.responsibleUserId === member.userId}
-                />
-              ))}
-            </View>
-          </Field>
-
-          {submitError === undefined ? null : (
-            <InlineNotice tone="error">{submitError}</InlineNotice>
-          )}
-        </ScrollView>
-
-        <View style={styles.footer}>
-          <ActionButton
-            label="Guardar ingreso esperado"
-            loading={saving}
-            onPress={() => void save()}
+      <Field
+        label="Importe estimado"
+        error={showValidation && !amountValid ? 'Completá este campo' : undefined}
+      >
+        <View style={[styles.amountField, showValidation && !amountValid && styles.inputError]}>
+          <Text style={styles.amountPrefix}>Gs.</Text>
+          <TextInput
+            accessibilityLabel="Importe estimado"
+            keyboardType="number-pad"
+            onChangeText={(text) => {
+              update({ amount: sanitizeAmountInput(text, 'PYG') });
+            }}
+            placeholder="0"
+            placeholderTextColor={themeTokens.colors.inkSecondary}
+            style={styles.amountInput}
+            value={formatAmountDisplay(draft.amount, 'PYG')}
           />
-          <Text style={styles.footerHint}>
-            Aparece en Ingresos como “esperado”, sin tocar el balance
-          </Text>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <Text style={m1TextStyles.secondary}>
+          Al marcarlo recibido confirmás el importe real de ese mes.
+        </Text>
+      </Field>
+
+      <Field label="Recurrencia">
+        <View style={styles.chipRow}>
+          {FREQUENCY_OPTIONS.map(([value, label]) => (
+            <Chip
+              key={value}
+              label={label}
+              onPress={() => {
+                update({ frequency: value });
+              }}
+              selected={draft.frequency === value}
+            />
+          ))}
+        </View>
+        {draft.frequency === 'EVERY_N_MONTHS' ? (
+          <Stepper
+            label="cada"
+            onDecrement={() => {
+              update({ intervalMonths: Math.max(1, draft.intervalMonths - 1) });
+            }}
+            onIncrement={() => {
+              update({ intervalMonths: draft.intervalMonths + 1 });
+            }}
+            unit="meses"
+            value={draft.intervalMonths}
+          />
+        ) : null}
+      </Field>
+
+      <Field label="Fecha esperada">
+        {usesDayOfMonth ? (
+          <Stepper
+            label="El día"
+            onDecrement={() => {
+              update({ dayOfMonth: Math.max(1, draft.dayOfMonth - 1) });
+            }}
+            onIncrement={() => {
+              update({ dayOfMonth: Math.min(28, draft.dayOfMonth + 1) });
+            }}
+            unit="de cada mes"
+            value={draft.dayOfMonth}
+          />
+        ) : (
+          <TextInput
+            accessibilityLabel="Fecha esperada (aaaa-mm-dd)"
+            onChangeText={(firstDueDate) => {
+              update({ firstDueDate });
+            }}
+            placeholder="2026-07-28"
+            placeholderTextColor={themeTokens.colors.inkSecondary}
+            style={[styles.input, showValidation && !dateValid && styles.inputError]}
+            value={draft.firstDueDate}
+          />
+        )}
+      </Field>
+
+      <Field label="Lo recibe">
+        <View style={styles.chipRow}>
+          {members.map((member) => (
+            <Chip
+              key={member.userId}
+              label={member.displayName}
+              onPress={() => {
+                update({
+                  responsibleUserId:
+                    draft.responsibleUserId === member.userId ? null : member.userId,
+                });
+              }}
+              selected={draft.responsibleUserId === member.userId}
+            />
+          ))}
+        </View>
+      </Field>
+
+      {submitError === undefined ? null : <InlineNotice tone="error">{submitError}</InlineNotice>}
+    </AppFormScreen>
   );
 }
 
@@ -508,13 +497,6 @@ function Stepper({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -539,12 +521,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.displaySemibold,
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
-  },
-  content: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingBottom: themeTokens.spacing.screen,
   },
   field: {
     gap: 8,
@@ -652,15 +628,6 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
-  },
-  footer: {
-    gap: 4,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.cardGap,
-    paddingBottom: themeTokens.spacing.cardGap,
-    borderTopWidth: 1,
-    borderTopColor: themeTokens.colors.border,
-    backgroundColor: themeTokens.colors.background,
   },
   footerHint: {
     color: themeTokens.colors.inkSecondary,

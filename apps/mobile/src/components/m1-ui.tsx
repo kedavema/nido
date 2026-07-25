@@ -208,6 +208,12 @@ export function AppListScreen<ItemT>({
 interface AppFormScreenProps extends PropsWithChildren {
   readonly testID?: string;
   /**
+   * A fixed header rendered inside the safe area *above* the scroll — it never
+   * scrolls with the fields. Use it for the close button, title, and controls
+   * (like a currency toggle) that must stay reachable while the keyboard is up.
+   */
+  readonly header?: ReactNode;
+  /**
    * Primary call-to-action pinned to the bottom. On native it rides the
    * keyboard via `KeyboardStickyView` so it is never covered; on web it degrades
    * to a static footer.
@@ -220,12 +226,19 @@ interface AppFormScreenProps extends PropsWithChildren {
   readonly toolbar?: boolean;
 }
 
-export function AppFormScreen({ children, testID, footer, toolbar = true }: AppFormScreenProps) {
+export function AppFormScreen({
+  children,
+  testID,
+  header,
+  footer,
+  toolbar = true,
+}: AppFormScreenProps) {
   const bottomInset = useScreenBottomInset();
   const isNative = Platform.OS !== 'web';
 
   return (
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
+      {header}
       <ScreenScrollView
         bottomOffset={KEYBOARD_BOTTOM_OFFSET}
         contentContainerStyle={styles.screenContent}
