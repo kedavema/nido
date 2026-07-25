@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, View, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { TAB_DEFINITIONS, type TabDefinition } from '@/navigation/tabs';
+import { TAB_BAR_BASE_HEIGHT, TAB_DEFINITIONS, type TabDefinition } from '@/navigation/tabs';
 import { themeTokens } from '@/theme/tokens';
 
 interface TabBarIconProps {
@@ -36,7 +36,7 @@ export default function TabLayout() {
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: false,
         tabBarStyle: {
-          height: 64 + insets.bottom,
+          height: TAB_BAR_BASE_HEIGHT + insets.bottom,
           paddingTop: themeTokens.spacing.base,
           paddingBottom: Math.max(insets.bottom, themeTokens.spacing.base),
           borderTopColor: themeTokens.colors.border,
