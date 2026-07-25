@@ -18,7 +18,6 @@ import {
 import {
   KeyboardAwareScrollView,
   KeyboardStickyView,
-  KeyboardToolbar,
   type KeyboardAwareScrollViewProps,
 } from 'react-native-keyboard-controller';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
@@ -214,27 +213,21 @@ interface AppFormScreenProps extends PropsWithChildren {
    */
   readonly header?: ReactNode;
   /**
-   * Primary call-to-action pinned to the bottom. On native it rides the
-   * keyboard via `KeyboardStickyView` so it is never covered; on web it degrades
-   * to a static footer.
+   * Primary call-to-action pinned to the bottom. On native it rides the keyboard
+   * via `KeyboardStickyView` so it stays visible right above the keys — the
+   * always-reachable CTA is the amount-entry action, so no separate "Done"
+   * toolbar is needed (and a toolbar would sit in the same band and cover it).
+   * On web it degrades to a static footer.
    */
   readonly footer: ReactElement;
-  /**
-   * Show the Done/prev/next keyboard toolbar (native only) — solves the numeric
-   * keypad that ships without a Done key. Default `true`.
-   */
-  readonly toolbar?: boolean;
 }
 
-export function AppFormScreen({
-  children,
-  testID,
-  header,
-  footer,
-  toolbar = true,
-}: AppFormScreenProps) {
+export function AppFormScreen({ children, testID, header, footer }: AppFormScreenProps) {
   const bottomInset = useScreenBottomInset();
   const isNative = Platform.OS !== 'web';
+  const footerBar = (
+    <View style={[styles.formFooter, { paddingBottom: bottomInset }]}>{footer}</View>
+  );
 
   return (
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
@@ -243,19 +236,21 @@ export function AppFormScreen({
         bottomOffset={KEYBOARD_BOTTOM_OFFSET}
         contentContainerStyle={styles.screenContent}
         keyboardShouldPersistTaps="handled"
+        style={styles.formScroll}
       >
         {children}
       </ScreenScrollView>
 
       {isNative ? (
+        // Rides the keyboard to sit just above the keys. `opened: bottomInset`
+        // pulls the bar's home-indicator padding down behind the keyboard so the
+        // button hugs the keys instead of floating a safe-area gap above them.
         <KeyboardStickyView offset={{ closed: 0, opened: bottomInset }}>
-          <View style={[styles.formFooter, { paddingBottom: bottomInset }]}>{footer}</View>
+          {footerBar}
         </KeyboardStickyView>
       ) : (
-        <View style={[styles.formFooter, { paddingBottom: bottomInset }]}>{footer}</View>
+        footerBar
       )}
-
-      {isNative && toolbar ? <KeyboardToolbar /> : null}
     </SafeAreaView>
   );
 }
@@ -546,6 +541,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: themeTokens.spacing.cardGap,
     padding: themeTokens.spacing.screen,
+  },
+  formScroll: {
+    // Fills the space between the fixed header and the sticky footer so the
+    // footer anchors to the bottom (its correct base position for the keyboard-
+    // sticky lift), instead of floating right under short content.
+    flex: 1,
   },
   listContent: {
     flexGrow: 1,
