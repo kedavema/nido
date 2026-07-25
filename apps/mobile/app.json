@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Nido",
-    "slug": "nido",
+    "slug": "nido-app",
     "version": "0.0.0",
     "platforms": ["android", "web"],
     "orientation": "portrait",
@@ -34,12 +34,21 @@
       [
         "expo-splash-screen",
         {
+          "image": "./public/icon-512.png",
+          "imageWidth": 180,
           "backgroundColor": "#F6F4EF"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "904ea1c0-ab1c-4291-831f-e274e4699d2f"
+      }
+    },
+    "owner": "kedavemas-team"
   }
 }
