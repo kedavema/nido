@@ -1,57 +1,187 @@
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { ComponentType, PropsWithChildren, ReactElement, ReactNode } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  FlatList,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type FlatListProps,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  KeyboardAwareScrollView,
+  KeyboardStickyView,
+  KeyboardToolbar,
+  type KeyboardAwareScrollViewProps,
+} from 'react-native-keyboard-controller';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
+import { useScreenBottomInset } from '@/hooks/use-screen-bottom-inset';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
+
+/**
+ * Safe-area edges shared by every screen variant. The bottom edge is
+ * deliberately excluded: the scrollable content (or a keyboard-riding footer)
+ * owns the bottom inset via `useScreenBottomInset`, so applying it here too
+ * would double-count it and push content up by the home-indicator height.
+ */
+const SCREEN_EDGES: readonly Edge[] = ['top', 'left', 'right'];
+
+/**
+ * Distance kept between the keyboard and a focused input when it scrolls into
+ * view. Native only — the web scroll fallback ignores it.
+ */
+const KEYBOARD_BOTTOM_OFFSET = themeTokens.spacing.lg;
+
+/**
+ * Native builds get keyboard-controller's `KeyboardAwareScrollView` (real
+ * on-focus scroll tracking); web renders a plain `ScrollView` since the native
+ * module is inert there. Both accept `ScrollViewProps`, so call sites are
+ * identical across platforms.
+ */
+const ScreenScrollView = (
+  Platform.OS === 'web' ? ScrollView : KeyboardAwareScrollView
+) as ComponentType<KeyboardAwareScrollViewProps>;
+
+interface EmptyStateContent {
+  readonly title: string;
+  readonly message: string;
+}
 
 interface AppScreenProps extends PropsWithChildren {
   readonly centered?: boolean;
   readonly testID?: string;
+  /**
+   * Renders a full-screen empty state (title + centered message card) instead
+   * of `children`. Folds in the former standalone `EmptyTabScreen`.
+   */
+  readonly empty?: EmptyStateContent;
 }
 
-export function AppScreen({ children, centered = false, testID }: AppScreenProps) {
+export function AppScreen({ children, centered = false, testID, empty }: AppScreenProps) {
+  const bottomInset = useScreenBottomInset();
+
   return (
-    <SafeAreaView
-      edges={['top', 'bottom', 'left', 'right']}
-      style={styles.safeArea}
-      testID={testID}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardView}
+    <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
+      <ScreenScrollView
+        bottomOffset={KEYBOARD_BOTTOM_OFFSET}
+        contentContainerStyle={[
+          styles.screenContent,
+          centered && styles.centeredContent,
+          { paddingBottom: themeTokens.spacing.screen + bottomInset },
+        ]}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={[styles.screenContent, centered && styles.centeredContent]}
-          keyboardShouldPersistTaps="handled"
-        >
-          {children}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        {empty === undefined ? children : <EmptyState {...empty} />}
+      </ScreenScrollView>
     </SafeAreaView>
   );
 }
 
-interface PageHeaderProps {
+/**
+ * `FlatList`-backed screen variant for lists: native pull-to-refresh via
+ * `RefreshControl`, keyboard-dismiss-on-drag, and the same safe-area/bottom
+ * inset handling as `AppScreen`. The list scrolls under the tab bar, with the
+ * last row clearing it through `contentContainerStyle` padding.
+ */
+type AppListScreenProps<ItemT> = Omit<
+  FlatListProps<ItemT>,
+  'contentContainerStyle' | 'refreshControl'
+> & {
+  readonly testID?: string;
+  readonly refreshing?: boolean;
+  readonly onRefresh?: () => void;
+};
+
+export function AppListScreen<ItemT>({
+  testID,
+  refreshing,
+  onRefresh,
+  ...listProps
+}: AppListScreenProps<ItemT>) {
+  const bottomInset = useScreenBottomInset();
+
+  return (
+    <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
+      <FlatList
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: themeTokens.spacing.screen + bottomInset },
+        ]}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh === undefined ? undefined : (
+            <RefreshControl
+              onRefresh={onRefresh}
+              refreshing={refreshing ?? false}
+              tintColor={themeTokens.colors.primary}
+            />
+          )
+        }
+        {...listProps}
+      />
+    </SafeAreaView>
+  );
+}
+
+interface AppFormScreenProps extends PropsWithChildren {
+  readonly testID?: string;
+  /**
+   * Primary call-to-action pinned to the bottom. On native it rides the
+   * keyboard via `KeyboardStickyView` so it is never covered; on web it degrades
+   * to a static footer.
+   */
+  readonly footer: ReactElement;
+  /**
+   * Show the Done/prev/next keyboard toolbar (native only) — solves the numeric
+   * keypad that ships without a Done key. Default `true`.
+   */
+  readonly toolbar?: boolean;
+}
+
+export function AppFormScreen({ children, testID, footer, toolbar = true }: AppFormScreenProps) {
+  const bottomInset = useScreenBottomInset();
+  const isNative = Platform.OS !== 'web';
+
+  return (
+    <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
+      <ScreenScrollView
+        bottomOffset={KEYBOARD_BOTTOM_OFFSET}
+        contentContainerStyle={styles.screenContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScreenScrollView>
+
+      {isNative ? (
+        <KeyboardStickyView offset={{ closed: 0, opened: bottomInset }}>
+          <View style={[styles.formFooter, { paddingBottom: bottomInset }]}>{footer}</View>
+        </KeyboardStickyView>
+      ) : (
+        <View style={[styles.formFooter, { paddingBottom: bottomInset }]}>{footer}</View>
+      )}
+
+      {isNative && toolbar ? <KeyboardToolbar /> : null}
+    </SafeAreaView>
+  );
+}
+
+interface ScreenHeaderProps {
   readonly title: string;
   readonly description?: string;
   readonly eyebrow?: string;
 }
 
-export function PageHeader({ title, description, eyebrow }: PageHeaderProps) {
+export function ScreenHeader({ title, description, eyebrow }: ScreenHeaderProps) {
   return (
     <View style={styles.header}>
       {eyebrow === undefined ? null : <Text style={styles.eyebrow}>{eyebrow}</Text>}
@@ -59,6 +189,26 @@ export function PageHeader({ title, description, eyebrow }: PageHeaderProps) {
         {title}
       </Text>
       {description === undefined ? null : <Text style={styles.description}>{description}</Text>}
+    </View>
+  );
+}
+
+/**
+ * Backward-compatible alias for the pre-Phase-1 name. Screens still importing
+ * `PageHeader` keep working; new code should use `ScreenHeader`.
+ */
+export const PageHeader = ScreenHeader;
+
+/** The former standalone `EmptyTabScreen`, folded into `AppScreen`'s `empty` prop. */
+function EmptyState({ title, message }: EmptyStateContent) {
+  return (
+    <View style={styles.emptyState}>
+      <Text accessibilityRole="header" style={styles.emptyTitle}>
+        {title}
+      </Text>
+      <View style={[styles.emptyCard, cardShadowStyle]}>
+        <Text style={styles.emptyMessage}>{message}</Text>
+      </View>
     </View>
   );
 }
@@ -307,16 +457,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: themeTokens.colors.background,
   },
-  keyboardView: {
-    flex: 1,
-  },
   screenContent: {
     flexGrow: 1,
     gap: themeTokens.spacing.cardGap,
     padding: themeTokens.spacing.screen,
   },
+  listContent: {
+    flexGrow: 1,
+    padding: themeTokens.spacing.screen,
+  },
   centeredContent: {
     justifyContent: 'center',
+  },
+  formFooter: {
+    gap: themeTokens.spacing.cardGap,
+    borderTopWidth: 1,
+    borderTopColor: themeTokens.colors.border,
+    backgroundColor: themeTokens.colors.surface,
+    paddingHorizontal: themeTokens.spacing.screen,
+    paddingTop: themeTokens.spacing.cardGap,
+  },
+  emptyState: {
+    flex: 1,
+    gap: themeTokens.spacing.cardGap,
+  },
+  emptyTitle: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.displaySemibold,
+    fontSize: themeTokens.typography.scale.screenTitle,
+    lineHeight: 26,
+  },
+  emptyCard: {
+    minHeight: 112,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: themeTokens.colors.border,
+    borderRadius: themeTokens.radii.card,
+    backgroundColor: themeTokens.colors.surface,
+    padding: themeTokens.spacing.cardPadding,
+  },
+  emptyMessage: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.body,
+    lineHeight: 23,
+    textAlign: 'center',
   },
   header: {
     gap: themeTokens.spacing.base,

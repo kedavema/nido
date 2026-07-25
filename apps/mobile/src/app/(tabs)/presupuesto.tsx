@@ -1,7 +1,12 @@
-import { EmptyTabScreen } from '@/components/empty-tab-screen';
+import { AppScreen } from '@/components/m1-ui';
 
 export default function PresupuestoScreen() {
   return (
-    <EmptyTabScreen message="Todavía no hay un presupuesto para mostrar." title="Presupuesto" />
+    <AppScreen
+      empty={{
+        title: 'Presupuesto',
+        message: 'Todavía no hay un presupuesto para mostrar.',
+      }}
+    />
   );
 }
