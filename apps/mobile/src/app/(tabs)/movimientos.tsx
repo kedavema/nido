@@ -10,12 +10,13 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
   ActionButton,
+  AppListScreen,
+  AppScreen,
   Card,
   InlineNotice,
   LoadingContent,
@@ -101,6 +102,7 @@ export default function MovimientosScreen() {
   const [transactionsState, setTransactionsState] = useState<TransactionsState>({
     kind: 'loading',
   });
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -111,28 +113,31 @@ export default function MovimientosScreen() {
     };
   }, [searchInput]);
 
-  const loadCatalog = useCallback(async () => {
-    if (household === null) return;
-    setCatalogState({ kind: 'loading' });
-    try {
-      const [{ categories }, { paymentSources }] = await Promise.all([
-        catalog.listCategories(household.id),
-        catalog.listPaymentSources(household.id),
-      ]);
-      setCatalogState({ kind: 'loaded', categories, paymentSources });
-    } catch (error) {
-      setCatalogState({ kind: 'error', message: messageForActionError(error) });
-    }
-  }, [catalog, household]);
+  const loadCatalog = useCallback(
+    async (silent = false) => {
+      if (household === null) return;
+      if (!silent) setCatalogState({ kind: 'loading' });
+      try {
+        const [{ categories }, { paymentSources }] = await Promise.all([
+          catalog.listCategories(household.id),
+          catalog.listPaymentSources(household.id),
+        ]);
+        setCatalogState({ kind: 'loaded', categories, paymentSources });
+      } catch (error) {
+        setCatalogState({ kind: 'error', message: messageForActionError(error) });
+      }
+    },
+    [catalog, household],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void loadCatalog());
   }, [loadCatalog]);
 
   const loadTransactions = useCallback(
-    async (isActive: () => boolean) => {
+    async (isActive: () => boolean, silent = false) => {
       if (household === null) return;
-      setTransactionsState({ kind: 'loading' });
+      if (!silent) setTransactionsState({ kind: 'loading' });
       const { from, to } = monthLocalDateRange(month);
       const query: ListTransactionsQuery = {
         from,
@@ -168,6 +173,16 @@ export default function MovimientosScreen() {
       };
     }, [loadTransactions]),
   );
+
+  // Pull-to-refresh refetches transactions and catalog silently — the RefreshControl spinner is
+  // the only progress affordance, so neither reset flips its state back to `loading` (which would
+  // swap the visible list for the full-screen skeleton mid-pull).
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void Promise.all([loadTransactions(() => true, true), loadCatalog(true)]).finally(() => {
+      setRefreshing(false);
+    });
+  }, [loadTransactions, loadCatalog]);
 
   const categories = catalogState.kind === 'loaded' ? catalogState.categories : EMPTY_CATEGORIES;
   const paymentSources =
@@ -227,9 +242,9 @@ export default function MovimientosScreen() {
 
   if (household === null) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+      <AppScreen centered>
         <LoadingContent />
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
@@ -238,9 +253,13 @@ export default function MovimientosScreen() {
       ? groupTransactionsByDay(transactionsState.transactions)
       : [];
   const todayLocal = todayLocalDate();
+  const hasDayGroups = dayGroups.length > 0;
 
-  return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+  // Fixed above the list: title, month stepper, search, and filter chips. The chips' dropdowns are
+  // absolutely positioned; inside a scrolling `ListHeaderComponent` later list cells would paint
+  // over them on Android, so this whole block stays pinned via `AppListScreen`'s `header` slot.
+  const listHeader = (
+    <>
       <View style={styles.headerRow}>
         <Text accessibilityRole="header" style={styles.title}>
           Movimientos
@@ -338,140 +357,109 @@ export default function MovimientosScreen() {
           <Text style={styles.clearFiltersText}>Limpiar filtros</Text>
         </Pressable>
       ) : null}
+    </>
+  );
 
-      <ScrollView contentContainerStyle={styles.listArea} keyboardShouldPersistTaps="handled">
-        {isOnline || pendingExpenses.length === 0 ? null : (
-          <View accessibilityLiveRegion="polite" style={styles.offlineBanner}>
-            <View style={styles.offlineBannerDot} />
-            <Text style={styles.offlineBannerText}>
-              Sin conexión ·{' '}
-              {pendingExpenses.length === 1
-                ? '1 movimiento esperando sincronizar'
-                : `${pendingExpenses.length.toString()} movimientos esperando sincronizar`}
-            </Text>
+  // Scrolls with the list: connection banner, load progress/errors, and the offline "Pendientes"
+  // card. Sits above the day groups; `hasDayGroups` adds the gap before the first group.
+  const scrollHeader = (
+    <View style={[styles.scrollHeader, hasDayGroups && styles.scrollHeaderSpaced]}>
+      {isOnline || pendingExpenses.length === 0 ? null : (
+        <View accessibilityLiveRegion="polite" style={styles.offlineBanner}>
+          <View style={styles.offlineBannerDot} />
+          <Text style={styles.offlineBannerText}>
+            Sin conexión ·{' '}
+            {pendingExpenses.length === 1
+              ? '1 movimiento esperando sincronizar'
+              : `${pendingExpenses.length.toString()} movimientos esperando sincronizar`}
+          </Text>
+        </View>
+      )}
+
+      {transactionsState.kind === 'loading' || catalogState.kind === 'loading' ? (
+        <LoadingContent label="Cargando movimientos…" />
+      ) : null}
+
+      {transactionsState.kind === 'error' ? (
+        <>
+          <InlineNotice tone="error">{transactionsState.message}</InlineNotice>
+          <ActionButton
+            label="Reintentar"
+            onPress={() => void loadTransactions(() => true)}
+            variant="secondary"
+          />
+        </>
+      ) : null}
+
+      {catalogState.kind === 'error' ? (
+        <InlineNotice tone="error">{catalogState.message}</InlineNotice>
+      ) : null}
+
+      {pendingExpenses.length === 0 ? null : (
+        <Card>
+          <View style={styles.pendingHeaderRow}>
+            <View style={styles.pendingHeaderCopy}>
+              <Text style={m1TextStyles.sectionTitle}>Pendientes</Text>
+              <Text style={m1TextStyles.secondary}>
+                {pendingExpenses.length === 1
+                  ? '1 movimiento guardado en este teléfono.'
+                  : `${pendingExpenses.length.toString()} movimientos guardados en este teléfono.`}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void retryAll()}
+              style={styles.pendingRetryAll}
+            >
+              <Text style={styles.pendingRetryAllText}>Reintentar todo</Text>
+            </Pressable>
           </View>
-        )}
-
-        {transactionsState.kind === 'loading' || catalogState.kind === 'loading' ? (
-          <LoadingContent label="Cargando movimientos…" />
-        ) : null}
-
-        {transactionsState.kind === 'error' ? (
-          <>
-            <InlineNotice tone="error">{transactionsState.message}</InlineNotice>
-            <ActionButton
-              label="Reintentar"
-              onPress={() => void loadTransactions(() => true)}
-              variant="secondary"
+          {pendingExpenses.map((mutation, index) => (
+            <PendingMutationRow
+              categories={categories}
+              isLast={index === pendingExpenses.length - 1}
+              key={mutation.id}
+              mutation={mutation}
+              onRetry={() => void retry(mutation.id)}
             />
-          </>
-        ) : null}
+          ))}
+        </Card>
+      )}
+    </View>
+  );
 
-        {catalogState.kind === 'error' ? (
-          <InlineNotice tone="error">{catalogState.message}</InlineNotice>
-        ) : null}
+  // Only a *loaded* empty month is a real empty state — while loading, `dayGroups` is also empty but
+  // the spinner in `scrollHeader` covers it, so render nothing here to avoid a flash of empty copy.
+  const listEmpty =
+    transactionsState.kind === 'loaded' ? (
+      hasActiveFiltersOrSearch ? (
+        <Card>
+          <Text style={m1TextStyles.sectionTitle}>Sin resultados</Text>
+          <Text style={m1TextStyles.secondary}>No encontramos movimientos con estos filtros.</Text>
+          <ActionButton label="Limpiar filtros" onPress={clearFilters} variant="secondary" />
+        </Card>
+      ) : (
+        <Card>
+          <Text style={m1TextStyles.sectionTitle}>
+            Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
+          </Text>
+          <Text style={m1TextStyles.secondary}>
+            Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para ambos.
+          </Text>
+          <ActionButton
+            label="Cargar un gasto"
+            onPress={() => {
+              navigateToNewExpense();
+            }}
+          />
+        </Card>
+      )
+    ) : null;
 
-        {pendingExpenses.length === 0 ? null : (
-          <Card>
-            <View style={styles.pendingHeaderRow}>
-              <View style={styles.pendingHeaderCopy}>
-                <Text style={m1TextStyles.sectionTitle}>Pendientes</Text>
-                <Text style={m1TextStyles.secondary}>
-                  {pendingExpenses.length === 1
-                    ? '1 movimiento guardado en este teléfono.'
-                    : `${pendingExpenses.length.toString()} movimientos guardados en este teléfono.`}
-                </Text>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void retryAll()}
-                style={styles.pendingRetryAll}
-              >
-                <Text style={styles.pendingRetryAllText}>Reintentar todo</Text>
-              </Pressable>
-            </View>
-            {pendingExpenses.map((mutation, index) => (
-              <PendingMutationRow
-                categories={categories}
-                isLast={index === pendingExpenses.length - 1}
-                key={mutation.id}
-                mutation={mutation}
-                onRetry={() => void retry(mutation.id)}
-              />
-            ))}
-          </Card>
-        )}
-
-        {transactionsState.kind === 'loaded' && dayGroups.length === 0 ? (
-          hasActiveFiltersOrSearch ? (
-            <Card>
-              <Text style={m1TextStyles.sectionTitle}>Sin resultados</Text>
-              <Text style={m1TextStyles.secondary}>
-                No encontramos movimientos con estos filtros.
-              </Text>
-              <ActionButton label="Limpiar filtros" onPress={clearFilters} variant="secondary" />
-            </Card>
-          ) : (
-            <Card>
-              <Text style={m1TextStyles.sectionTitle}>
-                Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
-              </Text>
-              <Text style={m1TextStyles.secondary}>
-                Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para
-                ambos.
-              </Text>
-              <ActionButton
-                label="Cargar un gasto"
-                onPress={() => {
-                  navigateToNewExpense();
-                }}
-              />
-            </Card>
-          )
-        ) : null}
-
-        {dayGroups.map((group) => {
-          const subtotal = formatSignedPygAmount(group.netBaseAmountPyg);
-          return (
-            <View key={group.localDate} style={styles.dayGroup}>
-              <View style={styles.dayHeaderRow}>
-                <Text style={styles.dayHeading}>
-                  {formatDayHeading(group.localDate, todayLocal)}
-                </Text>
-                <Text
-                  style={[
-                    styles.daySubtotal,
-                    subtotal.isPositive ? styles.positiveAmount : styles.negativeAmount,
-                  ]}
-                >
-                  {subtotal.text}
-                </Text>
-              </View>
-              <Card>
-                {group.transactions.map((transaction, index) => (
-                  <MovementRow
-                    category={categories.find((c) => c.id === transaction.categoryId)}
-                    categoryLabelText={categoryLabel(transaction.categoryId, categories)}
-                    isLast={index === group.transactions.length - 1}
-                    key={transaction.id}
-                    onPress={() => {
-                      router.push(`/movimiento/${transaction.id}`);
-                    }}
-                    paymentSourceName={
-                      transaction.paymentSourceId === null
-                        ? undefined
-                        : paymentSources.find((s) => s.id === transaction.paymentSourceId)?.name
-                    }
-                    transaction={transaction}
-                  />
-                ))}
-              </Card>
-            </View>
-          );
-        })}
-      </ScrollView>
-
-      <View pointerEvents="box-none" style={styles.fabContainer}>
+  return (
+    <AppListScreen
+      data={dayGroups}
+      floatingAction={
         <Pressable
           accessibilityLabel="Nuevo gasto"
           accessibilityRole="button"
@@ -482,9 +470,58 @@ export default function MovimientosScreen() {
         >
           <Text style={styles.fabLabel}>+ Nuevo gasto</Text>
         </Pressable>
-      </View>
-    </SafeAreaView>
+      }
+      header={listHeader}
+      ItemSeparatorComponent={DayGroupSeparator}
+      keyExtractor={(group) => group.localDate}
+      ListEmptyComponent={listEmpty}
+      ListHeaderComponent={scrollHeader}
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+      renderItem={({ item: group }) => {
+        const subtotal = formatSignedPygAmount(group.netBaseAmountPyg);
+        return (
+          <View style={styles.dayGroup}>
+            <View style={styles.dayHeaderRow}>
+              <Text style={styles.dayHeading}>{formatDayHeading(group.localDate, todayLocal)}</Text>
+              <Text
+                style={[
+                  styles.daySubtotal,
+                  subtotal.isPositive ? styles.positiveAmount : styles.negativeAmount,
+                ]}
+              >
+                {subtotal.text}
+              </Text>
+            </View>
+            <Card>
+              {group.transactions.map((transaction, index) => (
+                <MovementRow
+                  category={categories.find((c) => c.id === transaction.categoryId)}
+                  categoryLabelText={categoryLabel(transaction.categoryId, categories)}
+                  isLast={index === group.transactions.length - 1}
+                  key={transaction.id}
+                  onPress={() => {
+                    router.push(`/movimiento/${transaction.id}`);
+                  }}
+                  paymentSourceName={
+                    transaction.paymentSourceId === null
+                      ? undefined
+                      : paymentSources.find((s) => s.id === transaction.paymentSourceId)?.name
+                  }
+                  transaction={transaction}
+                />
+              ))}
+            </Card>
+          </View>
+        );
+      }}
+    />
   );
+}
+
+/** Vertical gap between day-group cards in the Movimientos list. */
+function DayGroupSeparator() {
+  return <View style={styles.dayGroupSeparator} />;
 }
 
 function FilterPicker<T extends string>({
@@ -691,10 +728,6 @@ function PendingMutationRow({
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -815,14 +848,17 @@ const styles = StyleSheet.create({
     fontSize: themeTokens.typography.scale.secondary,
     textDecorationLine: 'underline',
   },
-  listArea: {
-    flexGrow: 1,
+  scrollHeader: {
     gap: themeTokens.spacing.cardGap,
-    padding: themeTokens.spacing.screen,
-    paddingBottom: 96,
+  },
+  scrollHeaderSpaced: {
+    marginBottom: themeTokens.spacing.cardGap,
   },
   dayGroup: {
     gap: 8,
+  },
+  dayGroupSeparator: {
+    height: themeTokens.spacing.cardGap,
   },
   dayHeaderRow: {
     flexDirection: 'row',
@@ -919,11 +955,6 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.surface,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.secondary,
-  },
-  fabContainer: {
-    position: 'absolute',
-    right: themeTokens.spacing.screen,
-    bottom: themeTokens.spacing.screen,
   },
   fab: {
     minHeight: themeTokens.touchTarget.minimum,

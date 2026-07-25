@@ -2,11 +2,17 @@ import type { HouseholdMember, Occurrence, RecurringItem } from '@nido/contracts
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { ActionButton, Card, InlineNotice, LoadingContent, m1TextStyles } from '@/components/m1-ui';
+import {
+  ActionButton,
+  AppScreen,
+  Card,
+  InlineNotice,
+  LoadingContent,
+  m1TextStyles,
+} from '@/components/m1-ui';
 import {
   navigateToExpectedIncomeForm,
   navigateToReceiveOccurrence,
@@ -94,7 +100,7 @@ export default function IngresoDetailScreen() {
   );
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
+    <AppScreen>
       <View style={styles.headerRow}>
         <Pressable
           accessibilityLabel="Volver"
@@ -123,7 +129,7 @@ export default function IngresoDetailScreen() {
       {detailState.kind === 'loading' ? <LoadingContent label="Cargando ingreso…" /> : null}
 
       {detailState.kind === 'error' ? (
-        <View style={styles.content}>
+        <>
           <InlineNotice tone="error">{detailState.message}</InlineNotice>
           <ActionButton
             label="Reintentar"
@@ -137,7 +143,7 @@ export default function IngresoDetailScreen() {
             }}
             variant="secondary"
           />
-        </View>
+        </>
       ) : null}
 
       {detailState.kind === 'loaded' ? (
@@ -151,7 +157,7 @@ export default function IngresoDetailScreen() {
           state={detailState}
         />
       ) : null}
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
@@ -193,7 +199,7 @@ function DetailBody({
   const heroStyles = received ? SUCCESS_HERO : WARNING_HERO;
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <>
       <View style={[styles.heroCard, heroStyles.card]}>
         <View style={styles.heroChip}>
           <View style={[styles.heroChipPill, heroStyles.pill]}>
@@ -234,7 +240,7 @@ function DetailBody({
         {received ? null : <ActionButton label="Marcar como recibido" onPress={onReceive} />}
         <ActionButton label="Editar ingreso" onPress={onEdit} variant="secondary" />
       </View>
-    </ScrollView>
+    </>
   );
 }
 
@@ -268,17 +274,10 @@ const WARNING_HERO = {
 } as const;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-    paddingBottom: themeTokens.spacing.cardGap,
   },
   backButton: {
     width: 40,
@@ -296,12 +295,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.displaySemibold,
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
-  },
-  content: {
-    flexGrow: 1,
-    gap: themeTokens.spacing.cardGap,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingBottom: themeTokens.spacing.screen,
   },
   heroCard: {
     gap: 8,
