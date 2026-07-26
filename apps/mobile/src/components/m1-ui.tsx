@@ -23,9 +23,11 @@ import {
   KeyboardStickyView,
   type KeyboardAwareScrollViewProps,
 } from 'react-native-keyboard-controller';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { useScreenBottomInset } from '@/hooks/use-screen-bottom-inset';
+import { selectionFeedback } from '@/lib/haptics';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
 
@@ -450,6 +452,78 @@ export function Card({ children }: PropsWithChildren) {
   return <View style={[styles.card, cardShadowStyle]}>{children}</View>;
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** How far a control shrinks while held, and how long it takes to get there. */
+const PRESS_SCALE = 0.97;
+const PRESS_DURATION_MS = 90;
+
+interface PressableScaleProps {
+  readonly children: ReactNode;
+  readonly onPress: () => void;
+  readonly disabled?: boolean;
+  readonly style?: StyleProp<ViewStyle>;
+  readonly accessibilityLabel?: string | undefined;
+  readonly accessibilityHint?: string | undefined;
+  readonly accessibilityState?: { readonly busy?: boolean; readonly disabled?: boolean };
+  readonly testID?: string | undefined;
+  /** Fires a light haptic on press. Off by default so it stays a deliberate choice. */
+  readonly haptic?: boolean;
+}
+
+/**
+ * A `Pressable` that dips slightly under the finger. The scale is what makes a
+ * control feel physical rather than like a link — it starts the moment the touch
+ * lands, before any navigation or network work, so the app answers instantly
+ * even when the action behind it does not.
+ *
+ * Runs on the UI thread through Reanimated, which is supported on web too, so
+ * this needs no platform branch. The optional haptic is separately guarded.
+ */
+export function PressableScale({
+  children,
+  onPress,
+  disabled = false,
+  style,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityState,
+  testID,
+  haptic = false,
+}: PressableScaleProps) {
+  const pressProgress = useSharedValue(0);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - pressProgress.value * (1 - PRESS_SCALE) }],
+  }));
+
+  return (
+    <AnimatedPressable
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={accessibilityState}
+      disabled={disabled}
+      onPress={() => {
+        if (haptic) {
+          selectionFeedback();
+        }
+        onPress();
+      }}
+      onPressIn={() => {
+        pressProgress.value = withTiming(1, { duration: PRESS_DURATION_MS });
+      }}
+      onPressOut={() => {
+        pressProgress.value = withTiming(0, { duration: PRESS_DURATION_MS });
+      }}
+      style={[style, animatedStyle]}
+      testID={testID}
+    >
+      {children}
+    </AnimatedPressable>
+  );
+}
+
 interface ActionButtonProps {
   readonly label: string;
   readonly onPress: () => void;
@@ -470,19 +544,20 @@ export function ActionButton({
   const blocked = disabled || loading;
 
   return (
-    <Pressable
+    // Every CTA in the app routes through here, so the press-scale and the light
+    // haptic land everywhere at once rather than screen by screen.
+    <PressableScale
       accessibilityHint={accessibilityHint}
       accessibilityLabel={label}
-      accessibilityRole="button"
       accessibilityState={{ busy: loading, disabled: blocked }}
       disabled={blocked}
+      haptic
       onPress={onPress}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         variant === 'primary' && styles.primaryButton,
         variant === 'secondary' && styles.secondaryButton,
         variant === 'danger' && styles.dangerButton,
-        pressed && !blocked && styles.pressedButton,
         blocked && styles.disabledButton,
       ]}
     >
@@ -502,7 +577,7 @@ export function ActionButton({
           {label}
         </Text>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 

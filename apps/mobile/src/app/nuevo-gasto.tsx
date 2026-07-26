@@ -11,10 +11,12 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import { AppBottomSheet } from '@/components/app-bottom-sheet';
 import {
   ActionButton,
   AppFormScreen,
@@ -27,6 +29,7 @@ import {
 import type { CreateExpenseOutcome } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { cardShadowStyle } from '@/theme/styles';
+import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
 import {
   amountToWireDecimal,
@@ -478,7 +481,9 @@ export default function NuevoGastoScreen() {
         await catalog.updateTransaction(household.id, original.id, request);
         router.back();
       }
+      successFeedback();
     } catch (error) {
+      errorFeedback();
       setSubmitError(messageForActionError(error));
     } finally {
       setSaving(false);
@@ -895,112 +900,100 @@ function CategoryPickerModal({
   const roots = categories.filter((category) => category.parentId === null);
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
-      <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-        <View style={styles.pickerHeaderRow}>
-          <Pressable
-            accessibilityLabel="Cerrar"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onClose}
-            style={styles.closeButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="close" size={20} />
-          </Pressable>
-          <View>
-            <Text accessibilityRole="header" style={styles.headerTitle}>
-              Elegir categoría
-            </Text>
-            <Text style={m1TextStyles.secondary}>Para este gasto</Text>
-          </View>
-        </View>
-        <View style={styles.searchRow}>
-          <Ionicons color={themeTokens.colors.inkSecondary} name="search" size={18} />
-          <TextInput
-            accessibilityLabel="Buscar categoría o subcategoría"
-            onChangeText={setSearch}
-            placeholder="Buscar categoría o subcategoría…"
-            placeholderTextColor={themeTokens.colors.inkSecondary}
-            style={styles.searchInput}
-            value={search}
-          />
-        </View>
-        <ScrollView contentContainerStyle={styles.pickerList}>
-          {roots.map((root) => {
-            const children = categories.filter((category) => category.parentId === root.id);
-            const matchesRoot = query === '' || root.name.toLowerCase().includes(query);
-            const filteredChildren = children.filter(
-              (child) => query === '' || matchesRoot || child.name.toLowerCase().includes(query),
-            );
-            if (query !== '' && !matchesRoot && filteredChildren.length === 0) {
-              return null;
-            }
-            const containsSelection =
-              selectedCategoryId === root.id ||
-              children.some((child) => child.id === selectedCategoryId);
-            const expanded =
-              query !== '' ||
-              expandedRoots[root.id] === true ||
-              (expandedRoots[root.id] !== false && containsSelection);
-            return (
-              <View key={root.id} style={styles.pickerRootGroup}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    if (children.length === 0) {
-                      onSelect(root);
-                      return;
-                    }
-                    setExpandedRoots((current) => ({ ...current, [root.id]: !expanded }));
-                  }}
-                  style={styles.pickerRootRow}
-                >
-                  <View style={[styles.pickerAvatar, { backgroundColor: `${root.color}26` }]}>
-                    <Text style={[styles.pickerAvatarText, { color: root.color }]}>
-                      {root.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.pickerRootCopy}>
-                    <Text style={m1TextStyles.body}>{root.name}</Text>
-                    <Text numberOfLines={1} style={m1TextStyles.secondary}>
-                      {children.map((child) => child.name).join(' · ') || 'Sin subcategorías'}
-                    </Text>
-                  </View>
-                  {children.length > 0 ? (
-                    <Ionicons
-                      color={themeTokens.colors.inkSecondary}
-                      name={expanded ? 'chevron-down' : 'chevron-forward'}
-                      size={16}
-                    />
-                  ) : null}
-                </Pressable>
-                {expanded && children.length > 0 ? (
-                  <ChipRow>
-                    {(query === '' ? children : filteredChildren).map((child) => (
-                      <Chip
-                        key={child.id}
-                        label={child.name}
-                        onPress={() => {
-                          onSelect(child);
-                        }}
-                        selected={selectedCategoryId === child.id}
-                      />
-                    ))}
-                    <Chip
-                      label="Sin subcategoría"
-                      onPress={() => {
-                        onSelect(root);
-                      }}
-                      selected={selectedCategoryId === root.id}
-                    />
-                  </ChipRow>
+    <AppBottomSheet
+      onClose={onClose}
+      subtitle="Para este gasto"
+      title="Elegir categoría"
+      visible={visible}
+    >
+      <View style={styles.searchRow}>
+        <Ionicons color={themeTokens.colors.inkSecondary} name="search" size={18} />
+        {/* The sheet has to know about this focus to ride the keyboard, which a
+            plain TextInput would not report. */}
+        <BottomSheetTextInput
+          accessibilityLabel="Buscar categoría o subcategoría"
+          onChangeText={setSearch}
+          placeholder="Buscar categoría o subcategoría…"
+          placeholderTextColor={themeTokens.colors.inkSecondary}
+          style={styles.searchInput}
+          value={search}
+        />
+      </View>
+      <>
+        {roots.map((root) => {
+          const children = categories.filter((category) => category.parentId === root.id);
+          const matchesRoot = query === '' || root.name.toLowerCase().includes(query);
+          const filteredChildren = children.filter(
+            (child) => query === '' || matchesRoot || child.name.toLowerCase().includes(query),
+          );
+          if (query !== '' && !matchesRoot && filteredChildren.length === 0) {
+            return null;
+          }
+          const containsSelection =
+            selectedCategoryId === root.id ||
+            children.some((child) => child.id === selectedCategoryId);
+          const expanded =
+            query !== '' ||
+            expandedRoots[root.id] === true ||
+            (expandedRoots[root.id] !== false && containsSelection);
+          return (
+            <View key={root.id} style={styles.pickerRootGroup}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  if (children.length === 0) {
+                    onSelect(root);
+                    return;
+                  }
+                  setExpandedRoots((current) => ({ ...current, [root.id]: !expanded }));
+                }}
+                style={styles.pickerRootRow}
+              >
+                <View style={[styles.pickerAvatar, { backgroundColor: `${root.color}26` }]}>
+                  <Text style={[styles.pickerAvatarText, { color: root.color }]}>
+                    {root.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.pickerRootCopy}>
+                  <Text style={m1TextStyles.body}>{root.name}</Text>
+                  <Text numberOfLines={1} style={m1TextStyles.secondary}>
+                    {children.map((child) => child.name).join(' · ') || 'Sin subcategorías'}
+                  </Text>
+                </View>
+                {children.length > 0 ? (
+                  <Ionicons
+                    color={themeTokens.colors.inkSecondary}
+                    name={expanded ? 'chevron-down' : 'chevron-forward'}
+                    size={16}
+                  />
                 ) : null}
-              </View>
-            );
-          })}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+              </Pressable>
+              {expanded && children.length > 0 ? (
+                <ChipRow>
+                  {(query === '' ? children : filteredChildren).map((child) => (
+                    <Chip
+                      key={child.id}
+                      label={child.name}
+                      onPress={() => {
+                        onSelect(child);
+                      }}
+                      selected={selectedCategoryId === child.id}
+                    />
+                  ))}
+                  <Chip
+                    label="Sin subcategoría"
+                    onPress={() => {
+                      onSelect(root);
+                    }}
+                    selected={selectedCategoryId === root.id}
+                  />
+                </ChipRow>
+              ) : null}
+            </View>
+          );
+        })}
+      </>
+    </AppBottomSheet>
   );
 }
 
@@ -1025,79 +1018,61 @@ function PaymentSourcePickerModal({
   const others = paymentSources.filter((source) => !favoriteIds.includes(source.id));
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
-      <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-        <View style={styles.pickerHeaderRow}>
-          <Pressable
-            accessibilityLabel="Cerrar"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onClose}
-            style={styles.closeButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="close" size={20} />
-          </Pressable>
-          <View>
-            <Text accessibilityRole="header" style={styles.headerTitle}>
-              Pagado con
-            </Text>
-            <Text style={m1TextStyles.secondary}>Para este gasto</Text>
-          </View>
-        </View>
-        <ScrollView contentContainerStyle={styles.pickerList}>
-          {favorites.length === 0 ? null : (
-            <View style={styles.pickerSection}>
-              <Text style={styles.pickerSectionLabel}>FAVORITOS</Text>
-              {favorites.map((source) => (
-                <PaymentSourceRow
-                  key={source.id}
-                  onPress={() => {
-                    onSelect(source.id);
-                  }}
-                  selected={selectedPaymentSourceId === source.id}
-                  source={source}
-                />
-              ))}
-            </View>
-          )}
-          {others.length === 0 ? null : (
-            <View style={styles.pickerSection}>
-              <Text style={styles.pickerSectionLabel}>OTROS MEDIOS</Text>
-              {others.map((source) => (
-                <PaymentSourceRow
-                  key={source.id}
-                  onPress={() => {
-                    onSelect(source.id);
-                  }}
-                  selected={selectedPaymentSourceId === source.id}
-                  source={source}
-                />
-              ))}
-            </View>
-          )}
-          {paymentSources.length === 0 ? (
-            <Text style={m1TextStyles.secondary}>Todavía no hay medios de pago.</Text>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
+    <AppBottomSheet
+      onClose={onClose}
+      subtitle="Para este gasto"
+      title="Pagado con"
+      visible={visible}
+    >
+      {favorites.length === 0 ? null : (
+        <View style={styles.pickerSection}>
+          <Text style={styles.pickerSectionLabel}>FAVORITOS</Text>
+          {favorites.map((source) => (
+            <PaymentSourceRow
+              key={source.id}
               onPress={() => {
-                onSelect(null);
+                onSelect(source.id);
               }}
-              style={styles.pickerRow}
-            >
-              <View
-                style={[styles.radio, selectedPaymentSourceId === null && styles.radioSelected]}
-              >
-                {selectedPaymentSourceId === null ? (
-                  <Ionicons color={themeTokens.colors.surface} name="checkmark" size={14} />
-                ) : null}
-              </View>
-              <Text style={m1TextStyles.body}>Sin medio de pago</Text>
-            </Pressable>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+              selected={selectedPaymentSourceId === source.id}
+              source={source}
+            />
+          ))}
+        </View>
+      )}
+      {others.length === 0 ? null : (
+        <View style={styles.pickerSection}>
+          <Text style={styles.pickerSectionLabel}>OTROS MEDIOS</Text>
+          {others.map((source) => (
+            <PaymentSourceRow
+              key={source.id}
+              onPress={() => {
+                onSelect(source.id);
+              }}
+              selected={selectedPaymentSourceId === source.id}
+              source={source}
+            />
+          ))}
+        </View>
+      )}
+      {paymentSources.length === 0 ? (
+        <Text style={m1TextStyles.secondary}>Todavía no hay medios de pago.</Text>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            onSelect(null);
+          }}
+          style={styles.pickerRow}
+        >
+          <View style={[styles.radio, selectedPaymentSourceId === null && styles.radioSelected]}>
+            {selectedPaymentSourceId === null ? (
+              <Ionicons color={themeTokens.colors.surface} name="checkmark" size={14} />
+            ) : null}
+          </View>
+          <Text style={m1TextStyles.body}>Sin medio de pago</Text>
+        </Pressable>
+      )}
+    </AppBottomSheet>
   );
 }
 
@@ -1544,14 +1519,6 @@ const styles = StyleSheet.create({
     borderTopColor: themeTokens.colors.border,
     backgroundColor: themeTokens.colors.background,
   },
-  pickerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-    paddingBottom: themeTokens.spacing.cardGap,
-  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1570,10 +1537,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.body,
     paddingVertical: 10,
-  },
-  pickerList: {
-    gap: themeTokens.spacing.cardGap,
-    padding: themeTokens.spacing.screen,
   },
   pickerRootGroup: {
     gap: 8,
