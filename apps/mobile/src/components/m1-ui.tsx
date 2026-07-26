@@ -99,6 +99,7 @@ export function AppScreen({
   floatingAction,
 }: AppScreenProps) {
   const bottomInset = useScreenBottomInset();
+  const { clearance, measure } = useFloatingActionClearance();
 
   return (
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
@@ -108,7 +109,7 @@ export function AppScreen({
         contentContainerStyle={[
           styles.screenContent,
           centered && styles.centeredContent,
-          { paddingBottom: themeTokens.spacing.screen + bottomInset },
+          { paddingBottom: themeTokens.spacing.screen + bottomInset + clearance },
         ]}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -123,7 +124,9 @@ export function AppScreen({
       >
         {empty === undefined ? children : <EmptyState {...empty} />}
       </ScreenScrollView>
-      <FloatingActionSlot bottomInset={bottomInset}>{floatingAction}</FloatingActionSlot>
+      <FloatingActionSlot bottomInset={bottomInset} onLayout={measure}>
+        {floatingAction}
+      </FloatingActionSlot>
     </SafeAreaView>
   );
 }
@@ -137,18 +140,49 @@ export function AppScreen({
 function FloatingActionSlot({
   children,
   bottomInset,
+  onLayout,
 }: {
   readonly children: ReactNode;
   readonly bottomInset: number;
+  readonly onLayout: (event: LayoutChangeEvent) => void;
 }) {
   if (children === undefined || children === null) {
     return null;
   }
   return (
-    <View pointerEvents="box-none" style={[styles.floatingAction, { bottom: bottomInset }]}>
+    <View
+      onLayout={onLayout}
+      pointerEvents="box-none"
+      style={[styles.floatingAction, { bottom: bottomInset }]}
+    >
       {children}
     </View>
   );
+}
+
+/**
+ * Bottom padding a scroll view must add so its last row can clear the floating
+ * action drawn over it. The action lives outside the scroll, so the content has
+ * no idea it is there: without this a FAB simply paints over the last card
+ * whenever the content is too short to scroll out from under it.
+ *
+ * Returns 0 until the action has been measured, and while there is no action at
+ * all, so screens without one keep their previous padding exactly.
+ */
+function useFloatingActionClearance(): {
+  readonly clearance: number;
+  readonly measure: (event: LayoutChangeEvent) => void;
+} {
+  const [height, setHeight] = useState(0);
+
+  const measure = useCallback((event: LayoutChangeEvent) => {
+    setHeight(event.nativeEvent.layout.height);
+  }, []);
+
+  return {
+    clearance: height === 0 ? 0 : height + themeTokens.spacing.cardGap,
+    measure,
+  };
 }
 
 /**
@@ -188,6 +222,7 @@ export function AppListScreen<ItemT>({
   ...listProps
 }: AppListScreenProps<ItemT>) {
   const bottomInset = useScreenBottomInset();
+  const { clearance, measure } = useFloatingActionClearance();
 
   return (
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
@@ -195,7 +230,7 @@ export function AppListScreen<ItemT>({
       <FlatList
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: themeTokens.spacing.screen + bottomInset },
+          { paddingBottom: themeTokens.spacing.screen + bottomInset + clearance },
         ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
@@ -210,7 +245,9 @@ export function AppListScreen<ItemT>({
         }
         {...listProps}
       />
-      <FloatingActionSlot bottomInset={bottomInset}>{floatingAction}</FloatingActionSlot>
+      <FloatingActionSlot bottomInset={bottomInset} onLayout={measure}>
+        {floatingAction}
+      </FloatingActionSlot>
     </SafeAreaView>
   );
 }
