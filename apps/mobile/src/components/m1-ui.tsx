@@ -754,7 +754,9 @@ export const m1TextStyles = StyleSheet.create({
   },
   token: {
     color: themeTokens.colors.ink,
-    fontFamily: Platform.select({ web: 'monospace', default: 'monospace' }),
+    // Both platforms resolve the same family; this was a Platform.select whose
+    // branches were identical, which implied a difference that does not exist.
+    fontFamily: 'monospace',
     fontSize: themeTokens.typography.scale.secondary,
     lineHeight: 21,
   },

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { AppScreen, Card, m1TextStyles } from '@/components/m1-ui';
+import { AppScreen, Card, PressableScale, m1TextStyles } from '@/components/m1-ui';
 import { useSession } from '@/auth/session-provider';
 import { themeTokens } from '@/theme/tokens';
 
@@ -54,18 +54,20 @@ function ChecklistRow({ prefix, bold, suffix }: Omit<ChecklistItem, 'key'>) {
 
 function GoogleSignInButton({ onPress }: { readonly onPress: () => void }) {
   return (
-    <Pressable
+    // The first control anyone touches in the app, and the only one reachable on
+    // web before signing in — it gets the same press response as every other CTA.
+    <PressableScale
       accessibilityHint="Abre el inicio de sesión seguro de Google"
       accessibilityLabel="Continuar con Google"
-      accessibilityRole="button"
+      haptic
       onPress={onPress}
-      style={({ pressed }) => [styles.googleButton, pressed && styles.googleButtonPressed]}
+      style={styles.googleButton}
     >
       <View style={styles.googleMark}>
         <Ionicons color={themeTokens.colors.ink} name="logo-google" size={16} />
       </View>
       <Text style={styles.googleButtonLabel}>Continuar con Google</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -170,9 +172,6 @@ const styles = StyleSheet.create({
     backgroundColor: themeTokens.colors.surface,
     paddingHorizontal: themeTokens.spacing.cardPadding,
     paddingVertical: 10,
-  },
-  googleButtonPressed: {
-    opacity: 0.78,
   },
   googleMark: {
     width: 20,

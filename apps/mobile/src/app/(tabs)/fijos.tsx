@@ -12,6 +12,7 @@ import {
   InlineNotice,
   LoadingContent,
   m1TextStyles,
+  PressableScale,
 } from '@/components/m1-ui';
 import {
   navigateToFijoDetail,
@@ -342,13 +343,9 @@ function OverdueCard({
         </View>
         <Text style={styles.overdueSubtitle}>{subtitle}</Text>
         <View style={styles.overdueActionRow}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onMarkPaid}
-            style={({ pressed }) => [styles.markPaidButton, pressed && styles.pressed]}
-          >
+          <PressableScale haptic onPress={onMarkPaid} style={styles.markPaidButton}>
             <Text style={styles.markPaidLabel}>Marcar pagado</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </View>
     </Pressable>
@@ -424,14 +421,14 @@ function OutlineButton({
   readonly onPress: () => void;
 }) {
   return (
-    <Pressable
+    <PressableScale
       accessibilityLabel={label}
-      accessibilityRole="button"
+      haptic
       onPress={onPress}
-      style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}
+      style={styles.outlineButton}
     >
       <Text style={styles.outlineButtonLabel}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -611,8 +608,5 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.primary,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
-  },
-  pressed: {
-    opacity: 0.78,
   },
 });
