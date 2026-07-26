@@ -234,8 +234,15 @@ interface AppFormScreenProps extends PropsWithChildren {
 export function AppFormScreen({ children, testID, header, footer }: AppFormScreenProps) {
   const bottomInset = useScreenBottomInset();
   const isNative = Platform.OS !== 'web';
+  // The safe-area inset is *added* to the bar's own padding rather than serving
+  // as it: on a device with hardware/gesture buttons `bottomInset` can be small
+  // or zero, which would leave the button flush against the screen edge. This
+  // keeps the bar symmetric (same breathing room above and below the button)
+  // and still clears the home indicator where there is one.
   const footerBar = (
-    <View style={[styles.formFooter, { paddingBottom: bottomInset }]}>{footer}</View>
+    <View style={[styles.formFooter, { paddingBottom: themeTokens.spacing.cardGap + bottomInset }]}>
+      {footer}
+    </View>
   );
 
   return (
@@ -252,8 +259,9 @@ export function AppFormScreen({ children, testID, header, footer }: AppFormScree
 
       {isNative ? (
         // Rides the keyboard to sit just above the keys. `opened: bottomInset`
-        // pulls the bar's home-indicator padding down behind the keyboard so the
-        // button hugs the keys instead of floating a safe-area gap above them.
+        // pulls only the home-indicator share of the bar's padding down behind
+        // the keyboard — the bar's own padding stays, so the button keeps the
+        // same breathing room over the keys that it has over the screen edge.
         <KeyboardStickyView offset={{ closed: 0, opened: bottomInset }}>
           {footerBar}
         </KeyboardStickyView>
