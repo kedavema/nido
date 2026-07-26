@@ -21,6 +21,7 @@ import {
   InlineNotice,
   LoadingContent,
   m1TextStyles,
+  PressableScale,
   SummarySkeleton,
 } from '@/components/m1-ui';
 import { navigateToIngresos } from '@/navigation/ingresos-routes';
@@ -269,16 +270,16 @@ export default function InicioScreen() {
   return (
     <AppScreen
       floatingAction={
-        <Pressable
+        <PressableScale
           accessibilityLabel="Nuevo gasto"
-          accessibilityRole="button"
+          haptic
           onPress={() => {
             navigateToNewExpense();
           }}
-          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+          style={styles.fab}
         >
           <Text style={styles.fabLabel}>+ Nuevo gasto</Text>
-        </Pressable>
+        </PressableScale>
       }
       onRefresh={onRefresh}
       refreshing={refreshing}
@@ -1175,9 +1176,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     ...cardShadowStyle,
-  },
-  fabPressed: {
-    opacity: 0.85,
   },
   fabLabel: {
     color: themeTokens.colors.surface,

@@ -21,6 +21,7 @@ import {
   InlineNotice,
   LoadingContent,
   m1TextStyles,
+  PressableScale,
   SyncStatusPill,
 } from '@/components/m1-ui';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
@@ -460,16 +461,16 @@ export default function MovimientosScreen() {
     <AppListScreen
       data={dayGroups}
       floatingAction={
-        <Pressable
+        <PressableScale
           accessibilityLabel="Nuevo gasto"
-          accessibilityRole="button"
+          haptic
           onPress={() => {
             navigateToNewExpense();
           }}
-          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+          style={styles.fab}
         >
           <Text style={styles.fabLabel}>+ Nuevo gasto</Text>
-        </Pressable>
+        </PressableScale>
       }
       header={listHeader}
       ItemSeparatorComponent={DayGroupSeparator}
@@ -966,9 +967,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     ...cardShadowStyle,
-  },
-  fabPressed: {
-    opacity: 0.85,
   },
   fabLabel: {
     color: themeTokens.colors.surface,

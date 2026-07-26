@@ -12,6 +12,7 @@ import {
   InlineNotice,
   LoadingContent,
   m1TextStyles,
+  PressableScale,
 } from '@/components/m1-ui';
 import {
   navigateToExpectedIncomeForm,
@@ -342,14 +343,14 @@ function OutlineButton({
   readonly onPress: () => void;
 }) {
   return (
-    <Pressable
+    <PressableScale
       accessibilityLabel={label}
-      accessibilityRole="button"
+      haptic
       onPress={onPress}
-      style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}
+      style={styles.outlineButton}
     >
       <Text style={styles.outlineButtonLabel}>{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -492,8 +493,5 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.primary,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
-  },
-  pressed: {
-    opacity: 0.78,
   },
 });
