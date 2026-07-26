@@ -1,4 +1,5 @@
 import type { ComponentType, PropsWithChildren, ReactElement, ReactNode } from 'react';
+import { useCallback, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -12,6 +13,7 @@ import {
   TextInput,
   View,
   type FlatListProps,
+  type LayoutChangeEvent,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
@@ -233,14 +235,33 @@ interface AppFormScreenProps extends PropsWithChildren {
 
 export function AppFormScreen({ children, testID, header, footer }: AppFormScreenProps) {
   const bottomInset = useScreenBottomInset();
+  const [footerHeight, setFooterHeight] = useState(0);
   const isNative = Platform.OS !== 'web';
+
+  const measureFooter = useCallback((event: LayoutChangeEvent) => {
+    setFooterHeight(event.nativeEvent.layout.height);
+  }, []);
+
+  /**
+   * How much of the scroll area the footer covers once it rides the keyboard:
+   * its full height minus the home-indicator padding, which the sticky offset
+   * pulls back down behind the keys. The scroll view has to know this — the
+   * footer is drawn over the band the keyboard-aware scrolling treats as free
+   * space, so without it a field near the end of the form lands underneath the
+   * bar with no way to scroll further.
+   */
+  const footerOverlap = Math.max(0, footerHeight - bottomInset);
+
   // The safe-area inset is *added* to the bar's own padding rather than serving
   // as it: on a device with hardware/gesture buttons `bottomInset` can be small
   // or zero, which would leave the button flush against the screen edge. This
   // keeps the bar symmetric (same breathing room above and below the button)
   // and still clears the home indicator where there is one.
   const footerBar = (
-    <View style={[styles.formFooter, { paddingBottom: themeTokens.spacing.cardGap + bottomInset }]}>
+    <View
+      onLayout={measureFooter}
+      style={[styles.formFooter, { paddingBottom: themeTokens.spacing.cardGap + bottomInset }]}
+    >
       {footer}
     </View>
   );
@@ -249,8 +270,13 @@ export function AppFormScreen({ children, testID, header, footer }: AppFormScree
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
       {header}
       <ScreenScrollView
-        bottomOffset={KEYBOARD_BOTTOM_OFFSET}
+        // `bottomOffset` is the gap between the keyboard and the focused caret,
+        // so it has to clear the footer as well; `extraKeyboardSpace` adds the
+        // matching scroll travel (it interpolates with the keyboard, so it costs
+        // nothing while the keyboard is closed).
+        bottomOffset={footerOverlap + KEYBOARD_BOTTOM_OFFSET}
         contentContainerStyle={styles.screenContent}
+        extraKeyboardSpace={footerOverlap}
         keyboardShouldPersistTaps="handled"
         style={styles.formScroll}
       >

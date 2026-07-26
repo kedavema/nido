@@ -675,6 +675,11 @@ export default function NuevoGastoScreen() {
               onChangeText={(notes) => {
                 updateDraft({ notes });
               }}
+              // A multiline input scrolls its own content on Android, which
+              // swallows the drag before the form's scroll view ever sees it.
+              // The field has no max height, so it can grow instead and leave
+              // scrolling to the screen.
+              scrollEnabled={false}
               style={[styles.textField, styles.notesField]}
               value={draft.notes}
             />
