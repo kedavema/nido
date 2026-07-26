@@ -5,10 +5,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
   ActionButton,
-  AppScreen,
+  AppFormScreen,
   Card,
   FormField,
-  PageHeader,
+  FormHeader,
   m1TextStyles,
 } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
@@ -55,8 +55,20 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <AppScreen>
-      <PageHeader description={subtitle} title="Crear tu hogar" />
+    // No dismiss affordance: this is where a user without a household lands, so
+    // there is nowhere to go back to — signing out is the only way out, and it
+    // lives with the other secondary actions below the fold.
+    <AppFormScreen
+      footer={
+        <ActionButton
+          disabled={name.trim().length === 0}
+          label="Crear hogar"
+          loading={submitting}
+          onPress={() => void submit()}
+        />
+      }
+      header={<FormHeader subtitle={subtitle} title="Crear tu hogar" />}
+    >
       <Card>
         <FormField
           autoCapitalize="words"
@@ -65,6 +77,7 @@ export default function OnboardingScreen() {
           label="Nombre del hogar"
           maxLength={100}
           onChangeText={setName}
+          onSubmitEditing={() => void submit()}
           placeholder="Ej. Casa Ale & Kevin"
           returnKeyType="done"
           value={name}
@@ -78,12 +91,6 @@ export default function OnboardingScreen() {
             Los gastos en USD se convierten con un tipo de cambio que cargás vos.
           </Text>
         </View>
-        <ActionButton
-          disabled={name.trim().length === 0}
-          label="Crear hogar"
-          loading={submitting}
-          onPress={() => void submit()}
-        />
       </Card>
       <Text
         accessibilityHint="Abre la pantalla para pegar un token de invitación"
@@ -96,7 +103,7 @@ export default function OnboardingScreen() {
         ¿Ya tenés una invitación? Ingresar token
       </Text>
       <ActionButton label="Cerrar sesión" onPress={() => void signOut()} variant="secondary" />
-    </AppScreen>
+    </AppFormScreen>
   );
 }
 

@@ -6,12 +6,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
   ActionButton,
+  AppFormScreen,
   AppScreen,
   Card,
   FormField,
+  FormHeader,
   InlineNotice,
   LoadingContent,
-  PageHeader,
   m1TextStyles,
 } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
@@ -46,27 +47,40 @@ export default function PaymentSourcesScreen() {
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [formError, setFormError] = useState<string>();
 
-  const load = useCallback(async () => {
-    if (household === null) return;
-    setLoadState({ kind: 'loading' });
-    try {
-      const [{ paymentSources }, { members }] = await Promise.all([
-        catalog.listPaymentSources(household.id),
-        getMembers(household.id),
-      ]);
-      setLoadState({
-        kind: 'loaded',
-        sources: paymentSources,
-        members: members.filter((member) => member.status === 'ACTIVE'),
-      });
-    } catch (error) {
-      setLoadState({ kind: 'error', message: messageForActionError(error) });
-    }
-  }, [catalog, getMembers, household]);
+  const load = useCallback(
+    async (silent = false) => {
+      if (household === null) return;
+      if (!silent) setLoadState({ kind: 'loading' });
+      try {
+        const [{ paymentSources }, { members }] = await Promise.all([
+          catalog.listPaymentSources(household.id),
+          getMembers(household.id),
+        ]);
+        setLoadState({
+          kind: 'loaded',
+          sources: paymentSources,
+          members: members.filter((member) => member.status === 'ACTIVE'),
+        });
+      } catch (error) {
+        setLoadState({ kind: 'error', message: messageForActionError(error) });
+      }
+    },
+    [catalog, getMembers, household],
+  );
   useEffect(() => {
     queueMicrotask(() => void load());
+  }, [load]);
+
+  // Pull-to-refresh refetches silently so the visible list isn't swapped for the
+  // full-screen spinner mid-pull — the RefreshControl is the only progress cue.
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load(true).finally(() => {
+      setRefreshing(false);
+    });
   }, [load]);
 
   if (household === null)
@@ -114,80 +128,95 @@ export default function PaymentSourcesScreen() {
     }
   }
 
-  return (
-    <AppScreen>
-      <ActionButton
-        label="Volver"
-        onPress={() => {
-          router.back();
-        }}
-        variant="secondary"
-      />
-      <PageHeader
-        description="Son informativos: Nido no calcula saldos por medio."
-        title="Medios de pago"
-      />
-      {draft === null ? null : (
-        <Card>
-          <Text style={m1TextStyles.sectionTitle}>
-            {draft.id === undefined ? 'Nuevo medio' : 'Editar medio'}
-          </Text>
-          <FormField
-            label="Nombre"
-            maxLength={100}
-            onChangeText={(name) => {
-              setDraft({ ...draft, name });
-            }}
-            value={draft.name}
-          />
-          <Choice
-            label="Tipo"
-            options={TYPES}
-            selected={draft.type}
-            onSelect={(type) => {
-              setDraft({ ...draft, type });
-            }}
-          />
-          <Choice
-            label="Titular informativo"
-            options={[
-              [null, 'Sin titular'],
-              ...members.map((member) => [member.userId, member.displayName] as const),
-            ]}
-            selected={draft.ownerUserId}
-            onSelect={(ownerUserId) => {
-              setDraft({ ...draft, ownerUserId });
-            }}
-          />
-          {draft.id === undefined ? null : (
-            <Choice
-              label="Estado"
-              options={[
-                [true, 'Activo'],
-                [false, 'Archivado'],
-              ]}
-              selected={draft.isActive}
-              onSelect={(isActive) => {
-                setDraft({ ...draft, isActive });
-              }}
-            />
-          )}
-          {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+  // The editor takes over the whole screen instead of appearing as a card inside
+  // the list: it is the only way the "Guardar" CTA can ride the keyboard rather
+  // than sit buried under it, and it is the shape this content will keep when it
+  // becomes a bottom sheet.
+  if (draft !== null) {
+    return (
+      <AppFormScreen
+        footer={
           <ActionButton
             disabled={draft.name.trim() === ''}
             label="Guardar"
             loading={saving}
             onPress={() => void save()}
           />
-          <ActionButton
-            label="Cancelar"
-            onPress={() => {
+        }
+        header={
+          <FormHeader
+            onDismiss={() => {
               setDraft(null);
+              setFormError(undefined);
             }}
-            variant="secondary"
+            title={draft.id === undefined ? 'Nuevo medio' : 'Editar medio'}
           />
-        </Card>
-      )}
+        }
+      >
+        <FormField
+          autoFocus
+          label="Nombre"
+          maxLength={100}
+          onChangeText={(name) => {
+            setDraft({ ...draft, name });
+          }}
+          value={draft.name}
+        />
+        <Choice
+          label="Tipo"
+          options={TYPES}
+          selected={draft.type}
+          onSelect={(type) => {
+            setDraft({ ...draft, type });
+          }}
+        />
+        <Choice
+          label="Titular informativo"
+          options={[
+            [null, 'Sin titular'],
+            ...members.map((member) => [member.userId, member.displayName] as const),
+          ]}
+          selected={draft.ownerUserId}
+          onSelect={(ownerUserId) => {
+            setDraft({ ...draft, ownerUserId });
+          }}
+        />
+        {draft.id === undefined ? null : (
+          <Choice
+            label="Estado"
+            options={[
+              [true, 'Activo'],
+              [false, 'Archivado'],
+            ]}
+            selected={draft.isActive}
+            onSelect={(isActive) => {
+              setDraft({ ...draft, isActive });
+            }}
+          />
+        )}
+        {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+      </AppFormScreen>
+    );
+  }
+
+  return (
+    <AppScreen
+      header={
+        <FormHeader
+          dismissIcon="back"
+          onDismiss={() => {
+            router.back();
+          }}
+          subtitle="Son informativos: Nido no calcula saldos por medio."
+          title="Medios de pago"
+        />
+      }
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+    >
+      {/* A failed delete reports here: the editor that used to host `formError`
+          is closed, so without this the error would be silently swallowed. */}
+      {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
       {loadState.kind === 'loading' ? <LoadingContent label="Cargando medios…" /> : null}
       {loadState.kind === 'error' ? (
         <>
@@ -218,6 +247,7 @@ export default function PaymentSourcesScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => {
+                      setFormError(undefined);
                       setDraft({
                         id: source.id,
                         name: source.name,
@@ -240,20 +270,17 @@ export default function PaymentSourcesScreen() {
         </Card>
       ) : null}
 
-      {draft === null ? (
-        <>
-          <OutlinePillButton
-            label="+ Agregar medio de pago"
-            onPress={() => {
-              setDraft(EMPTY_DRAFT);
-            }}
-          />
-          <Text style={m1TextStyles.secondary}>
-            Un medio con movimientos no se borra: se archiva (deja de ofrecerse al cargar, el
-            historial queda intacto).
-          </Text>
-        </>
-      ) : null}
+      <OutlinePillButton
+        label="+ Agregar medio de pago"
+        onPress={() => {
+          setFormError(undefined);
+          setDraft(EMPTY_DRAFT);
+        }}
+      />
+      <Text style={m1TextStyles.secondary}>
+        Un medio con movimientos no se borra: se archiva (deja de ofrecerse al cargar, el historial
+        queda intacto).
+      </Text>
     </AppScreen>
   );
 }
