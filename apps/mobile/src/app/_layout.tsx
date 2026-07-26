@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -69,6 +70,36 @@ export default function RootLayout() {
   );
 }
 
+/**
+ * Create and detail routes are opened on top of a list the user is still
+ * conceptually inside, so on native they slide up as modals and the previous
+ * screen stays behind them — the standard "this is a task, not a destination"
+ * signal. `presentation` and `animation` are Android/iOS-only options, and on
+ * web these routes are ordinary addressable pages that the browser's own back
+ * button already handles, so the whole thing is skipped there.
+ *
+ * Note this stops at slide-up plus the system back gesture: drag-to-dismiss on
+ * Android needs `presentation: 'formSheet'`, which turns the screen into a
+ * partial-height sheet and would fight the keyboard-riding footer these forms
+ * depend on.
+ */
+const MODAL_ROUTE_OPTIONS = Platform.select({
+  web: {},
+  default: { presentation: 'modal', animation: 'slide_from_bottom' },
+} as const);
+
+/** Routes that open as a task on top of the current context rather than as a destination. */
+const MODAL_ROUTES = [
+  'nuevo-gasto',
+  'nuevo-fijo',
+  'nuevo-ingreso',
+  'pagar-fijo/[id]',
+  'recibir-ingreso/[id]',
+  'movimiento/[id]',
+  'fijo/[id]',
+  'ingreso/[id]',
+] as const;
+
 function SessionStack() {
   const { state } = useSession();
   const destination = destinationForSession(state);
@@ -99,15 +130,10 @@ function SessionStack() {
         <Stack.Screen name="invitation" />
         <Stack.Screen name="categories" />
         <Stack.Screen name="payment-sources" />
-        <Stack.Screen name="movimiento/[id]" />
-        <Stack.Screen name="nuevo-gasto" />
-        <Stack.Screen name="fijo/[id]" />
-        <Stack.Screen name="nuevo-fijo" />
-        <Stack.Screen name="pagar-fijo/[id]" />
         <Stack.Screen name="ingresos" />
-        <Stack.Screen name="ingreso/[id]" />
-        <Stack.Screen name="nuevo-ingreso" />
-        <Stack.Screen name="recibir-ingreso/[id]" />
+        {MODAL_ROUTES.map((name) => (
+          <Stack.Screen key={name} name={name} options={MODAL_ROUTE_OPTIONS} />
+        ))}
       </Stack.Protected>
     </Stack>
   );
