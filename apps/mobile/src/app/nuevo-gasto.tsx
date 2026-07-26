@@ -27,6 +27,7 @@ import {
 import type { CreateExpenseOutcome } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { cardShadowStyle } from '@/theme/styles';
+import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
 import {
   amountToWireDecimal,
@@ -478,7 +479,9 @@ export default function NuevoGastoScreen() {
         await catalog.updateTransaction(household.id, original.id, request);
         router.back();
       }
+      successFeedback();
     } catch (error) {
+      errorFeedback();
       setSubmitError(messageForActionError(error));
     } finally {
       setSaving(false);

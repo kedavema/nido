@@ -20,6 +20,7 @@ import {
   LoadingContent,
   m1TextStyles,
 } from '@/components/m1-ui';
+import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
 import {
   amountToWireDecimal,
@@ -251,8 +252,10 @@ export default function NuevoIngresoScreen() {
         };
         await catalog.updateRecurringItem(household.id, draft.id, request);
       }
+      successFeedback();
       router.back();
     } catch (error) {
+      errorFeedback();
       setSubmitError(messageForActionError(error));
     } finally {
       setSaving(false);

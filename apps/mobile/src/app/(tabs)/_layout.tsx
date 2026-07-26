@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { StyleSheet, View, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { selectionFeedback } from '@/lib/haptics';
 import { TAB_BAR_BASE_HEIGHT, TAB_DEFINITIONS, type TabDefinition } from '@/navigation/tabs';
 import { themeTokens } from '@/theme/tokens';
 
@@ -60,6 +61,13 @@ export default function TabLayout() {
         <Tabs.Screen
           key={tab.route}
           name={tab.route}
+          listeners={{
+            // Answers the touch before the screen swaps, so switching tabs feels
+            // like pressing a physical key rather than waiting for a render.
+            tabPress: () => {
+              selectionFeedback();
+            },
+          }}
           options={{
             title: tab.label,
             tabBarAccessibilityLabel: tab.label,

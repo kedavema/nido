@@ -20,6 +20,7 @@ import {
   LoadingContent,
   m1TextStyles,
 } from '@/components/m1-ui';
+import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
 import {
   amountToWireDecimal,
@@ -143,8 +144,10 @@ export default function PagarFijoScreen() {
         settledAt: localDateToOccurredAt(payDate, todayLocal),
       };
       await catalog.settleOccurrence(household.id, occurrence.id, request);
+      successFeedback();
       router.back();
     } catch (error) {
+      errorFeedback();
       setSubmitError(messageForActionError(error));
     } finally {
       setSubmitting(false);
