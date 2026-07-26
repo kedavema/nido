@@ -9,10 +9,10 @@ import type {
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import { AppBottomSheet } from '@/components/app-bottom-sheet';
 import {
   ActionButton,
   AppFormScreen,
@@ -607,72 +607,50 @@ function CategoryPickerModal({
   const roots = categories.filter((category) => category.parentId === null);
 
   return (
-    <Modal animationType="slide" onRequestClose={onClose} visible={visible}>
-      <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.safeArea}>
-        <View style={styles.headerRow}>
-          <Pressable
-            accessibilityLabel="Cerrar"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={onClose}
-            style={styles.closeButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="close" size={20} />
-          </Pressable>
-          <Text accessibilityRole="header" style={styles.headerTitle}>
-            Elegir categoría
-          </Text>
-        </View>
-        <ScrollView contentContainerStyle={styles.pickerList}>
-          {roots.map((root) => {
-            const children = categories.filter((category) => category.parentId === root.id);
-            return (
-              <View key={root.id} style={styles.pickerGroup}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    onSelect(root.id);
-                  }}
-                  style={styles.pickerRootRow}
-                >
-                  <View style={[styles.pickerAvatar, { backgroundColor: `${root.color}26` }]}>
-                    <Text style={[styles.pickerAvatarText, { color: root.color }]}>
-                      {root.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={[m1TextStyles.body, styles.pickerRootName]}>{root.name}</Text>
-                  {selectedCategoryId === root.id ? (
-                    <Ionicons color={themeTokens.colors.primary} name="checkmark" size={18} />
-                  ) : null}
-                </Pressable>
-                {children.length > 0 ? (
-                  <View style={styles.chipRow}>
-                    {children.map((child) => (
-                      <Chip
-                        key={child.id}
-                        label={child.name}
-                        onPress={() => {
-                          onSelect(child.id);
-                        }}
-                        selected={selectedCategoryId === child.id}
-                      />
-                    ))}
-                  </View>
-                ) : null}
+    <AppBottomSheet onClose={onClose} title="Elegir categoría" visible={visible}>
+      {roots.map((root) => {
+        const children = categories.filter((category) => category.parentId === root.id);
+        return (
+          <View key={root.id} style={styles.pickerGroup}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                onSelect(root.id);
+              }}
+              style={styles.pickerRootRow}
+            >
+              <View style={[styles.pickerAvatar, { backgroundColor: `${root.color}26` }]}>
+                <Text style={[styles.pickerAvatarText, { color: root.color }]}>
+                  {root.name.charAt(0).toUpperCase()}
+                </Text>
               </View>
-            );
-          })}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+              <Text style={[m1TextStyles.body, styles.pickerRootName]}>{root.name}</Text>
+              {selectedCategoryId === root.id ? (
+                <Ionicons color={themeTokens.colors.primary} name="checkmark" size={18} />
+              ) : null}
+            </Pressable>
+            {children.length > 0 ? (
+              <View style={styles.chipRow}>
+                {children.map((child) => (
+                  <Chip
+                    key={child.id}
+                    label={child.name}
+                    onPress={() => {
+                      onSelect(child.id);
+                    }}
+                    selected={selectedCategoryId === child.id}
+                  />
+                ))}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </AppBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: themeTokens.colors.background,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -831,10 +809,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.secondary,
     textAlign: 'center',
-  },
-  pickerList: {
-    gap: themeTokens.spacing.cardGap,
-    padding: themeTokens.spacing.screen,
   },
   pickerGroup: {
     gap: 8,

@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -54,16 +55,21 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider statusBarTranslucent>
         <SafeAreaProvider>
-          <Head>
-            <title>Nido</title>
-            <meta content="Finanzas del hogar para dos" name="description" />
-          </Head>
-          <StatusBar style="dark" />
-          <SessionProvider>
-            <SyncQueueProvider>
-              <SessionStack />
-            </SyncQueueProvider>
-          </SessionProvider>
+          {/* Hosts every `AppBottomSheet`; it must sit inside the safe-area and
+              gesture providers the sheets read from, and above the screens that
+              present them. */}
+          <BottomSheetModalProvider>
+            <Head>
+              <title>Nido</title>
+              <meta content="Finanzas del hogar para dos" name="description" />
+            </Head>
+            <StatusBar style="dark" />
+            <SessionProvider>
+              <SyncQueueProvider>
+                <SessionStack />
+              </SyncQueueProvider>
+            </SessionProvider>
+          </BottomSheetModalProvider>
         </SafeAreaProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>
