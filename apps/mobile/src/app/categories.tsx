@@ -7,12 +7,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
   ActionButton,
+  AppFormScreen,
   AppScreen,
   Card,
   FormField,
+  FormHeader,
   InlineNotice,
   LoadingContent,
-  PageHeader,
   m1TextStyles,
 } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
@@ -57,21 +58,34 @@ export default function CategoriesScreen() {
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [newSubcategory, setNewSubcategory] = useState<NewSubcategoryDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [formError, setFormError] = useState<string>();
 
-  const load = useCallback(async () => {
-    if (household === null) return;
-    setLoadState({ kind: 'loading' });
-    try {
-      const { categories } = await catalog.listCategories(household.id);
-      setLoadState({ kind: 'loaded', categories });
-    } catch (error) {
-      setLoadState({ kind: 'error', message: messageForActionError(error) });
-    }
-  }, [catalog, household]);
+  const load = useCallback(
+    async (silent = false) => {
+      if (household === null) return;
+      if (!silent) setLoadState({ kind: 'loading' });
+      try {
+        const { categories } = await catalog.listCategories(household.id);
+        setLoadState({ kind: 'loaded', categories });
+      } catch (error) {
+        setLoadState({ kind: 'error', message: messageForActionError(error) });
+      }
+    },
+    [catalog, household],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void load());
+  }, [load]);
+
+  // Pull-to-refresh refetches silently so the visible accordion isn't swapped for
+  // the full-screen spinner mid-pull — the RefreshControl is the only progress cue.
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void load(true).finally(() => {
+      setRefreshing(false);
+    });
   }, [load]);
 
   if (household === null) {
@@ -169,75 +183,14 @@ export default function CategoriesScreen() {
     }
   }
 
-  return (
-    <AppScreen>
-      <ActionButton
-        label="Volver"
-        onPress={() => {
-          router.back();
-        }}
-        variant="secondary"
-      />
-      <PageHeader description="7 raíces fijas · subcategorías del hogar" title="Categorías" />
-
-      {loadState.kind === 'loading' ? <LoadingContent label="Cargando categorías…" /> : null}
-      {loadState.kind === 'error' ? (
-        <>
-          <InlineNotice tone="error">{loadState.message}</InlineNotice>
-          <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
-        </>
-      ) : null}
-
-      {editDraft === null ? null : (
-        <Card>
-          <Text style={m1TextStyles.sectionTitle}>Editar subcategoría</Text>
-          <FormField
-            label="Nombre"
-            maxLength={100}
-            onChangeText={(name) => {
-              setEditDraft({ ...editDraft, name });
-            }}
-            value={editDraft.name}
-          />
-          <FormField
-            label="Ícono"
-            maxLength={50}
-            onChangeText={(icon) => {
-              setEditDraft({ ...editDraft, icon });
-            }}
-            value={editDraft.icon}
-          />
-          <FormField
-            autoCapitalize="characters"
-            label="Color hexadecimal"
-            maxLength={7}
-            onChangeText={(color) => {
-              setEditDraft({ ...editDraft, color });
-            }}
-            value={editDraft.color}
-          />
-          <ChoiceRow
-            label="Raíz"
-            onSelect={(parentId) => {
-              setEditDraft({ ...editDraft, parentId });
-            }}
-            options={roots
-              .filter((root) => root.kind === editDraft.kind)
-              .map((root) => [root.id, root.name] as const)}
-            selected={editDraft.parentId}
-          />
-          <ChoiceRow
-            label="Estado"
-            onSelect={(isActive) => {
-              setEditDraft({ ...editDraft, isActive });
-            }}
-            options={[
-              [true, 'Activa'],
-              [false, 'Archivada'],
-            ]}
-            selected={editDraft.isActive}
-          />
-          {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+  // Both editors take over the whole screen instead of appearing as a card above
+  // the accordion: it is the only way their "Guardar" CTA can ride the keyboard
+  // rather than sit buried under it, and it is the shape this content will keep
+  // when it becomes a bottom sheet.
+  if (editDraft !== null) {
+    return (
+      <AppFormScreen
+        footer={
           <ActionButton
             disabled={
               editDraft.name.trim() === '' ||
@@ -248,52 +201,140 @@ export default function CategoriesScreen() {
             loading={saving}
             onPress={() => void saveEdit()}
           />
-          {editDraft.isActive ? (
-            <ActionButton
-              label="Archivar"
-              loading={saving}
-              onPress={() => void archiveEditing()}
-              variant="danger"
-            />
-          ) : null}
-          <ActionButton
-            label="Cancelar"
-            onPress={() => {
+        }
+        header={
+          <FormHeader
+            onDismiss={() => {
               setEditDraft(null);
+              setFormError(undefined);
             }}
-            variant="secondary"
+            title="Editar subcategoría"
           />
-        </Card>
-      )}
+        }
+      >
+        <FormField
+          label="Nombre"
+          maxLength={100}
+          onChangeText={(name) => {
+            setEditDraft({ ...editDraft, name });
+          }}
+          value={editDraft.name}
+        />
+        <FormField
+          label="Ícono"
+          maxLength={50}
+          onChangeText={(icon) => {
+            setEditDraft({ ...editDraft, icon });
+          }}
+          value={editDraft.icon}
+        />
+        <FormField
+          autoCapitalize="characters"
+          label="Color hexadecimal"
+          maxLength={7}
+          onChangeText={(color) => {
+            setEditDraft({ ...editDraft, color });
+          }}
+          value={editDraft.color}
+        />
+        <ChoiceRow
+          label="Raíz"
+          onSelect={(parentId) => {
+            setEditDraft({ ...editDraft, parentId });
+          }}
+          options={roots
+            .filter((root) => root.kind === editDraft.kind)
+            .map((root) => [root.id, root.name] as const)}
+          selected={editDraft.parentId}
+        />
+        <ChoiceRow
+          label="Estado"
+          onSelect={(isActive) => {
+            setEditDraft({ ...editDraft, isActive });
+          }}
+          options={[
+            [true, 'Activa'],
+            [false, 'Archivada'],
+          ]}
+          selected={editDraft.isActive}
+        />
+        {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+        {editDraft.isActive ? (
+          <ActionButton
+            label="Archivar"
+            loading={saving}
+            onPress={() => void archiveEditing()}
+            variant="danger"
+          />
+        ) : null}
+      </AppFormScreen>
+    );
+  }
 
-      {newSubcategory === null ? null : (
-        <Card>
-          <Text style={m1TextStyles.sectionTitle}>Nueva subcategoría</Text>
-          <FormField
-            autoFocus
-            label="Nombre"
-            maxLength={100}
-            onChangeText={(name) => {
-              setNewSubcategory({ ...newSubcategory, name });
-            }}
-            value={newSubcategory.name}
-          />
-          {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+  if (newSubcategory !== null) {
+    const parentRoot = roots.find((root) => root.id === newSubcategory.rootId);
+
+    return (
+      <AppFormScreen
+        footer={
           <ActionButton
             disabled={newSubcategory.name.trim() === ''}
             label="Guardar"
             loading={saving}
             onPress={() => void createSubcategory()}
           />
-          <ActionButton
-            label="Cancelar"
-            onPress={() => {
+        }
+        header={
+          // The accordion that showed which root this belongs to is off-screen
+          // now, so the header carries that context instead.
+          <FormHeader
+            onDismiss={() => {
               setNewSubcategory(null);
+              setFormError(undefined);
             }}
-            variant="secondary"
+            title="Nueva subcategoría"
+            {...(parentRoot === undefined ? {} : { subtitle: `Dentro de ${parentRoot.name}` })}
           />
-        </Card>
-      )}
+        }
+      >
+        <FormField
+          autoFocus
+          label="Nombre"
+          maxLength={100}
+          onChangeText={(name) => {
+            setNewSubcategory({ ...newSubcategory, name });
+          }}
+          onSubmitEditing={() => void createSubcategory()}
+          returnKeyType="done"
+          value={newSubcategory.name}
+        />
+        {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
+      </AppFormScreen>
+    );
+  }
+
+  return (
+    <AppScreen
+      header={
+        <FormHeader
+          dismissIcon="back"
+          onDismiss={() => {
+            router.back();
+          }}
+          subtitle="7 raíces fijas · subcategorías del hogar"
+          title="Categorías"
+        />
+      }
+      onRefresh={onRefresh}
+      refreshing={refreshing}
+    >
+      {loadState.kind === 'loading' ? <LoadingContent label="Cargando categorías…" /> : null}
+      {loadState.kind === 'error' ? (
+        <>
+          <InlineNotice tone="error">{loadState.message}</InlineNotice>
+          <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
+        </>
+      ) : null}
 
       {(['EXPENSE', 'INCOME'] as const).map((kind) => {
         const kindRoots = roots.filter((root) => root.kind === kind);

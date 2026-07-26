@@ -1,4 +1,6 @@
 import type { ComponentType, PropsWithChildren, ReactElement, ReactNode } from 'react';
+import { useCallback, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +13,7 @@ import {
   TextInput,
   View,
   type FlatListProps,
+  type LayoutChangeEvent,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
@@ -59,6 +62,12 @@ interface AppScreenProps extends PropsWithChildren {
   readonly centered?: boolean;
   readonly testID?: string;
   /**
+   * A fixed header rendered inside the safe area *above* the scroll — it never
+   * scrolls with the content. Same slot as `AppListScreen`/`AppFormScreen`, so a
+   * screen that swaps between browsing and editing keeps its header in place.
+   */
+  readonly header?: ReactNode;
+  /**
    * Renders a full-screen empty state (title + centered message card) instead
    * of `children`. Folds in the former standalone `EmptyTabScreen`.
    */
@@ -83,6 +92,7 @@ export function AppScreen({
   children,
   centered = false,
   testID,
+  header,
   empty,
   refreshing,
   onRefresh,
@@ -92,6 +102,7 @@ export function AppScreen({
 
   return (
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
+      {header}
       <ScreenScrollView
         bottomOffset={KEYBOARD_BOTTOM_OFFSET}
         contentContainerStyle={[
@@ -224,17 +235,48 @@ interface AppFormScreenProps extends PropsWithChildren {
 
 export function AppFormScreen({ children, testID, header, footer }: AppFormScreenProps) {
   const bottomInset = useScreenBottomInset();
+  const [footerHeight, setFooterHeight] = useState(0);
   const isNative = Platform.OS !== 'web';
+
+  const measureFooter = useCallback((event: LayoutChangeEvent) => {
+    setFooterHeight(event.nativeEvent.layout.height);
+  }, []);
+
+  /**
+   * How much of the scroll area the footer covers once it rides the keyboard:
+   * its full height minus the home-indicator padding, which the sticky offset
+   * pulls back down behind the keys. The scroll view has to know this — the
+   * footer is drawn over the band the keyboard-aware scrolling treats as free
+   * space, so without it a field near the end of the form lands underneath the
+   * bar with no way to scroll further.
+   */
+  const footerOverlap = Math.max(0, footerHeight - bottomInset);
+
+  // The safe-area inset is *added* to the bar's own padding rather than serving
+  // as it: on a device with hardware/gesture buttons `bottomInset` can be small
+  // or zero, which would leave the button flush against the screen edge. This
+  // keeps the bar symmetric (same breathing room above and below the button)
+  // and still clears the home indicator where there is one.
   const footerBar = (
-    <View style={[styles.formFooter, { paddingBottom: bottomInset }]}>{footer}</View>
+    <View
+      onLayout={measureFooter}
+      style={[styles.formFooter, { paddingBottom: themeTokens.spacing.cardGap + bottomInset }]}
+    >
+      {footer}
+    </View>
   );
 
   return (
     <SafeAreaView edges={SCREEN_EDGES} style={styles.safeArea} testID={testID}>
       {header}
       <ScreenScrollView
-        bottomOffset={KEYBOARD_BOTTOM_OFFSET}
+        // `bottomOffset` is the gap between the keyboard and the focused caret,
+        // so it has to clear the footer as well; `extraKeyboardSpace` adds the
+        // matching scroll travel (it interpolates with the keyboard, so it costs
+        // nothing while the keyboard is closed).
+        bottomOffset={footerOverlap + KEYBOARD_BOTTOM_OFFSET}
         contentContainerStyle={styles.screenContent}
+        extraKeyboardSpace={footerOverlap}
         keyboardShouldPersistTaps="handled"
         style={styles.formScroll}
       >
@@ -243,8 +285,9 @@ export function AppFormScreen({ children, testID, header, footer }: AppFormScree
 
       {isNative ? (
         // Rides the keyboard to sit just above the keys. `opened: bottomInset`
-        // pulls the bar's home-indicator padding down behind the keyboard so the
-        // button hugs the keys instead of floating a safe-area gap above them.
+        // pulls only the home-indicator share of the bar's padding down behind
+        // the keyboard — the bar's own padding stays, so the button keeps the
+        // same breathing room over the keys that it has over the screen edge.
         <KeyboardStickyView offset={{ closed: 0, opened: bottomInset }}>
           {footerBar}
         </KeyboardStickyView>
@@ -278,6 +321,79 @@ export function ScreenHeader({ title, description, eyebrow }: ScreenHeaderProps)
  * `PageHeader` keep working; new code should use `ScreenHeader`.
  */
 export const PageHeader = ScreenHeader;
+
+/**
+ * Diameter of the header's circular icon button. Matches the hand-rolled headers
+ * shipped with the amount-entry forms so the pending retrofit of those screens is
+ * a pure deduplication with no visual change.
+ */
+const FORM_HEADER_BUTTON_SIZE = 40;
+
+const DISMISS_AFFORDANCES = {
+  close: { icon: 'close', label: 'Cerrar' },
+  back: { icon: 'chevron-back', label: 'Volver' },
+} as const;
+
+interface FormHeaderProps {
+  readonly title: string;
+  readonly subtitle?: string;
+  /**
+   * Escape affordance rendered left of the title, and the reason this exists as
+   * a *fixed* header: it stays reachable while the keyboard is up. Omit it on a
+   * screen with nowhere to go back to (a root screen).
+   */
+  readonly onDismiss?: () => void;
+  /**
+   * `close` (×) reads as "leave this editor" and suits a screen that took over
+   * to edit something; `back` (chevron) reads as "return to where I came from"
+   * and suits a pushed route.
+   */
+  readonly dismissIcon?: keyof typeof DISMISS_AFFORDANCES;
+  /**
+   * Trailing slot for a control that must stay reachable while typing (a
+   * currency toggle, a delete action).
+   */
+  readonly trailing?: ReactNode;
+}
+
+/**
+ * The fixed header for `AppFormScreen` (and for `AppScreen` when a screen needs
+ * the same pinned title/back row): dismiss affordance, title, optional subtitle,
+ * optional trailing control. Replaces the per-screen `headerRow`/`closeButton`
+ * style blocks each form used to hand-roll.
+ */
+export function FormHeader({
+  title,
+  subtitle,
+  onDismiss,
+  dismissIcon = 'close',
+  trailing,
+}: FormHeaderProps) {
+  const dismiss = DISMISS_AFFORDANCES[dismissIcon];
+
+  return (
+    <View style={styles.formHeader}>
+      {onDismiss === undefined ? null : (
+        <Pressable
+          accessibilityLabel={dismiss.label}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onDismiss}
+          style={({ pressed }) => [styles.formHeaderButton, pressed && styles.pressedButton]}
+        >
+          <Ionicons color={themeTokens.colors.ink} name={dismiss.icon} size={20} />
+        </Pressable>
+      )}
+      <View style={styles.formHeaderCopy}>
+        <Text accessibilityRole="header" style={styles.formHeaderTitle}>
+          {title}
+        </Text>
+        {subtitle === undefined ? null : <Text style={m1TextStyles.secondary}>{subtitle}</Text>}
+      </View>
+      {trailing}
+    </View>
+  );
+}
 
 /** The former standalone `EmptyTabScreen`, folded into `AppScreen`'s `empty` prop. */
 function EmptyState({ title, message }: EmptyStateContent) {
@@ -558,6 +674,31 @@ const styles = StyleSheet.create({
   },
   centeredContent: {
     justifyContent: 'center',
+  },
+  formHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: themeTokens.spacing.cardGap,
+    paddingHorizontal: themeTokens.spacing.screen,
+    paddingTop: themeTokens.spacing.base,
+    paddingBottom: themeTokens.spacing.cardGap,
+  },
+  formHeaderButton: {
+    width: FORM_HEADER_BUTTON_SIZE,
+    height: FORM_HEADER_BUTTON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: FORM_HEADER_BUTTON_SIZE / 2,
+    backgroundColor: themeTokens.colors.surface,
+  },
+  formHeaderCopy: {
+    flex: 1,
+  },
+  formHeaderTitle: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.displaySemibold,
+    fontSize: themeTokens.typography.scale.screenTitle,
+    lineHeight: 26,
   },
   formFooter: {
     gap: themeTokens.spacing.cardGap,
