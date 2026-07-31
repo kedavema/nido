@@ -25,8 +25,8 @@ import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { themeTokens } from '@/theme/tokens';
 
 /** MAS-01's "CONFIGURACIÓN FINANCIERA" only lists rows that map to a real, working screen today —
- * Informes / Importar movimientos / Moneda y tipo de cambio / Dispositivos y notificaciones are
- * future milestones, so a dead-end row would be worse than omitting them. */
+ * Importar movimientos / Moneda y tipo de cambio / Dispositivos y notificaciones are future
+ * milestones, so a dead-end row would be worse than omitting them. */
 type PaymentSourceNamesState =
   { readonly kind: 'loading' } | { readonly kind: 'loaded'; readonly names: readonly string[] };
 
@@ -260,10 +260,10 @@ export default function MasScreen() {
         <ConfigRow
           isFirst
           onPress={() => {
-            router.push('/categories');
+            router.push('/informes');
           }}
-          subtitle="7 raíces fijas · subcategorías editables"
-          title="Categorías y subcategorías"
+          subtitle="Categorías, presupuesto, ingresos y medios"
+          title="Informes"
         />
         <ConfigRow
           onPress={() => {
@@ -271,6 +271,13 @@ export default function MasScreen() {
           }}
           subtitle={paymentSourcesSubtitle}
           title="Medios de pago"
+        />
+        <ConfigRow
+          onPress={() => {
+            router.push('/categories');
+          }}
+          subtitle="7 raíces fijas · subcategorías editables"
+          title="Categorías y subcategorías"
         />
       </Card>
 
@@ -345,8 +352,7 @@ export default function MasScreen() {
 }
 
 /** A "CONFIGURACIÓN DEL HOGAR"-style tappable row: title + subtitle + trailing chevron. Only used
- * for rows that map to a real, working screen (see the module-level comment on why the reference's
- * Informes/Importar/Moneda/Dispositivos rows are intentionally omitted). */
+ * for rows that map to a real, working screen (see the module-level comment for omitted rows). */
 function ConfigRow({
   title,
   subtitle,
