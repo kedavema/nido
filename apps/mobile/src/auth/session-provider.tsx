@@ -55,6 +55,9 @@ interface SessionContextValue {
     | 'updateTransaction'
     | 'deleteTransaction'
     | 'getMonthlySummary'
+    | 'getBudgetMonth'
+    | 'upsertBudgetMonth'
+    | 'copyBudgetMonth'
     | 'listRecurringItems'
     | 'createRecurringItem'
     | 'updateRecurringItem'
@@ -431,6 +434,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
       deleteTransaction: (householdId, transactionId) =>
         api().deleteTransaction(householdId, transactionId),
       getMonthlySummary: (householdId, query) => api().getMonthlySummary(householdId, query),
+      getBudgetMonth: (householdId, month) => api().getBudgetMonth(householdId, month),
+      upsertBudgetMonth: (householdId, month, input) =>
+        api().upsertBudgetMonth(householdId, month, input),
+      copyBudgetMonth: (householdId, month, input) =>
+        api().copyBudgetMonth(householdId, month, input),
       listRecurringItems: (householdId) => api().listRecurringItems(householdId),
       createRecurringItem: (householdId, input) => api().createRecurringItem(householdId, input),
       updateRecurringItem: (householdId, recurringItemId, input) =>

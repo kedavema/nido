@@ -380,6 +380,91 @@ describe('Nido API client', () => {
     );
   });
 
+  it('reads, replaces, and copies monthly budgets with validated decimal-string payloads', async () => {
+    const householdId = '00000000-0000-4000-8000-000000000011';
+    const budgetMonth = {
+      id: '00000000-0000-4000-8000-000000000030',
+      householdId,
+      month: '2026-07',
+      totalLimitPyg: '15000000',
+      allocations: [
+        {
+          categoryId: '00000000-0000-4000-8000-000000000020',
+          amountPyg: '3410000',
+        },
+      ],
+      unallocatedPyg: '11590000',
+      copiedFromId: null,
+    };
+    const fetchImplementation = vi
+      .fn<FetchImplementation>()
+      .mockResolvedValueOnce(jsonResponse({ budgetMonth: null }))
+      .mockResolvedValueOnce(jsonResponse({ budgetMonth }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          budgetMonth: {
+            ...budgetMonth,
+            id: '00000000-0000-4000-8000-000000000031',
+            month: '2026-08',
+            copiedFromId: budgetMonth.id,
+          },
+        }),
+      );
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    await expect(client.getBudgetMonth(householdId, '2026-07')).resolves.toEqual({
+      budgetMonth: null,
+    });
+    await expect(
+      client.upsertBudgetMonth(householdId, '2026-07', {
+        totalLimitPyg: budgetMonth.totalLimitPyg,
+        allocations: budgetMonth.allocations,
+      }),
+    ).resolves.toEqual({ budgetMonth });
+    await expect(
+      client.copyBudgetMonth(householdId, '2026-08', { sourceMonth: '2026-07' }),
+    ).resolves.toMatchObject({ budgetMonth: { month: '2026-08', copiedFromId: budgetMonth.id } });
+
+    const basePath = `https://api.example.com/v1/households/${householdId}/budgets`;
+    expect(fetchImplementation.mock.calls[0]?.[0]).toBe(`${basePath}/2026-07`);
+    expect(fetchImplementation.mock.calls[1]).toEqual([
+      `${basePath}/2026-07`,
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          totalLimitPyg: budgetMonth.totalLimitPyg,
+          allocations: budgetMonth.allocations,
+        }),
+      }),
+    ]);
+    expect(fetchImplementation.mock.calls[2]).toEqual([
+      `${basePath}/2026-08/copy`,
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ sourceMonth: '2026-07' }) }),
+    ]);
+  });
+
+  it('rejects invalid budget months and amounts before making a request', () => {
+    const fetchImplementation = vi.fn<FetchImplementation>();
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    expect(() => client.getBudgetMonth('household', '2026-7')).toThrow();
+    expect(() =>
+      client.upsertBudgetMonth('household', '2026-07', {
+        totalLimitPyg: '-1',
+        allocations: [],
+      }),
+    ).toThrow();
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid monthly-summary query client-side, without making a request', () => {
     const fetchImplementation = vi.fn<FetchImplementation>();
     const client = createNidoApiClient({
