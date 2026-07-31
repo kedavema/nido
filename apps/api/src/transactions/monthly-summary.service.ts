@@ -68,6 +68,9 @@ export class MonthlySummaryService {
       expenseTotal: totals.expense.toFixed(0),
       categoryBreakdown,
       recentTransactions: recentTransactions.map(toTransaction),
+      // M6 fills this block after the budget repository and projection queries land. Keeping the
+      // field explicit now makes the contract evolution atomic for API and mobile consumers.
+      budget: null,
     };
   }
 }

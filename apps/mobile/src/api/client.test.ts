@@ -361,6 +361,7 @@ describe('Nido API client', () => {
         },
       ],
       recentTransactions: [],
+      budget: null,
     };
     const fetchImplementation = vi.fn<FetchImplementation>(() =>
       Promise.resolve(jsonResponse(summary)),

@@ -108,13 +108,13 @@ model User {
 }
 
 model Household {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name            String
-  baseCurrency    String   @default("PYG") @map("base_currency") @db.Char(3)
-  timezone        String   @default("America/Asuncion")
-  createdByUserId String   @map("created_by") @db.Uuid
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  baseCurrency    String    @default("PYG") @map("base_currency") @db.Char(3)
+  timezone        String    @default("America/Asuncion")
+  createdByUserId String    @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   // Local calendar day (America/Asuncion) the lazy-on-read occurrence sweep last ran for this
   // household (ADR 0009 point 3). Null until the first sweep. The sweep only runs when this is
   // not today, so it fires at most once per household per day — "la primera apertura autenticada
@@ -128,6 +128,7 @@ model Household {
   transactions   Transaction[]
   recurringItems RecurringItem[]
   occurrences    Occurrence[]
+  budgetMonths   BudgetMonth[]
 
   @@index([createdByUserId], map: "households_created_by_idx")
   @@map("households")
@@ -200,11 +201,12 @@ model Category {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  household      Household       @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  parent         Category?       @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  children       Category[]      @relation("CategoryHierarchy")
-  transactions   Transaction[]
-  recurringItems RecurringItem[]
+  household         Household          @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  parent            Category?          @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children          Category[]         @relation("CategoryHierarchy")
+  transactions      Transaction[]
+  recurringItems    RecurringItem[]
+  budgetAllocations BudgetAllocation[]
 
   // DB-level rules added by hand in the migration (Prisma cannot express them):
   // - categories_active_sibling_name_key: partial unique index (household_id, kind, parent_id, name)
@@ -337,4 +339,38 @@ model Occurrence {
   @@index([householdId, dueDate], map: "occurrences_household_id_due_date_idx")
   @@index([householdId, status], map: "occurrences_household_id_status_idx")
   @@map("occurrences")
+}
+
+// A budget month stores only the user-authored limit and root-category allocations. Actual,
+// pending, and projected values are derived from transactions/occurrences at read time.
+model BudgetMonth {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId   String   @map("household_id") @db.Uuid
+  month         DateTime @db.Date
+  totalLimitPyg Decimal  @map("total_limit_pyg") @db.Decimal(18, 0)
+  copiedFromId  String?  @map("copied_from_id") @db.Uuid
+
+  household   Household          @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  copiedFrom  BudgetMonth?       @relation("BudgetMonthCopy", fields: [copiedFromId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  copies      BudgetMonth[]      @relation("BudgetMonthCopy")
+  allocations BudgetAllocation[]
+
+  @@unique([householdId, month], map: "budget_months_household_id_month_key")
+  @@index([copiedFromId], map: "budget_months_copied_from_id_idx")
+  @@map("budget_months")
+}
+
+// Allocations deliberately use a composite primary key: a category can occur only once per
+// budget month, and the pair is the stable identity needed by PUT replacement semantics.
+model BudgetAllocation {
+  budgetMonthId String  @map("budget_month_id") @db.Uuid
+  categoryId    String  @map("category_id") @db.Uuid
+  amountPyg     Decimal @map("amount_pyg") @db.Decimal(18, 0)
+
+  budgetMonth BudgetMonth @relation(fields: [budgetMonthId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  category    Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([budgetMonthId, categoryId], map: "budget_allocations_pkey")
+  @@index([categoryId], map: "budget_allocations_category_id_idx")
+  @@map("budget_allocations")
 }

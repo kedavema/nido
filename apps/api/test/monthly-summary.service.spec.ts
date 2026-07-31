@@ -116,6 +116,7 @@ describe('MonthlySummaryService — empty month', () => {
       expenseTotal: '0',
       categoryBreakdown: [],
       recentTransactions: [],
+      budget: null,
     });
   });
 });
