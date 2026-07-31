@@ -1,5 +1,8 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import {
+  CategoryBreakdownReportResponse,
+  ReportMonthQuery,
+  ReportMonthQuerySchema,
   MonthlySummaryQuerySchema,
   type MonthlySummaryQuery,
   type MonthlySummaryResponse,
@@ -12,6 +15,7 @@ import type { HouseholdAccess } from '../households/household.js';
 import { HouseholdMembershipGuard } from '../households/household-membership.guard.js';
 import { RequireHouseholdRoles } from '../households/required-household-roles.decorator.js';
 import { MonthlySummaryService } from './monthly-summary.service.js';
+import { CategoryBreakdownReportService } from './category-breakdown-report.service.js';
 
 // Dedicated `reports` sub-path (docs/system-design.md §12), distinct from the `transactions`
 // resource controller: `reports/monthly-summary` is a read-only aggregate view, not a movement,
@@ -21,7 +25,10 @@ import { MonthlySummaryService } from './monthly-summary.service.js';
 @RequireHouseholdRoles('OWNER', 'MEMBER')
 @Controller('households/:householdId/reports')
 export class ReportsController {
-  constructor(private readonly monthlySummary: MonthlySummaryService) {}
+  constructor(
+    private readonly monthlySummary: MonthlySummaryService,
+    private readonly categoryBreakdown: CategoryBreakdownReportService,
+  ) {}
 
   @Get('monthly-summary')
   getMonthlySummary(
@@ -29,5 +36,13 @@ export class ReportsController {
     @Query(new ZodValidationPipe(MonthlySummaryQuerySchema)) query: MonthlySummaryQuery,
   ): Promise<MonthlySummaryResponse> {
     return this.monthlySummary.getMonthlySummary(access, query);
+  }
+
+  @Get('category-breakdown')
+  getCategoryBreakdown(
+    @CurrentHouseholdAccess() access: HouseholdAccess,
+    @Query(new ZodValidationPipe(ReportMonthQuerySchema)) query: ReportMonthQuery,
+  ): Promise<CategoryBreakdownReportResponse> {
+    return this.categoryBreakdown.getReport(access, query);
   }
 }

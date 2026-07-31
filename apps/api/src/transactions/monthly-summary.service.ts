@@ -14,12 +14,12 @@ import { BudgetSummaryService } from '../budgets/budget-summary.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { HouseholdAccess } from '../households/household.js';
 import { deriveMonthLocalDateRange } from './local-date.js';
+import { reportPercentage } from './report-math.js';
 import type { CategoryExpenseTotal } from './transaction.js';
 import { TRANSACTIONS_REPOSITORY, type TransactionsRepository } from './transactions.repository.js';
 import { toTransaction } from './transactions.service.js';
 
 const RECENT_TRANSACTIONS_LIMIT = 4;
-const PERCENTAGE_DECIMAL_PLACES = 2;
 
 /**
  * Dashboard monthly summary (docs/system-design.md §6.8, ADR 0007): balance, income/expense
@@ -62,7 +62,7 @@ export class MonthlySummaryService {
         categoryId: root.categoryId,
         categoryName: root.categoryName,
         amount: root.amount.toFixed(0),
-        percentage: computePercentage(root.amount, totals.expense),
+        percentage: reportPercentage(root.amount, totals.expense),
       }),
     );
 
@@ -120,20 +120,4 @@ function attributeToRootCategories(
   }
 
   return [...rootTotals.values()].sort((a, b) => b.amount.comparedTo(a.amount));
-}
-
-/**
- * `amount` as a percentage of `expenseTotal`, rounded half-up to 2 decimal places. `expenseTotal`
- * is only zero when `amount` is too (no expense rows exist without a total to belong to), so that
- * case returns `0` rather than dividing by zero.
- */
-function computePercentage(amount: Prisma.Decimal, expenseTotal: Prisma.Decimal): number {
-  if (expenseTotal.isZero()) {
-    return 0;
-  }
-  return amount
-    .dividedBy(expenseTotal)
-    .times(100)
-    .toDecimalPlaces(PERCENTAGE_DECIMAL_PLACES, Prisma.Decimal.ROUND_HALF_UP)
-    .toNumber();
 }
