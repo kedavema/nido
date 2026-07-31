@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import { DayOfMonthPicker, LocalDatePicker } from '@/components/date-picker';
 import {
   ActionButton,
   AppFormScreen,
@@ -22,6 +23,7 @@ import {
 } from '@/components/m1-ui';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
+import { monthlyFirstDueDate } from '@/utils/date-picker';
 import {
   amountToWireDecimal,
   formatAmountDisplay,
@@ -61,26 +63,6 @@ type ScreenState =
       readonly members: readonly HouseholdMember[];
     };
 
-function pad2(value: number): string {
-  return value.toString().padStart(2, '0');
-}
-
-/** First due date for a day-of-month recurrence: this month if the day hasn't passed, else next. */
-function monthlyFirstDueDate(day: number, todayLocal: string): string {
-  const [year = 1970, month = 1, today = 1] = todayLocal.split('-').map(Number);
-  const clampedDay = Math.min(Math.max(day, 1), 28);
-  let targetYear = year;
-  let targetMonth = month;
-  if (clampedDay < today) {
-    targetMonth += 1;
-    if (targetMonth > 12) {
-      targetMonth = 1;
-      targetYear += 1;
-    }
-  }
-  return `${targetYear.toString()}-${pad2(targetMonth)}-${pad2(clampedDay)}`;
-}
-
 /** The first active INCOME root category — the default `categoryId` auto-assigned to a new income. */
 function firstIncomeRootCategory(categories: readonly Category[]): Category | undefined {
   return categories.find(
@@ -98,7 +80,7 @@ function buildDraft(item: RecurringItem | null, todayLocal: string): Draft {
       // the sensible default — matching the "Una vez" chip pre-selected in the ING-02 reference.
       frequency: 'ONE_TIME',
       intervalMonths: 2,
-      dayOfMonth: Math.min(today, 28),
+      dayOfMonth: Math.min(today, 31),
       firstDueDate: todayLocal,
       responsibleUserId: null,
     };
@@ -368,26 +350,23 @@ export default function NuevoIngresoScreen() {
 
       <Field label="Fecha esperada">
         {usesDayOfMonth ? (
-          <Stepper
-            label="El día"
-            onDecrement={() => {
-              update({ dayOfMonth: Math.max(1, draft.dayOfMonth - 1) });
+          <DayOfMonthPicker
+            accessibilityLabel="Fecha esperada"
+            error={showValidation && !dateValid}
+            onChange={(dayOfMonth) => {
+              update({ dayOfMonth });
             }}
-            onIncrement={() => {
-              update({ dayOfMonth: Math.min(28, draft.dayOfMonth + 1) });
-            }}
-            unit="de cada mes"
+            testID="nuevo-ingreso-day-of-month"
             value={draft.dayOfMonth}
           />
         ) : (
-          <TextInput
-            accessibilityLabel="Fecha esperada (aaaa-mm-dd)"
-            onChangeText={(firstDueDate) => {
+          <LocalDatePicker
+            accessibilityLabel="Fecha esperada"
+            error={showValidation && !dateValid}
+            onChange={(firstDueDate) => {
               update({ firstDueDate });
             }}
-            placeholder="2026-07-28"
-            placeholderTextColor={themeTokens.colors.inkSecondary}
-            style={[styles.input, showValidation && !dateValid && styles.inputError]}
+            testID="nuevo-ingreso-date"
             value={draft.firstDueDate}
           />
         )}
