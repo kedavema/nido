@@ -6,6 +6,7 @@ import { CategoriesModule } from '../categories/categories.module.js';
 import { HouseholdsModule } from '../households/households.module.js';
 import { PaymentSourcesModule } from '../payment-sources/payment-sources.module.js';
 import { MonthlySummaryService } from './monthly-summary.service.js';
+import { CategoryBreakdownReportService } from './category-breakdown-report.service.js';
 import { PrismaTransactionsRepository } from './prisma-transactions.repository.js';
 import { ReportsController } from './reports.controller.js';
 import { TRANSACTIONS_REPOSITORY } from './transactions.repository.js';
@@ -18,6 +19,7 @@ import { TransactionsService } from './transactions.service.js';
   providers: [
     TransactionsService,
     MonthlySummaryService,
+    CategoryBreakdownReportService,
     PrismaTransactionsRepository,
     { provide: TRANSACTIONS_REPOSITORY, useExisting: PrismaTransactionsRepository },
   ],
