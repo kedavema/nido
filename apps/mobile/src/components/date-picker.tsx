@@ -19,6 +19,20 @@ import {
 } from '@/utils/date-picker';
 
 const CALENDAR_COLUMN_WIDTH = '14.285714285714285%' as const;
+const MONTH_OPTIONS = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+] as const;
 
 interface PickerTriggerProps {
   readonly accessibilityLabel: string;
@@ -111,6 +125,99 @@ export function DayOfMonthPicker({
                 >
                   <Text style={[styles.dayButtonText, selected && styles.dayButtonTextSelected]}>
                     {day.toString()}
+                  </Text>
+                </PressableScale>
+              </View>
+            );
+          })}
+        </View>
+      </AppBottomSheet>
+    </>
+  );
+}
+
+interface MonthPickerProps {
+  readonly accessibilityLabel?: string;
+  readonly onChange: (month: CalendarMonth) => void;
+  readonly testID?: string;
+  readonly value: CalendarMonth;
+}
+
+/** Controlled month picker for reports and other month-scoped views. */
+export function MonthPicker({
+  accessibilityLabel = 'Mes',
+  onChange,
+  testID,
+  value,
+}: MonthPickerProps) {
+  const [visible, setVisible] = useState(false);
+  const [displayYear, setDisplayYear] = useState(value.year);
+
+  function open(): void {
+    setDisplayYear(value.year);
+    setVisible(true);
+  }
+
+  return (
+    <>
+      <PickerTrigger
+        accessibilityLabel={`${accessibilityLabel}: ${formatCalendarMonthLabel(value)}`}
+        expanded={visible}
+        label={formatCalendarMonthLabel(value)}
+        onPress={open}
+        testID={testID}
+      />
+      <AppBottomSheet
+        onClose={() => {
+          setVisible(false);
+        }}
+        title="Elegir mes"
+        visible={visible}
+      >
+        <View style={styles.monthNavigation}>
+          <PressableScale
+            accessibilityLabel="Año anterior"
+            haptic
+            onPress={() => {
+              setDisplayYear((year) => year - 1);
+            }}
+            style={styles.monthNavigationButton}
+          >
+            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={20} />
+          </PressableScale>
+          <Text accessibilityRole="header" style={styles.monthLabel}>
+            {displayYear.toString()}
+          </Text>
+          <PressableScale
+            accessibilityLabel="Año siguiente"
+            haptic
+            onPress={() => {
+              setDisplayYear((year) => year + 1);
+            }}
+            style={styles.monthNavigationButton}
+          >
+            <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={20} />
+          </PressableScale>
+        </View>
+        <View style={styles.monthGrid}>
+          {MONTH_OPTIONS.map((label, index) => {
+            const month = index + 1;
+            const selected = value.year === displayYear && value.month === month;
+            return (
+              <View key={label} style={styles.monthCell}>
+                <PressableScale
+                  accessibilityLabel={`${label} ${displayYear.toString()}`}
+                  accessibilityState={{ selected }}
+                  haptic
+                  onPress={() => {
+                    onChange({ year: displayYear, month });
+                    setVisible(false);
+                  }}
+                  style={[styles.monthButton, selected && styles.dayButtonSelected]}
+                  testID={testID === undefined ? undefined : `${testID}-option-${month.toString()}`}
+                >
+                  <Text style={[styles.monthButtonText, selected && styles.dayButtonTextSelected]}>
+                    {label}
                   </Text>
                 </PressableScale>
               </View>
@@ -296,6 +403,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: themeTokens.radii.button,
     backgroundColor: themeTokens.colors.surfaceMuted,
+  },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  monthCell: { width: '33.333333333333336%', padding: 4 },
+  monthButton: {
+    minHeight: themeTokens.touchTarget.minimum,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: themeTokens.radii.button,
+    backgroundColor: themeTokens.colors.surfaceMuted,
+    paddingHorizontal: 4,
+  },
+  monthButtonText: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
   },
   monthLabel: {
     color: themeTokens.colors.ink,
