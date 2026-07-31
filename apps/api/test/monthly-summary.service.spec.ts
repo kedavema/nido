@@ -122,6 +122,27 @@ describe('MonthlySummaryService — empty month', () => {
       budget: null,
     });
   });
+
+  it('includes the server-computed budget block for a configured month', async () => {
+    const budget = {
+      totalLimitPyg: '1000000',
+      allocatedPyg: '400000',
+      unallocatedPyg: '600000',
+      spentPyg: '350000',
+      availablePyg: '650000',
+      pendingCommitmentsPyg: '200000',
+      projectedAvailablePyg: '450000',
+      spentPercentage: 35,
+      projectedPercentage: 55,
+    } as const;
+    const getBudgetSummary = vi.fn(() => Promise.resolve(budget));
+    const service = createService({ budgetSummaryService: { getBudgetSummary } });
+
+    const response = await service.getMonthlySummary(access, { month: '2026-07' });
+
+    expect(response.budget).toEqual(budget);
+    expect(getBudgetSummary).toHaveBeenCalledWith(access.householdId, '2026-07');
+  });
 });
 
 describe('MonthlySummaryService — balance', () => {
