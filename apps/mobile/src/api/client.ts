@@ -2,6 +2,7 @@ import {
   AcceptHouseholdInviteResponseSchema,
   CopyBudgetMonthRequestSchema,
   CopyBudgetMonthResponseSchema,
+  CategoryBreakdownReportResponseSchema,
   CreateCategoryRequestSchema,
   CreateCategoryResponseSchema,
   CreateHouseholdInviteRequestSchema,
@@ -28,6 +29,7 @@ import {
   MonthSchema,
   MonthlySummaryQuerySchema,
   MonthlySummaryResponseSchema,
+  ReportMonthQuerySchema,
   SettleOccurrenceRequestSchema,
   SettleOccurrenceResponseSchema,
   UpsertBudgetMonthRequestSchema,
@@ -40,9 +42,11 @@ import {
   UpdateRecurringItemResponseSchema,
   UpdateTransactionRequestSchema,
   UpdateTransactionResponseSchema,
+  TrendsReportResponseSchema,
   type AcceptHouseholdInviteResponse,
   type CopyBudgetMonthRequest,
   type CopyBudgetMonthResponse,
+  type CategoryBreakdownReportResponse,
   type CreateCategoryRequest,
   type CreateCategoryResponse,
   type CreateHouseholdInviteResponse,
@@ -65,6 +69,7 @@ import {
   type ListTransactionsResponse,
   type MonthlySummaryQuery,
   type MonthlySummaryResponse,
+  type ReportMonthQuery,
   type SettleOccurrenceRequest,
   type SettleOccurrenceResponse,
   type UpsertBudgetMonthRequest,
@@ -77,6 +82,7 @@ import {
   type UpdateRecurringItemResponse,
   type UpdateTransactionRequest,
   type UpdateTransactionResponse,
+  type TrendsReportResponse,
 } from '@nido/contracts';
 import { z } from 'zod';
 
@@ -241,6 +247,11 @@ export interface NidoApiClient {
     householdId: string,
     query: MonthlySummaryQuery,
   ): Promise<MonthlySummaryResponse>;
+  getCategoryBreakdownReport(
+    householdId: string,
+    query: ReportMonthQuery,
+  ): Promise<CategoryBreakdownReportResponse>;
+  getTrendsReport(householdId: string, query: ReportMonthQuery): Promise<TrendsReportResponse>;
   getBudgetMonth(householdId: string, month: string): Promise<GetBudgetMonthResponse>;
   upsertBudgetMonth(
     householdId: string,
@@ -496,6 +507,22 @@ export function createNidoApiClient({
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/reports/monthly-summary${queryString}`,
         MonthlySummaryResponseSchema,
+      );
+    },
+    getCategoryBreakdownReport(householdId, query) {
+      const validQuery = ReportMonthQuerySchema.parse(query);
+      const queryString = buildQueryString(validQuery);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/reports/category-breakdown${queryString}`,
+        CategoryBreakdownReportResponseSchema,
+      );
+    },
+    getTrendsReport(householdId, query) {
+      const validQuery = ReportMonthQuerySchema.parse(query);
+      const queryString = buildQueryString(validQuery);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/reports/trends${queryString}`,
+        TrendsReportResponseSchema,
       );
     },
     getBudgetMonth(householdId, month) {
