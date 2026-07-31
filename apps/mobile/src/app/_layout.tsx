@@ -137,6 +137,7 @@ function SessionStack() {
         <Stack.Screen name="categories" />
         <Stack.Screen name="payment-sources" />
         <Stack.Screen name="ingresos" />
+        <Stack.Screen name="informes" />
         {MODAL_ROUTES.map((name) => (
           <Stack.Screen key={name} name={name} options={MODAL_ROUTE_OPTIONS} />
         ))}
