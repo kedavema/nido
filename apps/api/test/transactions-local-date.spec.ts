@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveLocalDate,
   deriveMonthLocalDateRange,
+  deriveTrailingMonths,
   formatLocalDate,
   parseLocalDate,
 } from '../src/transactions/local-date.js';
@@ -83,5 +84,20 @@ describe('deriveMonthLocalDateRange', () => {
     expect(() => deriveMonthLocalDateRange('2026-13')).toThrow();
     expect(() => deriveMonthLocalDateRange('2026-7')).toThrow();
     expect(() => deriveMonthLocalDateRange('not-a-month')).toThrow();
+  });
+});
+
+describe('deriveTrailingMonths', () => {
+  it('returns an ascending window ending at the requested month', () => {
+    expect(deriveTrailingMonths('2026-07', 3)).toEqual(['2026-05', '2026-06', '2026-07']);
+  });
+
+  it('crosses the year boundary without skipping a month', () => {
+    expect(deriveTrailingMonths('2026-01', 3)).toEqual(['2025-11', '2025-12', '2026-01']);
+  });
+
+  it('rejects malformed months and invalid window sizes', () => {
+    expect(() => deriveTrailingMonths('2026-13', 3)).toThrow();
+    expect(() => deriveTrailingMonths('2026-07', 0)).toThrow();
   });
 });

@@ -16,6 +16,7 @@ import type {
   CreateTransactionRecordInput,
   ListTransactionsFilter,
   MonthlyTotals,
+  PaymentSourceExpenseTotal,
   TransactionRecord,
   UpdateTransactionRecordChanges,
 } from './transaction.js';
@@ -227,6 +228,29 @@ export class PrismaTransactionsRepository implements TransactionsRepository {
 
     return rows.map((row) => ({
       categoryId: row.categoryId,
+      amount: new Prisma.Decimal(row.amount),
+    }));
+  }
+
+  async getExpenseTotalsByPaymentSource(
+    householdId: string,
+    from: string,
+    to: string,
+  ): Promise<readonly PaymentSourceExpenseTotal[]> {
+    const rows = await this.prisma.$queryRaw<
+      readonly { paymentSourceId: string | null; amount: string }[]
+    >`
+      SELECT "payment_source_id" AS "paymentSourceId", SUM("base_amount_pyg")::text AS "amount"
+      FROM "transactions"
+      WHERE "household_id" = ${householdId}::uuid
+        AND "type" = 'EXPENSE'
+        AND "local_date" >= ${from}::date
+        AND "local_date" <= ${to}::date
+      GROUP BY "payment_source_id"
+    `;
+
+    return rows.map((row) => ({
+      paymentSourceId: row.paymentSourceId,
       amount: new Prisma.Decimal(row.amount),
     }));
   }

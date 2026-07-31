@@ -98,3 +98,9 @@ export interface CategoryExpenseTotal {
   readonly categoryId: string;
   readonly amount: Decimal;
 }
+
+/** Expense total grouped by the nullable payment-source dimension for one local-date range. */
+export interface PaymentSourceExpenseTotal {
+  readonly paymentSourceId: string | null;
+  readonly amount: Decimal;
+}

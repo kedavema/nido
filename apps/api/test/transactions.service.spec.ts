@@ -124,6 +124,7 @@ function createTransactionsRepository(
     deleteById: () => Promise.reject(new Error('not used')),
     getMonthlyTotals: () => Promise.reject(new Error('not used')),
     getExpenseTotalsByCategory: () => Promise.reject(new Error('not used')),
+    getExpenseTotalsByPaymentSource: () => Promise.reject(new Error('not used')),
     findRecent: () => Promise.reject(new Error('not used')),
     ...overrides,
   };

@@ -68,3 +68,15 @@ export function deriveMonthLocalDateRange(month: string): { from: string; to: st
   const to = new Date(Date.UTC(year, monthIndex + 1, 0));
   return { from: formatLocalDate(from), to: formatLocalDate(to) };
 }
+
+/** Ordered calendar months ending at `month`, used by fixed-window report trends. */
+export function deriveTrailingMonths(month: string, count: number): readonly string[] {
+  deriveMonthLocalDateRange(month);
+  if (!Number.isInteger(count) || count < 1)
+    throw new Error('Month count must be a positive integer');
+  const [year, monthNumber] = month.split('-').map(Number);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(Date.UTC(year ?? 0, (monthNumber ?? 1) - count + index, 1));
+    return formatLocalDate(date).slice(0, 7);
+  });
+}
