@@ -12,6 +12,7 @@ import { ReportsController } from './reports.controller.js';
 import { TRANSACTIONS_REPOSITORY } from './transactions.repository.js';
 import { TransactionsController } from './transactions.controller.js';
 import { TransactionsService } from './transactions.service.js';
+import { TrendsReportService } from './trends-report.service.js';
 
 @Module({
   imports: [AuthModule, HouseholdsModule, CategoriesModule, PaymentSourcesModule, BudgetsModule],
@@ -20,6 +21,7 @@ import { TransactionsService } from './transactions.service.js';
     TransactionsService,
     MonthlySummaryService,
     CategoryBreakdownReportService,
+    TrendsReportService,
     PrismaTransactionsRepository,
     { provide: TRANSACTIONS_REPOSITORY, useExisting: PrismaTransactionsRepository },
   ],
