@@ -1,4 +1,11 @@
-import type { BudgetMonth, Category, MonthlySummaryResponse } from '@nido/contracts';
+import type {
+  BudgetMonth,
+  Category,
+  HouseholdMember,
+  MonthlySummaryResponse,
+  Occurrence,
+  RecurringItem,
+} from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -6,6 +13,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { BudgetOverview } from '@/components/budget-overview';
+import { BudgetProjection } from '@/components/budget-projection';
 import {
   ActionButton,
   AppScreen,
@@ -16,11 +24,13 @@ import {
   SummarySkeleton,
   m1TextStyles,
 } from '@/components/m1-ui';
+import { navigateToFijoDetail, navigateToSettleOccurrence } from '@/navigation/fijos-routes';
 import { themeTokens } from '@/theme/tokens';
 import {
   formatMonthLabel,
   formatMonthQueryParam,
   monthFromLocalDate,
+  monthLocalDateRange,
   shiftMonth,
   todayLocalDate,
   type MonthValue,
@@ -34,10 +44,13 @@ type ScreenState =
       readonly budgetMonth: BudgetMonth | null;
       readonly summary: MonthlySummaryResponse;
       readonly categories: readonly Category[];
+      readonly occurrences: readonly Occurrence[];
+      readonly recurringItems: readonly RecurringItem[];
+      readonly members: readonly HouseholdMember[];
     };
 
 export default function PresupuestoScreen() {
-  const { catalog, state } = useSession();
+  const { catalog, getMembers, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
   const [screen, setScreen] = useState<ScreenState>({ kind: 'loading' });
@@ -48,14 +61,37 @@ export default function PresupuestoScreen() {
       if (household === null) return;
       if (!silent) setScreen({ kind: 'loading' });
       const monthParam = formatMonthQueryParam(month);
+      const { from, to } = monthLocalDateRange(month);
       try {
-        const [{ budgetMonth }, summary, { categories }] = await Promise.all([
+        const [
+          { budgetMonth },
+          summary,
+          { categories },
+          { occurrences },
+          { recurringItems },
+          { members },
+        ] = await Promise.all([
           catalog.getBudgetMonth(household.id, monthParam),
           catalog.getMonthlySummary(household.id, { month: monthParam }),
           catalog.listCategories(household.id),
+          catalog.listOccurrences(household.id, {
+            from,
+            to,
+            status: ['PENDING', 'OVERDUE'],
+          }),
+          catalog.listRecurringItems(household.id),
+          getMembers(household.id),
         ]);
         if (isActive()) {
-          setScreen({ kind: 'ready', budgetMonth, summary, categories });
+          setScreen({
+            kind: 'ready',
+            budgetMonth,
+            summary,
+            categories,
+            occurrences,
+            recurringItems,
+            members,
+          });
         }
       } catch (error) {
         if (isActive()) {
@@ -63,7 +99,7 @@ export default function PresupuestoScreen() {
         }
       }
     },
-    [catalog, household, month],
+    [catalog, getMembers, household, month],
   );
 
   useFocusEffect(
@@ -170,13 +206,24 @@ export default function PresupuestoScreen() {
         </InlineNotice>
       ) : null}
       {screen.kind === 'ready' && screen.budgetMonth !== null && screen.summary.budget !== null ? (
-        <BudgetOverview
-          budget={screen.summary.budget}
-          budgetMonth={screen.budgetMonth}
-          categories={screen.categories}
-          categoryBreakdown={screen.summary.categoryBreakdown}
-          month={month}
-        />
+        <>
+          <BudgetOverview
+            budget={screen.summary.budget}
+            budgetMonth={screen.budgetMonth}
+            categories={screen.categories}
+            categoryBreakdown={screen.summary.categoryBreakdown}
+            month={month}
+          />
+          <BudgetProjection
+            budget={screen.summary.budget}
+            members={screen.members}
+            occurrences={screen.occurrences}
+            onOpenOccurrence={navigateToFijoDetail}
+            onSettleOccurrence={navigateToSettleOccurrence}
+            recurringItems={screen.recurringItems}
+            todayLocal={todayLocalDate()}
+          />
+        </>
       ) : null}
     </AppScreen>
   );
