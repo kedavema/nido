@@ -3,6 +3,7 @@ import {
   CategoryBreakdownReportResponse,
   ReportMonthQuery,
   ReportMonthQuerySchema,
+  TrendsReportResponse,
   MonthlySummaryQuerySchema,
   type MonthlySummaryQuery,
   type MonthlySummaryResponse,
@@ -16,6 +17,7 @@ import { HouseholdMembershipGuard } from '../households/household-membership.gua
 import { RequireHouseholdRoles } from '../households/required-household-roles.decorator.js';
 import { MonthlySummaryService } from './monthly-summary.service.js';
 import { CategoryBreakdownReportService } from './category-breakdown-report.service.js';
+import { TrendsReportService } from './trends-report.service.js';
 
 // Dedicated `reports` sub-path (docs/system-design.md §12), distinct from the `transactions`
 // resource controller: `reports/monthly-summary` is a read-only aggregate view, not a movement,
@@ -28,6 +30,7 @@ export class ReportsController {
   constructor(
     private readonly monthlySummary: MonthlySummaryService,
     private readonly categoryBreakdown: CategoryBreakdownReportService,
+    private readonly trends: TrendsReportService,
   ) {}
 
   @Get('monthly-summary')
@@ -44,5 +47,13 @@ export class ReportsController {
     @Query(new ZodValidationPipe(ReportMonthQuerySchema)) query: ReportMonthQuery,
   ): Promise<CategoryBreakdownReportResponse> {
     return this.categoryBreakdown.getReport(access, query);
+  }
+
+  @Get('trends')
+  getTrends(
+    @CurrentHouseholdAccess() access: HouseholdAccess,
+    @Query(new ZodValidationPipe(ReportMonthQuerySchema)) query: ReportMonthQuery,
+  ): Promise<TrendsReportResponse> {
+    return this.trends.getReport(access, query);
   }
 }
