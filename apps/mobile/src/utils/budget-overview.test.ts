@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   budgetCommitmentRows,
   budgetCategoryBasisPoints,
+  effectiveBudgetPercentage,
   formatBudgetBasisPoints,
   formatBudgetPyg,
 } from './budget-overview';
@@ -26,6 +27,11 @@ describe('budget overview formatting', () => {
 
   it('formats signed PYG decimal strings without converting them to numbers', () => {
     expect(formatBudgetPyg('-9007199254740993')).toBe('−Gs. 9.007.199.254.740.993');
+  });
+
+  it('marks nonzero use of a zero-limit budget as exceeded', () => {
+    expect(effectiveBudgetPercentage(0, 1n, 0n)).toBe(100.01);
+    expect(effectiveBudgetPercentage(0, 0n, 0n)).toBe(0);
   });
 });
 

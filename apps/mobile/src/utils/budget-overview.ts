@@ -34,6 +34,11 @@ export function formatBudgetBasisPoints(value: bigint): string {
   return fraction === '' ? whole.toString() : `${whole.toString()},${fraction}`;
 }
 
+/** Keeps zero-limit budgets honest: any nonzero use is an explicit exceeded state. */
+export function effectiveBudgetPercentage(value: number, used: bigint, total: bigint): number {
+  return total === 0n && used > 0n ? 100.01 : value;
+}
+
 /** Joins and ranks the three fixed-expense occurrences PRE-03 can act on. */
 export function budgetCommitmentRows(
   occurrences: readonly Pick<
