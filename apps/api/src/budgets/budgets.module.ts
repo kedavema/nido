@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module.js';
 import { HouseholdsModule } from '../households/households.module.js';
+import { BudgetSummaryService } from './budget-summary.service.js';
 import { BudgetsController } from './budgets.controller.js';
 import { BUDGETS_REPOSITORY } from './budgets.repository.js';
 import { BudgetsService } from './budgets.service.js';
@@ -12,8 +13,10 @@ import { PrismaBudgetsRepository } from './prisma-budgets.repository.js';
   controllers: [BudgetsController],
   providers: [
     BudgetsService,
+    BudgetSummaryService,
     PrismaBudgetsRepository,
     { provide: BUDGETS_REPOSITORY, useExisting: PrismaBudgetsRepository },
   ],
+  exports: [BudgetSummaryService],
 })
 export class BudgetsModule {}

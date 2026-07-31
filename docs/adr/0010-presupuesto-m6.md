@@ -34,8 +34,9 @@ existe en `GET /households/:householdId/reports/monthly-summary` y su respuesta 
 - El API valida que cada `categoryId` sea una categoría raíz `EXPENSE` activa o archivada del mismo
   hogar; la migración repite la regla como backstop contra carreras concurrentes.
 - `MonthlySummaryResponseSchema` conserva los campos de M3 y agrega `budget: BudgetSummary | null`.
-  La API devuelve `null` mientras M6 todavía no calcula métricas; API, mobile y tests evolucionan
-  juntos porque comparten el paquete de contratos.
+  La API devuelve `null` cuando el mes no tiene presupuesto y calcula el bloque desde movimientos y
+  ocurrencias pendientes cuando sí existe; API, mobile y tests evolucionan juntos porque comparten
+  el paquete de contratos.
 
 ## Invariantes
 

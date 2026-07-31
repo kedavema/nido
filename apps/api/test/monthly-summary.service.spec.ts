@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { CategoriesRepository } from '../src/categories/categories.repository.js';
 import type { CategoryRecord } from '../src/categories/category.js';
+import type { BudgetSummaryService } from '../src/budgets/budget-summary.service.js';
 import { Prisma } from '../src/generated/prisma/client.js';
 import type { HouseholdAccess } from '../src/households/household.js';
 import { MonthlySummaryService } from '../src/transactions/monthly-summary.service.js';
@@ -96,11 +97,13 @@ function createService(
   overrides: {
     readonly transactionsRepository?: Partial<TransactionsRepository>;
     readonly categoriesRepository?: Partial<Pick<CategoriesRepository, 'listForHousehold'>>;
+    readonly budgetSummaryService?: Pick<BudgetSummaryService, 'getBudgetSummary'>;
   } = {},
 ): MonthlySummaryService {
   return new MonthlySummaryService(
     createTransactionsRepository(overrides.transactionsRepository),
     createCategoriesRepository(overrides.categoriesRepository),
+    overrides.budgetSummaryService ?? { getBudgetSummary: () => Promise.resolve(null) },
   );
 }
 
