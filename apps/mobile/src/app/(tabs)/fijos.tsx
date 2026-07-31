@@ -330,25 +330,27 @@ function OverdueCard({
     .join(' · ');
 
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.overdueCard}>
+    <View style={styles.overdueCard}>
       <View style={styles.overdueIcon}>
         <Ionicons color={themeTokens.colors.surface} name="alert" size={20} />
       </View>
       <View style={styles.overdueBody}>
-        <View style={styles.overdueTopRow}>
-          <Text style={styles.overdueTitle}>{row.title}</Text>
-          <Text style={styles.overdueAmount}>
-            {formatOccurrenceAmount(row.occurrence.amount, row.occurrence.currency)}
-          </Text>
-        </View>
-        <Text style={styles.overdueSubtitle}>{subtitle}</Text>
+        <Pressable accessibilityRole="button" onPress={onPress} style={styles.overdueDetail}>
+          <View style={styles.overdueTopRow}>
+            <Text style={styles.overdueTitle}>{row.title}</Text>
+            <Text style={styles.overdueAmount}>
+              {formatOccurrenceAmount(row.occurrence.amount, row.occurrence.currency)}
+            </Text>
+          </View>
+          <Text style={styles.overdueSubtitle}>{subtitle}</Text>
+        </Pressable>
         <View style={styles.overdueActionRow}>
           <PressableScale haptic onPress={onMarkPaid} style={styles.markPaidButton}>
             <Text style={styles.markPaidLabel}>Marcar pagado</Text>
           </PressableScale>
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -503,6 +505,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
+  overdueDetail: { gap: 8 },
   overdueTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

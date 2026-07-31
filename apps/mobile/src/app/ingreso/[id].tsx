@@ -182,19 +182,8 @@ function DetailBody({
   const badgeLabel = received ? 'Recibido' : `Esperado · ${formatShortDueDate(occurrence.dueDate)}`;
 
   const heroCaption = received
-    ? [
-        settledOnLabel(occurrence, 'INCOME'),
-        responsibleName === undefined ? undefined : `lo recibe ${responsibleName}`,
-      ]
-        .filter((part): part is string => part !== undefined)
-        .join(' · ')
-    : [
-        'Importe estimado',
-        responsibleName === undefined ? undefined : `lo recibe ${responsibleName}`,
-        'todavía no cuenta en el balance',
-      ]
-        .filter((part): part is string => part !== undefined)
-        .join(' · ');
+    ? `${settledOnLabel(occurrence, 'INCOME')} · lo recibe ${responsibleLabel}`
+    : `Importe estimado · lo recibe ${responsibleLabel} · todavía no cuenta en el balance`;
 
   const heroStyles = received ? SUCCESS_HERO : WARNING_HERO;
 

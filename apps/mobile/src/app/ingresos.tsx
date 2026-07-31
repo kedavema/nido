@@ -286,40 +286,38 @@ function IngresoListRow({
   readonly onReceive: () => void;
 }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={[styles.row, !isFirst && styles.rowDivider]}
-    >
-      {row.received ? (
-        <View style={styles.receivedAvatar}>
-          <Ionicons
-            color={themeTokens.semanticColors.success.foreground}
-            name="arrow-down"
-            size={20}
-          />
-        </View>
-      ) : (
-        <View style={[styles.avatar, { backgroundColor: `${row.accentColor}26` }]}>
-          <Text style={[styles.avatarText, { color: row.accentColor }]}>{row.initial}</Text>
-        </View>
-      )}
-      <View style={styles.rowCopy}>
-        <Text numberOfLines={1} style={m1TextStyles.body}>
-          {row.title}
-        </Text>
+    <View style={[styles.row, !isFirst && styles.rowDivider]}>
+      <Pressable accessibilityRole="button" onPress={onPress} style={styles.rowDetail}>
         {row.received ? (
-          <Text numberOfLines={1} style={styles.receivedSubtitle}>
-            ✓ {settledOnLabel(row.occurrence, 'INCOME')}
-          </Text>
+          <View style={styles.receivedAvatar}>
+            <Ionicons
+              color={themeTokens.semanticColors.success.foreground}
+              name="arrow-down"
+              size={20}
+            />
+          </View>
         ) : (
-          <View style={styles.expectedBadge}>
-            <Text style={styles.expectedBadgeText}>
-              Esperado · {formatShortDueDate(row.occurrence.dueDate)}
-            </Text>
+          <View style={[styles.avatar, { backgroundColor: `${row.accentColor}26` }]}>
+            <Text style={[styles.avatarText, { color: row.accentColor }]}>{row.initial}</Text>
           </View>
         )}
-      </View>
+        <View style={styles.rowCopy}>
+          <Text numberOfLines={1} style={m1TextStyles.body}>
+            {row.title}
+          </Text>
+          {row.received ? (
+            <Text numberOfLines={1} style={styles.receivedSubtitle}>
+              ✓ {settledOnLabel(row.occurrence, 'INCOME')}
+            </Text>
+          ) : (
+            <View style={styles.expectedBadge}>
+              <Text style={styles.expectedBadgeText}>
+                Esperado · {formatShortDueDate(row.occurrence.dueDate)}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
       <View style={styles.rowAmountColumn}>
         <Text style={[styles.rowAmount, row.received && styles.rowAmountReceived]}>
           {row.received ? '+' : ''}
@@ -331,7 +329,7 @@ function IngresoListRow({
           </Pressable>
         )}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -419,6 +417,13 @@ const styles = StyleSheet.create({
     borderTopColor: themeTokens.colors.border,
     paddingTop: themeTokens.spacing.cardGap,
     marginTop: 2,
+  },
+  rowDetail: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: themeTokens.touchTarget.minimum,
   },
   avatar: {
     width: 40,
