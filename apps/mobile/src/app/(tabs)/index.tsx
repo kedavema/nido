@@ -3,7 +3,9 @@ import type {
   CategoryBreakdownItem,
   HouseholdMember,
   MonthlySummaryResponse,
+  Occurrence,
   PaymentSource,
+  RecurringItem,
   Transaction,
 } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +16,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '@/api/client';
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { getSummaryCache } from '@/cache/summary-cache';
+import { BudgetCommitmentsCard } from '@/components/budget-projection';
+import { DashboardBudget } from '@/components/dashboard-budget';
 import {
   ActionButton,
   AppScreen,
@@ -24,6 +28,7 @@ import {
   PressableScale,
   SummarySkeleton,
 } from '@/components/m1-ui';
+import { navigateToFijoDetail, navigateToSettleOccurrence } from '@/navigation/fijos-routes';
 import { navigateToIngresos } from '@/navigation/ingresos-routes';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
 import { cardShadowStyle } from '@/theme/styles';
@@ -41,6 +46,7 @@ import {
   futureMonthSubtitle,
   isCurrentMonth,
   monthFromLocalDate,
+  monthLocalDateRange,
   shiftMonth,
   todayLocalDate,
   type MonthValue,
@@ -67,7 +73,13 @@ type CatalogState =
       readonly kind: 'loaded';
       readonly categories: readonly Category[];
       readonly paymentSources: readonly PaymentSource[];
+      readonly recurringItems: readonly RecurringItem[];
     };
+
+type OccurrencesState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error' }
+  | { readonly kind: 'loaded'; readonly occurrences: readonly Occurrence[] };
 
 // Only used for the INI-02 header avatars and the INI-01 true-first-run heuristic below — neither
 // is critical enough to warrant its own error UI, so a failed fetch just degrades quietly (no
@@ -153,6 +165,7 @@ export default function InicioScreen() {
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: 'loading' });
   const [summaryState, setSummaryState] = useState<SummaryState>({ kind: 'loading' });
   const [membersState, setMembersState] = useState<MembersState>({ kind: 'loading' });
+  const [occurrencesState, setOccurrencesState] = useState<OccurrencesState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
 
   const loadCatalog = useCallback(
@@ -160,11 +173,12 @@ export default function InicioScreen() {
       if (household === null) return;
       if (!silent) setCatalogState({ kind: 'loading' });
       try {
-        const [{ categories }, { paymentSources }] = await Promise.all([
+        const [{ categories }, { paymentSources }, { recurringItems }] = await Promise.all([
           catalog.listCategories(household.id),
           catalog.listPaymentSources(household.id),
+          catalog.listRecurringItems(household.id),
         ]);
-        setCatalogState({ kind: 'loaded', categories, paymentSources });
+        setCatalogState({ kind: 'loaded', categories, paymentSources, recurringItems });
       } catch (error) {
         setCatalogState({ kind: 'error', message: messageForActionError(error) });
       }
@@ -227,6 +241,25 @@ export default function InicioScreen() {
     [catalog, household, month, summaryCache],
   );
 
+  const loadOccurrences = useCallback(
+    async (isActive: () => boolean, silent = false) => {
+      if (household === null) return;
+      if (!silent) setOccurrencesState({ kind: 'loading' });
+      const { from, to } = monthLocalDateRange(month);
+      try {
+        const { occurrences } = await catalog.listOccurrences(household.id, {
+          from,
+          to,
+          status: ['PENDING', 'OVERDUE'],
+        });
+        if (isActive()) setOccurrencesState({ kind: 'loaded', occurrences });
+      } catch {
+        if (isActive()) setOccurrencesState({ kind: 'error' });
+      }
+    },
+    [catalog, household, month],
+  );
+
   // Same stale-response guard as movimientos.tsx: without it, a slow response for a month the
   // user has since navigated away from (via month stepper or tab switch) can land after a faster
   // response for the current month and clobber it.
@@ -234,22 +267,26 @@ export default function InicioScreen() {
     useCallback(() => {
       let active = true;
       void loadSummary(() => active);
+      void loadOccurrences(() => active);
       return () => {
         active = false;
       };
-    }, [loadSummary]),
+    }, [loadOccurrences, loadSummary]),
   );
 
   // Pull-to-refresh refetches the summary (and the catalog/members it renders with) silently, so
   // the dashboard cards stay put instead of collapsing to the skeleton mid-pull.
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    void Promise.all([loadSummary(() => true, true), loadCatalog(true), loadMembers(true)]).finally(
-      () => {
-        setRefreshing(false);
-      },
-    );
-  }, [loadSummary, loadCatalog, loadMembers]);
+    void Promise.all([
+      loadSummary(() => true, true),
+      loadCatalog(true),
+      loadMembers(true),
+      loadOccurrences(() => true, true),
+    ]).finally(() => {
+      setRefreshing(false);
+    });
+  }, [loadSummary, loadCatalog, loadMembers, loadOccurrences]);
 
   if (household === null) {
     return (
@@ -263,9 +300,17 @@ export default function InicioScreen() {
   const paymentSources =
     catalogState.kind === 'loaded' ? catalogState.paymentSources : EMPTY_PAYMENT_SOURCES;
   const members = membersState.kind === 'loaded' ? membersState.members : EMPTY_MEMBERS;
+  const recurringItems =
+    catalogState.kind === 'loaded' ? catalogState.recurringItems : ([] as const);
+  const occurrences =
+    occurrencesState.kind === 'loaded' ? occurrencesState.occurrences : ([] as const);
   const todayLocal = todayLocalDate();
   const monthSubtitle = futureMonthSubtitle(month, todayLocal);
   const daysRemaining = daysRemainingInCurrentMonth(month, todayLocal);
+  const monthParam = formatMonthQueryParam(month);
+  const openBudget = () => {
+    router.push(`/presupuesto?month=${encodeURIComponent(monthParam)}`);
+  };
 
   return (
     <AppScreen
@@ -364,6 +409,11 @@ export default function InicioScreen() {
             summary={summaryState.summary}
             tooltipOpen={tooltipOpen}
           />
+          <DashboardBudget
+            budget={summaryState.summary.budget}
+            monthLabel={formatMonthLabel(month).toLowerCase()}
+            onOpenBudget={openBudget}
+          />
           <RecentTransactionsCard
             categories={categories}
             paymentSources={paymentSources}
@@ -378,34 +428,31 @@ export default function InicioScreen() {
       ) : null}
 
       {summaryState.kind === 'loaded' ? (
-        isEmptyMonth(summaryState.summary) ? (
-          isTrueFirstRun(month, todayLocal, membersState) ? (
-            <>
+        <>
+          {isEmptyMonth(summaryState.summary) ? (
+            isTrueFirstRun(month, todayLocal, membersState) ? (
               <FirstRunBalanceCard month={month} />
-              <FirstRunChecklistCard month={month} />
-            </>
+            ) : (
+              <Card>
+                <Text style={m1TextStyles.sectionTitle}>
+                  Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
+                </Text>
+                <Text style={m1TextStyles.secondary}>
+                  Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para
+                  ambos.
+                </Text>
+                <ActionButton
+                  label="Cargar un gasto"
+                  onPress={() => {
+                    navigateToNewExpense();
+                  }}
+                />
+              </Card>
+            )
           ) : (
-            <Card>
-              <Text style={m1TextStyles.sectionTitle}>
-                Aún no hay movimientos en {formatMonthLabel(month).toLowerCase()}
-              </Text>
-              <Text style={m1TextStyles.secondary}>
-                Cuando alguno de los dos cargue un gasto o marque un ingreso, aparece acá para
-                ambos.
-              </Text>
-              <ActionButton
-                label="Cargar un gasto"
-                onPress={() => {
-                  navigateToNewExpense();
-                }}
-              />
-            </Card>
-          )
-        ) : (
-          <>
             <BalanceCard
               onPressIncome={() => {
-                navigateToIngresos(formatMonthQueryParam(month));
+                navigateToIngresos(monthParam);
               }}
               onToggleTooltip={() => {
                 setTooltipOpen((current) => !current);
@@ -413,22 +460,48 @@ export default function InicioScreen() {
               summary={summaryState.summary}
               tooltipOpen={tooltipOpen}
             />
+          )}
 
-            {summaryState.summary.categoryBreakdown.length > 0 ? (
-              <CategoryBreakdownCard
-                categories={categories}
-                items={summaryState.summary.categoryBreakdown}
-              />
-            ) : null}
+          <DashboardBudget
+            budget={summaryState.summary.budget}
+            monthLabel={formatMonthLabel(month).toLowerCase()}
+            onOpenBudget={openBudget}
+          />
 
+          {occurrencesState.kind === 'loaded' ? (
+            <BudgetCommitmentsCard
+              hideWhenEmpty
+              label="PRÓXIMAS OBLIGACIONES"
+              members={members}
+              occurrences={occurrences}
+              onOpenOccurrence={navigateToFijoDetail}
+              onSettleOccurrence={navigateToSettleOccurrence}
+              recurringItems={recurringItems}
+              todayLocal={todayLocal}
+            />
+          ) : null}
+
+          {isEmptyMonth(summaryState.summary) && isTrueFirstRun(month, todayLocal, membersState) ? (
+            <FirstRunChecklistCard month={month} />
+          ) : null}
+
+          {!isEmptyMonth(summaryState.summary) &&
+          summaryState.summary.categoryBreakdown.length > 0 ? (
+            <CategoryBreakdownCard
+              categories={categories}
+              items={summaryState.summary.categoryBreakdown}
+            />
+          ) : null}
+
+          {!isEmptyMonth(summaryState.summary) ? (
             <RecentTransactionsCard
               categories={categories}
               paymentSources={paymentSources}
               todayLocal={todayLocal}
               transactions={summaryState.summary.recentTransactions}
             />
-          </>
-        )
+          ) : null}
+        </>
       ) : null}
     </AppScreen>
   );

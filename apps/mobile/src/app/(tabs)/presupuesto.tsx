@@ -1,13 +1,14 @@
-import type {
-  BudgetMonth,
-  Category,
-  HouseholdMember,
-  MonthlySummaryResponse,
-  Occurrence,
-  RecurringItem,
+import {
+  MonthSchema,
+  type BudgetMonth,
+  type Category,
+  type HouseholdMember,
+  type MonthlySummaryResponse,
+  type Occurrence,
+  type RecurringItem,
 } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -50,11 +51,24 @@ type ScreenState =
     };
 
 export default function PresupuestoScreen() {
+  const params = useLocalSearchParams<{ month?: string }>();
+  const requestedMonth = MonthSchema.safeParse(params.month);
+  const requestedMonthValue = requestedMonth.success
+    ? monthFromLocalDate(`${requestedMonth.data}-01`)
+    : undefined;
   const { catalog, getMembers, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
-  const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
+  const [selectedMonth, setSelectedMonth] = useState<MonthValue>(() =>
+    monthFromLocalDate(todayLocalDate()),
+  );
+  const month = requestedMonthValue ?? selectedMonth;
   const [screen, setScreen] = useState<ScreenState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
+
+  const moveMonth = (delta: number) => {
+    setSelectedMonth(shiftMonth(month, delta));
+    router.setParams({ month: undefined });
+  };
 
   const load = useCallback(
     async (isActive: () => boolean, silent = false) => {
@@ -159,7 +173,7 @@ export default function PresupuestoScreen() {
             accessibilityRole="button"
             hitSlop={8}
             onPress={() => {
-              setMonth((current) => shiftMonth(current, -1));
+              moveMonth(-1);
             }}
           >
             <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={17} />
@@ -170,7 +184,7 @@ export default function PresupuestoScreen() {
             accessibilityRole="button"
             hitSlop={8}
             onPress={() => {
-              setMonth((current) => shiftMonth(current, 1));
+              moveMonth(1);
             }}
           >
             <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={17} />
