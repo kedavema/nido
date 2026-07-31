@@ -1,11 +1,15 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import {
+  CategoryBreakdownReportResponseSchema,
   CreateCategoryResponseSchema,
   CreateHouseholdResponseSchema,
+  CreatePaymentSourceResponseSchema,
   CreateRecurringItemResponseSchema,
   CreateTransactionResponseSchema,
+  GetMeResponseSchema,
   MonthlySummaryResponseSchema,
+  TrendsReportResponseSchema,
   UpsertBudgetMonthResponseSchema,
 } from '@nido/contracts';
 import { Pool } from 'pg';
@@ -182,6 +186,160 @@ describe.skipIf(!hasTestDatabase)('Monthly summary aggregation with PostgreSQL',
     });
   });
 
+  it('reports direct root and subcategory expense totals from PostgreSQL', async () => {
+    const householdId = await createHousehold();
+    const rootId = await createCategory(householdId, 'Alimentación M6', 'EXPENSE');
+    const childId = await createCategory(householdId, 'Supermercado M6', 'EXPENSE', rootId);
+
+    await createTransaction(householdId, {
+      type: 'EXPENSE',
+      amount: '100000',
+      currency: 'PYG',
+      categoryId: rootId,
+      occurredAt: '2026-07-05T15:00:00.000Z',
+      description: 'Directo a raíz',
+    });
+    await createTransaction(householdId, {
+      type: 'EXPENSE',
+      amount: '200000',
+      currency: 'PYG',
+      categoryId: childId,
+      occurredAt: '2026-07-10T15:00:00.000Z',
+      description: 'En subcategoría',
+    });
+
+    const response = await request(`/v1/households/${householdId}/reports/category-breakdown`, {
+      token: 'owner',
+      query: { month: '2026-07' },
+    });
+    expect(response.status).toBe(200);
+    expect(CategoryBreakdownReportResponseSchema.parse(await response.json())).toEqual({
+      month: '2026-07',
+      totalExpensePyg: '300000',
+      categories: [
+        {
+          categoryId: rootId,
+          categoryName: 'Alimentación M6',
+          amountPyg: '300000',
+          directAmountPyg: '100000',
+          percentageOfTotal: 100,
+          subcategories: [
+            {
+              categoryId: childId,
+              categoryName: 'Supermercado M6',
+              amountPyg: '200000',
+              percentageOfTotal: 66.67,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('reports three-month trends and personal/shared/unassigned expense groups', async () => {
+    const householdId = await createHousehold();
+    const expenseId = await createCategory(householdId, 'Gastos M6', 'EXPENSE');
+    const incomeId = await createCategory(householdId, 'Ingresos M6', 'INCOME');
+    const meResponse = await request('/v1/me', { token: 'owner' });
+    const ownerUserId = GetMeResponseSchema.parse(await meResponse.json()).user.id;
+    const personalId = await createPaymentSource(householdId, 'Tarjeta personal', ownerUserId);
+    const sharedId = await createPaymentSource(householdId, 'Efectivo común');
+
+    const movements = [
+      {
+        type: 'INCOME',
+        amount: '1000',
+        categoryId: incomeId,
+        occurredAt: '2026-05-02T15:00:00.000Z',
+        description: 'Ingreso mayo',
+      },
+      {
+        type: 'EXPENSE',
+        amount: '100',
+        categoryId: expenseId,
+        occurredAt: '2026-05-03T15:00:00.000Z',
+        description: 'Gasto mayo',
+      },
+      {
+        type: 'INCOME',
+        amount: '500',
+        categoryId: incomeId,
+        occurredAt: '2026-06-02T15:00:00.000Z',
+        description: 'Ingreso junio',
+      },
+      {
+        type: 'EXPENSE',
+        amount: '700',
+        categoryId: expenseId,
+        occurredAt: '2026-06-03T15:00:00.000Z',
+        description: 'Gasto junio',
+      },
+      {
+        type: 'INCOME',
+        amount: '1000',
+        categoryId: incomeId,
+        occurredAt: '2026-07-02T15:00:00.000Z',
+        description: 'Ingreso julio',
+      },
+      {
+        type: 'EXPENSE',
+        amount: '200',
+        categoryId: expenseId,
+        paymentSourceId: personalId,
+        occurredAt: '2026-07-03T15:00:00.000Z',
+        description: 'Personal julio',
+      },
+      {
+        type: 'EXPENSE',
+        amount: '100',
+        categoryId: expenseId,
+        paymentSourceId: sharedId,
+        occurredAt: '2026-07-04T15:00:00.000Z',
+        description: 'Compartido julio',
+      },
+      {
+        type: 'EXPENSE',
+        amount: '50',
+        categoryId: expenseId,
+        occurredAt: '2026-07-05T15:00:00.000Z',
+        description: 'Sin medio julio',
+      },
+      {
+        type: 'EXPENSE',
+        amount: '9999',
+        categoryId: expenseId,
+        occurredAt: '2026-04-05T15:00:00.000Z',
+        description: 'Fuera de ventana',
+      },
+    ] as const;
+    for (const movement of movements) {
+      await createTransaction(householdId, { ...movement, currency: 'PYG' });
+    }
+
+    const response = await request(`/v1/households/${householdId}/reports/trends`, {
+      token: 'owner',
+      query: { month: '2026-07' },
+    });
+    expect(response.status).toBe(200);
+    const report = TrendsReportResponseSchema.parse(await response.json());
+    expect(report.points).toEqual([
+      { month: '2026-05', incomePyg: '1000', expensePyg: '100', balancePyg: '900' },
+      { month: '2026-06', incomePyg: '500', expensePyg: '700', balancePyg: '-200' },
+      { month: '2026-07', incomePyg: '1000', expensePyg: '350', balancePyg: '650' },
+    ]);
+    expect(
+      report.paymentSources.map(({ scope, amountPyg, percentageOfExpense }) => ({
+        scope,
+        amountPyg,
+        percentageOfExpense,
+      })),
+    ).toEqual([
+      { scope: 'PERSONAL', amountPyg: '200', percentageOfExpense: 57.14 },
+      { scope: 'SHARED', amountPyg: '100', percentageOfExpense: 28.57 },
+      { scope: 'UNASSIGNED', amountPyg: '50', percentageOfExpense: 14.29 },
+    ]);
+  });
+
   it('derives budget availability and pending commitments from real PostgreSQL rows', async () => {
     const householdId = await createHousehold();
     const expenseCategoryId = await createCategory(householdId, 'Servicios M6', 'EXPENSE');
@@ -271,14 +429,35 @@ describe.skipIf(!hasTestDatabase)('Monthly summary aggregation with PostgreSQL',
     householdId: string,
     name: string,
     kind: 'EXPENSE' | 'INCOME',
+    parentId?: string,
   ): Promise<string> {
     const response = await request(`/v1/households/${householdId}/categories`, {
       method: 'POST',
       token: 'owner',
-      body: { kind, name, icon: 'wallet', color: '#AABBCC' },
+      body: {
+        kind,
+        name,
+        icon: 'wallet',
+        color: '#AABBCC',
+        ...(parentId === undefined ? {} : { parentId }),
+      },
     });
     expect(response.status).toBe(201);
     return CreateCategoryResponseSchema.parse(await response.json()).category.id;
+  }
+
+  async function createPaymentSource(
+    householdId: string,
+    name: string,
+    ownerUserId?: string,
+  ): Promise<string> {
+    const response = await request(`/v1/households/${householdId}/payment-sources`, {
+      method: 'POST',
+      token: 'owner',
+      body: { name, type: 'CREDIT_CARD', ...(ownerUserId === undefined ? {} : { ownerUserId }) },
+    });
+    expect(response.status).toBe(201);
+    return CreatePaymentSourceResponseSchema.parse(await response.json()).paymentSource.id;
   }
 
   async function createTransaction(
