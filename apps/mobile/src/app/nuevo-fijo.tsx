@@ -13,6 +13,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { AppBottomSheet } from '@/components/app-bottom-sheet';
+import { DayOfMonthPicker, LocalDatePicker } from '@/components/date-picker';
 import {
   ActionButton,
   AppFormScreen,
@@ -23,6 +24,7 @@ import {
 } from '@/components/m1-ui';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
+import { monthlyFirstDueDate } from '@/utils/date-picker';
 import {
   amountToWireDecimal,
   formatAmountDisplay,
@@ -63,26 +65,6 @@ type ScreenState =
       readonly members: readonly HouseholdMember[];
     };
 
-function pad2(value: number): string {
-  return value.toString().padStart(2, '0');
-}
-
-/** First due date for a day-of-month recurrence: this month if the day hasn't passed, else next. */
-function monthlyFirstDueDate(day: number, todayLocal: string): string {
-  const [year = 1970, month = 1, today = 1] = todayLocal.split('-').map(Number);
-  const clampedDay = Math.min(Math.max(day, 1), 28);
-  let targetYear = year;
-  let targetMonth = month;
-  if (clampedDay < today) {
-    targetMonth += 1;
-    if (targetMonth > 12) {
-      targetMonth = 1;
-      targetYear += 1;
-    }
-  }
-  return `${targetYear.toString()}-${pad2(targetMonth)}-${pad2(clampedDay)}`;
-}
-
 function buildDraft(item: RecurringItem | null, todayLocal: string): Draft {
   if (item === null) {
     const [, , today = 1] = todayLocal.split('-').map(Number);
@@ -91,7 +73,7 @@ function buildDraft(item: RecurringItem | null, todayLocal: string): Draft {
       amount: '',
       frequency: 'MONTHLY',
       intervalMonths: 2,
-      dayOfMonth: Math.min(today, 28),
+      dayOfMonth: Math.min(today, 31),
       firstDueDate: todayLocal,
       responsibleUserId: null,
       notificationOffsets: DEFAULT_OFFSETS,
@@ -407,26 +389,23 @@ export default function NuevoFijoScreen() {
 
         <Field label="Vencimiento">
           {usesDayOfMonth ? (
-            <Stepper
-              label="El día"
-              onDecrement={() => {
-                update({ dayOfMonth: Math.max(1, draft.dayOfMonth - 1) });
+            <DayOfMonthPicker
+              accessibilityLabel="Vencimiento"
+              error={showValidation && !dateValid}
+              onChange={(dayOfMonth) => {
+                update({ dayOfMonth });
               }}
-              onIncrement={() => {
-                update({ dayOfMonth: Math.min(28, draft.dayOfMonth + 1) });
-              }}
-              unit="de cada mes"
+              testID="nuevo-fijo-day-of-month"
               value={draft.dayOfMonth}
             />
           ) : (
-            <TextInput
-              accessibilityLabel="Primer vencimiento (aaaa-mm-dd)"
-              onChangeText={(firstDueDate) => {
+            <LocalDatePicker
+              accessibilityLabel="Vencimiento"
+              error={showValidation && !dateValid}
+              onChange={(firstDueDate) => {
                 update({ firstDueDate });
               }}
-              placeholder="2026-07-15"
-              placeholderTextColor={themeTokens.colors.inkSecondary}
-              style={[styles.input, showValidation && !dateValid && styles.inputError]}
+              testID="nuevo-fijo-date"
               value={draft.firstDueDate}
             />
           )}
