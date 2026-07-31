@@ -99,6 +99,24 @@ export {
   type UpsertBudgetMonthResponse,
 } from './budgets.js';
 export {
+  CategoryBreakdownReportResponseSchema,
+  ReportMonthQuerySchema,
+  ReportPaymentSourceSchema,
+  ReportPaymentSourceScopeSchema,
+  ReportRootCategorySchema,
+  ReportSubcategorySchema,
+  ReportTrendPointSchema,
+  TrendsReportResponseSchema,
+  type CategoryBreakdownReportResponse,
+  type ReportMonthQuery,
+  type ReportPaymentSource,
+  type ReportPaymentSourceScope,
+  type ReportRootCategory,
+  type ReportSubcategory,
+  type ReportTrendPoint,
+  type TrendsReportResponse,
+} from './reports.js';
+export {
   BaseAmountPygSchema,
   BudgetSummarySchema,
   CategoryBreakdownItemSchema,
