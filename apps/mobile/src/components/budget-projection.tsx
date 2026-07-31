@@ -5,6 +5,7 @@ import { Card, PressableScale, m1TextStyles } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
 import {
   budgetCommitmentRows,
+  effectiveBudgetPercentage,
   formatBudgetPyg,
   type BudgetCommitmentRow,
 } from '@/utils/budget-overview';
@@ -20,6 +21,17 @@ interface BudgetProjectionProps {
   readonly onSettleOccurrence: (occurrenceId: string) => void;
 }
 
+interface BudgetCommitmentsCardProps {
+  readonly occurrences: readonly Occurrence[];
+  readonly recurringItems: readonly RecurringItem[];
+  readonly members: readonly HouseholdMember[];
+  readonly todayLocal: string;
+  readonly label?: string;
+  readonly hideWhenEmpty?: boolean;
+  readonly onOpenOccurrence: (occurrenceId: string) => void;
+  readonly onSettleOccurrence: (occurrenceId: string) => void;
+}
+
 type ProjectionTone = 'normal' | 'warning' | 'danger';
 
 function formatPercentage(value: number): string {
@@ -27,10 +39,6 @@ function formatPercentage(value: number): string {
     '.',
     ',',
   );
-}
-
-function effectivePercentage(value: number, used: bigint, total: bigint): number {
-  return total === 0n && used > 0n ? 100.01 : value;
 }
 
 function toneForPercentage(value: number): ProjectionTone {
@@ -50,10 +58,12 @@ export function BudgetProjection({
   const pending = BigInt(budget.pendingCommitmentsPyg);
   const total = BigInt(budget.totalLimitPyg);
   const projectedUsed = spent + pending;
-  const spentPercentage = effectivePercentage(budget.spentPercentage, spent, total);
-  const projectedPercentage = effectivePercentage(budget.projectedPercentage, projectedUsed, total);
-  const rows = budgetCommitmentRows(occurrences, recurringItems, members, todayLocal);
-
+  const spentPercentage = effectiveBudgetPercentage(budget.spentPercentage, spent, total);
+  const projectedPercentage = effectiveBudgetPercentage(
+    budget.projectedPercentage,
+    projectedUsed,
+    total,
+  );
   return (
     <>
       <Card>
@@ -74,28 +84,52 @@ export function BudgetProjection({
         />
       </Card>
 
-      <Card>
-        <Text style={styles.sectionLabel}>PRÓXIMOS COMPROMISOS</Text>
-        {rows.length === 0 ? (
-          <Text style={m1TextStyles.secondary}>No hay compromisos pendientes para este mes.</Text>
-        ) : (
-          rows.map((row, index) => (
-            <CommitmentRow
-              isFirst={index === 0}
-              key={row.id}
-              onOpen={() => {
-                onOpenOccurrence(row.id);
-              }}
-              onSettle={() => {
-                onSettleOccurrence(row.id);
-              }}
-              row={row}
-              todayLocal={todayLocal}
-            />
-          ))
-        )}
-      </Card>
+      <BudgetCommitmentsCard
+        members={members}
+        occurrences={occurrences}
+        onOpenOccurrence={onOpenOccurrence}
+        onSettleOccurrence={onSettleOccurrence}
+        recurringItems={recurringItems}
+        todayLocal={todayLocal}
+      />
     </>
+  );
+}
+
+export function BudgetCommitmentsCard({
+  occurrences,
+  recurringItems,
+  members,
+  todayLocal,
+  label = 'PRÓXIMOS COMPROMISOS',
+  hideWhenEmpty = false,
+  onOpenOccurrence,
+  onSettleOccurrence,
+}: BudgetCommitmentsCardProps) {
+  const rows = budgetCommitmentRows(occurrences, recurringItems, members, todayLocal);
+  if (hideWhenEmpty && rows.length === 0) return null;
+  return (
+    <Card>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      {rows.length === 0 ? (
+        <Text style={m1TextStyles.secondary}>No hay compromisos pendientes para este mes.</Text>
+      ) : (
+        rows.map((row, index) => (
+          <CommitmentRow
+            isFirst={index === 0}
+            key={row.id}
+            onOpen={() => {
+              onOpenOccurrence(row.id);
+            }}
+            onSettle={() => {
+              onSettleOccurrence(row.id);
+            }}
+            row={row}
+            todayLocal={todayLocal}
+          />
+        ))
+      )}
+    </Card>
   );
 }
 
