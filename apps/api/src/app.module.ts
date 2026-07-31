@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
+import { BudgetsModule } from './budgets/budgets.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
 import { validateEnvironment } from './config/environment.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -28,6 +29,7 @@ import { TransactionsModule } from './transactions/transactions.module.js';
       },
     ]),
     CategoriesModule,
+    BudgetsModule,
     DatabaseModule,
     HealthModule,
     HouseholdsModule,

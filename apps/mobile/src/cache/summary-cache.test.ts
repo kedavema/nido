@@ -9,6 +9,7 @@ const SAMPLE_SUMMARY: MonthlySummaryResponse = {
   expenseTotal: '10000',
   categoryBreakdown: [],
   recentTransactions: [],
+  budget: null,
 };
 
 async function loadCache(): Promise<SummaryCache> {

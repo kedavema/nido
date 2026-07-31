@@ -286,6 +286,7 @@ describe('M3 monthly summary contracts', () => {
         },
       ],
       recentTransactions: [validPygTransaction],
+      budget: null,
     };
 
     expect(MonthlySummaryResponseSchema.parse(payload)).toEqual(payload);

@@ -10,6 +10,7 @@ import {
   type CategoriesRepository,
 } from '../categories/categories.repository.js';
 import type { CategoryRecord } from '../categories/category.js';
+import { BudgetSummaryService } from '../budgets/budget-summary.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { HouseholdAccess } from '../households/household.js';
 import { deriveMonthLocalDateRange } from './local-date.js';
@@ -21,9 +22,9 @@ const RECENT_TRANSACTIONS_LIMIT = 4;
 const PERCENTAGE_DECIMAL_PLACES = 2;
 
 /**
- * M3 cut of the dashboard's monthly summary (docs/system-design.md §6.8, ADR 0007): balance,
- * income/expense totals, expense breakdown by root category, and up to 4 recent movements.
- * Budget/Fijos-dependent items (§6.8 points 2 and 3) are out of scope until M5/M6.
+ * Dashboard monthly summary (docs/system-design.md §6.8, ADR 0007): balance, income/expense
+ * totals, expense breakdown by root category, up to 4 recent movements, and the M6 budget block.
+ * Fixed-item projections remain limited to the pending-commitment aggregate in that block.
  */
 @Injectable()
 export class MonthlySummaryService {
@@ -32,6 +33,8 @@ export class MonthlySummaryService {
     private readonly transactionsRepository: TransactionsRepository,
     @Inject(CATEGORIES_REPOSITORY)
     private readonly categoriesRepository: Pick<CategoriesRepository, 'listForHousehold'>,
+    @Inject(BudgetSummaryService)
+    private readonly budgetSummaryService: Pick<BudgetSummaryService, 'getBudgetSummary'>,
   ) {}
 
   async getMonthlySummary(
@@ -40,7 +43,7 @@ export class MonthlySummaryService {
   ): Promise<MonthlySummaryResponse> {
     const { from, to } = deriveMonthLocalDateRange(query.month);
 
-    const [totals, expenseByCategory, categories, recentTransactions] = await Promise.all([
+    const [totals, expenseByCategory, categories, recentTransactions, budget] = await Promise.all([
       this.transactionsRepository.getMonthlyTotals(access.householdId, from, to),
       this.transactionsRepository.getExpenseTotalsByCategory(access.householdId, from, to),
       this.categoriesRepository.listForHousehold(access.householdId),
@@ -50,6 +53,7 @@ export class MonthlySummaryService {
         to,
         RECENT_TRANSACTIONS_LIMIT,
       ),
+      this.budgetSummaryService.getBudgetSummary(access.householdId, query.month),
     ]);
 
     const balance = totals.income.minus(totals.expense);
@@ -68,6 +72,7 @@ export class MonthlySummaryService {
       expenseTotal: totals.expense.toFixed(0),
       categoryBreakdown,
       recentTransactions: recentTransactions.map(toTransaction),
+      budget,
     };
   }
 }

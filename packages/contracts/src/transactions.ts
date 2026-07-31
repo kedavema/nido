@@ -235,19 +235,33 @@ export const CategoryBreakdownItemSchema = z.strictObject({
   percentage: CategoryBreakdownPercentageSchema,
 });
 
+// M6 budget metrics remain decimal strings at the API boundary. Percentages intentionally have no
+// upper bound because a projected budget can exceed 100% and the UI must show that excess.
+export const BudgetSummarySchema = z.strictObject({
+  totalLimitPyg: BaseAmountPygSchema,
+  allocatedPyg: BaseAmountPygSchema,
+  unallocatedPyg: BaseAmountPygSchema,
+  spentPyg: BaseAmountPygSchema,
+  availablePyg: MonthlyBalanceSchema,
+  pendingCommitmentsPyg: BaseAmountPygSchema,
+  projectedAvailablePyg: MonthlyBalanceSchema,
+  spentPercentage: z.number().min(0),
+  projectedPercentage: z.number().min(0),
+});
+
 export const MonthlySummaryQuerySchema = z.strictObject({
   month: MonthSchema,
 });
 
-// M3 cut of docs/system-design.md §6.8: balance, income/expense totals, expense breakdown by
-// root category, and up to 4 recent movements. Items 2 (presupuesto) and 3 (fijos) depend on
-// Budgets/Fijos (M5/M6) and are out of scope — see ADR 0007.
+// M6 keeps the existing transaction summary fields and adds a nullable budget block. Null means
+// that the requested month has no budget yet; it is different from zero-valued budget metrics.
 export const MonthlySummaryResponseSchema = z.strictObject({
   balance: MonthlyBalanceSchema,
   incomeTotal: BaseAmountPygSchema,
   expenseTotal: BaseAmountPygSchema,
   categoryBreakdown: z.array(CategoryBreakdownItemSchema),
   recentTransactions: z.array(TransactionSchema).max(4),
+  budget: BudgetSummarySchema.nullable(),
 });
 
 export type TransactionType = z.infer<typeof TransactionTypeSchema>;
@@ -261,5 +275,6 @@ export type UpdateTransactionResponse = z.infer<typeof UpdateTransactionResponse
 export type ListTransactionsResponse = z.infer<typeof ListTransactionsResponseSchema>;
 export type ListTransactionsQuery = z.infer<typeof ListTransactionsQuerySchema>;
 export type CategoryBreakdownItem = z.infer<typeof CategoryBreakdownItemSchema>;
+export type BudgetSummary = z.infer<typeof BudgetSummarySchema>;
 export type MonthlySummaryQuery = z.infer<typeof MonthlySummaryQuerySchema>;
 export type MonthlySummaryResponse = z.infer<typeof MonthlySummaryResponseSchema>;
