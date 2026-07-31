@@ -1,5 +1,7 @@
 import {
   AcceptHouseholdInviteResponseSchema,
+  CopyBudgetMonthRequestSchema,
+  CopyBudgetMonthResponseSchema,
   CreateCategoryRequestSchema,
   CreateCategoryResponseSchema,
   CreateHouseholdInviteRequestSchema,
@@ -13,6 +15,7 @@ import {
   CreateTransactionRequestSchema,
   CreateTransactionResponseSchema,
   GetHouseholdMembersResponseSchema,
+  GetBudgetMonthResponseSchema,
   GetMeResponseSchema,
   InviteTokenSchema,
   ListCategoriesResponseSchema,
@@ -22,10 +25,13 @@ import {
   ListRecurringItemsResponseSchema,
   ListTransactionsQuerySchema,
   ListTransactionsResponseSchema,
+  MonthSchema,
   MonthlySummaryQuerySchema,
   MonthlySummaryResponseSchema,
   SettleOccurrenceRequestSchema,
   SettleOccurrenceResponseSchema,
+  UpsertBudgetMonthRequestSchema,
+  UpsertBudgetMonthResponseSchema,
   UpdateCategoryRequestSchema,
   UpdateCategoryResponseSchema,
   UpdatePaymentSourceRequestSchema,
@@ -35,6 +41,8 @@ import {
   UpdateTransactionRequestSchema,
   UpdateTransactionResponseSchema,
   type AcceptHouseholdInviteResponse,
+  type CopyBudgetMonthRequest,
+  type CopyBudgetMonthResponse,
   type CreateCategoryRequest,
   type CreateCategoryResponse,
   type CreateHouseholdInviteResponse,
@@ -46,6 +54,7 @@ import {
   type CreateTransactionRequest,
   type CreateTransactionResponse,
   type GetHouseholdMembersResponse,
+  type GetBudgetMonthResponse,
   type GetMeResponse,
   type ListCategoriesResponse,
   type ListOccurrencesQuery,
@@ -58,6 +67,8 @@ import {
   type MonthlySummaryResponse,
   type SettleOccurrenceRequest,
   type SettleOccurrenceResponse,
+  type UpsertBudgetMonthRequest,
+  type UpsertBudgetMonthResponse,
   type UpdateCategoryRequest,
   type UpdateCategoryResponse,
   type UpdatePaymentSourceRequest,
@@ -230,6 +241,17 @@ export interface NidoApiClient {
     householdId: string,
     query: MonthlySummaryQuery,
   ): Promise<MonthlySummaryResponse>;
+  getBudgetMonth(householdId: string, month: string): Promise<GetBudgetMonthResponse>;
+  upsertBudgetMonth(
+    householdId: string,
+    month: string,
+    input: UpsertBudgetMonthRequest,
+  ): Promise<UpsertBudgetMonthResponse>;
+  copyBudgetMonth(
+    householdId: string,
+    month: string,
+    input: CopyBudgetMonthRequest,
+  ): Promise<CopyBudgetMonthResponse>;
   listRecurringItems(householdId: string): Promise<ListRecurringItemsResponse>;
   createRecurringItem(
     householdId: string,
@@ -262,7 +284,7 @@ export function createNidoApiClient({
     path: string,
     schema: z.ZodType<T>,
     options: {
-      readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+      readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
       readonly body?: Readonly<Record<string, unknown>>;
       /**
        * Extra request headers beyond the always-sent `Accept`/`Authorization`/`Content-Type`.
@@ -474,6 +496,31 @@ export function createNidoApiClient({
       return request(
         `/v1/households/${encodeURIComponent(householdId)}/reports/monthly-summary${queryString}`,
         MonthlySummaryResponseSchema,
+      );
+    },
+    getBudgetMonth(householdId, month) {
+      const validMonth = MonthSchema.parse(month);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/budgets/${encodeURIComponent(validMonth)}`,
+        GetBudgetMonthResponseSchema,
+      );
+    },
+    upsertBudgetMonth(householdId, month, input) {
+      const validMonth = MonthSchema.parse(month);
+      const body = UpsertBudgetMonthRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/budgets/${encodeURIComponent(validMonth)}`,
+        UpsertBudgetMonthResponseSchema,
+        { method: 'PUT', body },
+      );
+    },
+    copyBudgetMonth(householdId, month, input) {
+      const validMonth = MonthSchema.parse(month);
+      const body = CopyBudgetMonthRequestSchema.parse(input);
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/budgets/${encodeURIComponent(validMonth)}/copy`,
+        CopyBudgetMonthResponseSchema,
+        { method: 'POST', body },
       );
     },
     listRecurringItems(householdId) {
