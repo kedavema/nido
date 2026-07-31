@@ -380,6 +380,100 @@ describe('Nido API client', () => {
     );
   });
 
+  it('fetches and parses both report views for a validated month', async () => {
+    const householdId = '00000000-0000-4000-8000-000000000011';
+    const categoryReport = {
+      month: '2026-07',
+      totalExpensePyg: '3410000',
+      categories: [
+        {
+          categoryId: '00000000-0000-4000-8000-000000000020',
+          categoryName: 'Alimentación',
+          amountPyg: '3410000',
+          directAmountPyg: '1000000',
+          percentageOfTotal: 100,
+          subcategories: [
+            {
+              categoryId: '00000000-0000-4000-8000-000000000021',
+              categoryName: 'Supermercado',
+              amountPyg: '2410000',
+              percentageOfTotal: 70.67,
+            },
+          ],
+        },
+      ],
+    };
+    const trendsReport = {
+      month: '2026-07',
+      points: [
+        { month: '2026-05', incomePyg: '100', expensePyg: '20', balancePyg: '80' },
+        { month: '2026-06', incomePyg: '200', expensePyg: '60', balancePyg: '140' },
+        { month: '2026-07', incomePyg: '300', expensePyg: '90', balancePyg: '210' },
+      ],
+      totalExpensePyg: '90',
+      paymentSources: [
+        {
+          paymentSourceId: null,
+          paymentSourceName: 'Sin medio de pago',
+          ownerUserId: null,
+          scope: 'UNASSIGNED' as const,
+          amountPyg: '90',
+          percentageOfExpense: 100,
+        },
+      ],
+    };
+    const fetchImplementation = vi
+      .fn<FetchImplementation>()
+      .mockResolvedValueOnce(jsonResponse(categoryReport))
+      .mockResolvedValueOnce(jsonResponse(trendsReport));
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    await expect(
+      client.getCategoryBreakdownReport(householdId, { month: '2026-07' }),
+    ).resolves.toEqual(categoryReport);
+    await expect(client.getTrendsReport(householdId, { month: '2026-07' })).resolves.toEqual(
+      trendsReport,
+    );
+
+    const reportsPath = `https://api.example.com/v1/households/${householdId}/reports`;
+    expect(fetchImplementation.mock.calls[0]?.[0]).toBe(
+      `${reportsPath}/category-breakdown?month=2026-07`,
+    );
+    expect(fetchImplementation.mock.calls[1]?.[0]).toBe(`${reportsPath}/trends?month=2026-07`);
+  });
+
+  it('rejects invalid report months before making a request', () => {
+    const fetchImplementation = vi.fn<FetchImplementation>();
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    expect(() => client.getCategoryBreakdownReport('household', { month: '2026-7' })).toThrow();
+    expect(() => client.getTrendsReport('household', { month: 'July' })).toThrow();
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
+
+  it('rejects report responses that do not match the shared contract', async () => {
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation: () =>
+        Promise.resolve(
+          jsonResponse({ month: '2026-07', totalExpensePyg: '90', paymentSources: [] }),
+        ),
+    });
+
+    await expect(client.getTrendsReport('household', { month: '2026-07' })).rejects.toMatchObject({
+      kind: 'response',
+    });
+  });
+
   it('reads, replaces, and copies monthly budgets with validated decimal-string payloads', async () => {
     const householdId = '00000000-0000-4000-8000-000000000011';
     const budgetMonth = {

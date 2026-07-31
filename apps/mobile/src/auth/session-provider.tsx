@@ -55,6 +55,8 @@ interface SessionContextValue {
     | 'updateTransaction'
     | 'deleteTransaction'
     | 'getMonthlySummary'
+    | 'getCategoryBreakdownReport'
+    | 'getTrendsReport'
     | 'getBudgetMonth'
     | 'upsertBudgetMonth'
     | 'copyBudgetMonth'
@@ -434,6 +436,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
       deleteTransaction: (householdId, transactionId) =>
         api().deleteTransaction(householdId, transactionId),
       getMonthlySummary: (householdId, query) => api().getMonthlySummary(householdId, query),
+      getCategoryBreakdownReport: (householdId, query) =>
+        api().getCategoryBreakdownReport(householdId, query),
+      getTrendsReport: (householdId, query) => api().getTrendsReport(householdId, query),
       getBudgetMonth: (householdId, month) => api().getBudgetMonth(householdId, month),
       upsertBudgetMonth: (householdId, month, input) =>
         api().upsertBudgetMonth(householdId, month, input),
