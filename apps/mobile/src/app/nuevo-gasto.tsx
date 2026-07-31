@@ -21,6 +21,7 @@ import {
   ActionButton,
   AppFormScreen,
   AppScreen,
+  FormHeader,
   InlineNotice,
   LoadingContent,
   m1TextStyles,
@@ -520,21 +521,11 @@ export default function NuevoGastoScreen() {
           />
         }
         header={
-          <View style={styles.headerRow}>
-            <Pressable
-              accessibilityLabel="Cerrar"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={handleClose}
-              style={styles.closeButton}
-            >
-              <Ionicons color={themeTokens.colors.ink} name="close" size={20} />
-            </Pressable>
-            <Text accessibilityRole="header" style={styles.headerTitle}>
-              {title}
-            </Text>
-            <CurrencyToggle onSelect={selectCurrency} selected={draft.currency} />
-          </View>
+          <FormHeader
+            onDismiss={handleClose}
+            title={title}
+            trailing={<CurrencyToggle onSelect={selectCurrency} selected={draft.currency} />}
+          />
         }
       >
         <AmountField
@@ -1300,29 +1291,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: themeTokens.colors.background,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-    paddingBottom: themeTokens.spacing.cardGap,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: themeTokens.colors.surface,
-  },
-  headerTitle: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.screenTitle,
-    lineHeight: 26,
   },
   currencyToggle: {
     flexDirection: 'row',
