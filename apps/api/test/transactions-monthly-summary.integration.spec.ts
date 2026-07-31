@@ -3,8 +3,10 @@ import { Test } from '@nestjs/testing';
 import {
   CreateCategoryResponseSchema,
   CreateHouseholdResponseSchema,
+  CreateRecurringItemResponseSchema,
   CreateTransactionResponseSchema,
   MonthlySummaryResponseSchema,
+  UpsertBudgetMonthResponseSchema,
 } from '@nido/contracts';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -180,6 +182,81 @@ describe.skipIf(!hasTestDatabase)('Monthly summary aggregation with PostgreSQL',
     });
   });
 
+  it('derives budget availability and pending commitments from real PostgreSQL rows', async () => {
+    const householdId = await createHousehold();
+    const expenseCategoryId = await createCategory(householdId, 'Servicios M6', 'EXPENSE');
+    const incomeCategoryId = await createCategory(householdId, 'Ingreso M6', 'INCOME');
+
+    const budgetResponse = await request(`/v1/households/${householdId}/budgets/2026-03`, {
+      method: 'PUT',
+      token: 'owner',
+      body: {
+        totalLimitPyg: '1000000',
+        allocations: [{ categoryId: expenseCategoryId, amountPyg: '400000' }],
+      },
+    });
+    expect(budgetResponse.status).toBe(200);
+    UpsertBudgetMonthResponseSchema.parse(await budgetResponse.json());
+
+    await createTransaction(householdId, {
+      type: 'EXPENSE',
+      amount: '350000',
+      currency: 'PYG',
+      categoryId: expenseCategoryId,
+      occurredAt: '2026-03-05T15:00:00.000Z',
+      description: 'Gasto real',
+    });
+    await createRecurringItem(householdId, {
+      kind: 'EXPENSE',
+      name: 'Servicio pendiente',
+      categoryId: expenseCategoryId,
+      estimatedAmount: '200000',
+      currency: 'PYG',
+      frequency: 'ONE_TIME',
+      firstDueDate: '2026-03-20',
+    });
+    await createRecurringItem(householdId, {
+      kind: 'EXPENSE',
+      name: 'Servicio USD pendiente',
+      categoryId: expenseCategoryId,
+      estimatedAmount: '10.01',
+      currency: 'USD',
+      plannedFxRateToBase: '7350',
+      frequency: 'ONE_TIME',
+      firstDueDate: '2026-03-21',
+    });
+    // Expected income never consumes an expense budget.
+    await createRecurringItem(householdId, {
+      kind: 'INCOME',
+      name: 'Ingreso esperado',
+      categoryId: incomeCategoryId,
+      estimatedAmount: '999999',
+      currency: 'PYG',
+      frequency: 'ONE_TIME',
+      firstDueDate: '2026-03-22',
+    });
+
+    const response = await request(`/v1/households/${householdId}/reports/monthly-summary`, {
+      token: 'owner',
+      query: { month: '2026-03' },
+    });
+    expect(response.status).toBe(200);
+    const summary = MonthlySummaryResponseSchema.parse(await response.json());
+
+    // Pending: 200000 PYG + round(10.01 USD * 7350) = 273574 PYG.
+    expect(summary.budget).toEqual({
+      totalLimitPyg: '1000000',
+      allocatedPyg: '400000',
+      unallocatedPyg: '600000',
+      spentPyg: '350000',
+      availablePyg: '650000',
+      pendingCommitmentsPyg: '273574',
+      projectedAvailablePyg: '376426',
+      spentPercentage: 35,
+      projectedPercentage: 62.36,
+    });
+  });
+
   async function createHousehold(): Promise<string> {
     const response = await request('/v1/households', {
       method: 'POST',
@@ -217,11 +294,24 @@ describe.skipIf(!hasTestDatabase)('Monthly summary aggregation with PostgreSQL',
     CreateTransactionResponseSchema.parse(await response.json());
   }
 
+  async function createRecurringItem(
+    householdId: string,
+    body: Record<string, unknown>,
+  ): Promise<void> {
+    const response = await request(`/v1/households/${householdId}/recurring-items`, {
+      method: 'POST',
+      token: 'owner',
+      body,
+    });
+    expect(response.status).toBe(201);
+    CreateRecurringItemResponseSchema.parse(await response.json());
+  }
+
   function request(
     path: string,
     options: {
       readonly token?: string;
-      readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+      readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
       readonly body?: unknown;
       readonly query?: Record<string, string>;
     } = {},
