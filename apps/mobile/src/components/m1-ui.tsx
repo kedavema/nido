@@ -465,7 +465,12 @@ interface PressableScaleProps {
   readonly style?: StyleProp<ViewStyle>;
   readonly accessibilityLabel?: string | undefined;
   readonly accessibilityHint?: string | undefined;
-  readonly accessibilityState?: { readonly busy?: boolean; readonly disabled?: boolean };
+  readonly accessibilityState?: {
+    readonly busy?: boolean;
+    readonly disabled?: boolean;
+    readonly expanded?: boolean;
+    readonly selected?: boolean;
+  };
   readonly testID?: string | undefined;
   /** Fires a light haptic on press. Off by default so it stays a deliberate choice. */
   readonly haptic?: boolean;
