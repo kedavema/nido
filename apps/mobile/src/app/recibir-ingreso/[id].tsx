@@ -4,7 +4,6 @@ import type {
   RecurringItem,
   SettleOccurrenceRequest,
 } from '@nido/contracts';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -14,9 +13,9 @@ import {
   ActionButton,
   AppFormScreen,
   AppScreen,
+  FormHeader,
   InlineNotice,
   LoadingContent,
-  m1TextStyles,
 } from '@/components/m1-ui';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
@@ -153,27 +152,13 @@ export default function RecibirIngresoScreen() {
         />
       }
       header={
-        <View style={styles.headerRow}>
-          <Pressable
-            accessibilityLabel="Cerrar"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              router.back();
-            }}
-            style={styles.closeButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="close" size={20} />
-          </Pressable>
-          <View style={styles.headerCopy}>
-            <Text accessibilityRole="header" numberOfLines={1} style={styles.headerTitle}>
-              Marcar como recibido
-            </Text>
-            <Text style={m1TextStyles.secondary}>
-              {item.name} · {formatMonthLabel(monthFromLocalDate(occurrence.dueDate)).toLowerCase()}
-            </Text>
-          </View>
-        </View>
+        <FormHeader
+          onDismiss={() => {
+            router.back();
+          }}
+          subtitle={`${item.name} · ${formatMonthLabel(monthFromLocalDate(occurrence.dueDate)).toLowerCase()}`}
+          title="Marcar como recibido"
+        />
       }
     >
       <Text style={styles.amountLabel}>Importe real recibido</Text>
@@ -266,31 +251,6 @@ function Chip({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-    paddingBottom: themeTokens.spacing.cardGap,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: themeTokens.colors.surface,
-  },
-  headerCopy: {
-    flex: 1,
-  },
-  headerTitle: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.screenTitle,
-    lineHeight: 26,
-  },
   amountLabel: {
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodySemibold,
