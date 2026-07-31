@@ -3,6 +3,7 @@ import type {
   CreateTransactionRecordInput,
   ListTransactionsFilter,
   MonthlyTotals,
+  PaymentSourceExpenseTotal,
   TransactionRecord,
   UpdateTransactionRecordChanges,
 } from './transaction.js';
@@ -59,6 +60,12 @@ export interface TransactionsRepository {
     from: string,
     to: string,
   ): Promise<readonly CategoryExpenseTotal[]>;
+  /** Expense sums grouped by nullable payment source over a local-date range. */
+  getExpenseTotalsByPaymentSource(
+    householdId: string,
+    from: string,
+    to: string,
+  ): Promise<readonly PaymentSourceExpenseTotal[]>;
   /** Up to `limit` most recent transactions (by `localDate`, then `occurredAt`, then `id`, desc) with `local_date` in `[from, to]`. */
   findRecent(
     householdId: string,

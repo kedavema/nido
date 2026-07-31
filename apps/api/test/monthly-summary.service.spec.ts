@@ -79,6 +79,7 @@ function createTransactionsRepository(
     deleteById: () => Promise.reject(new Error('not used')),
     getMonthlyTotals: () => Promise.resolve({ income: new Decimal(0), expense: new Decimal(0) }),
     getExpenseTotalsByCategory: () => Promise.resolve([]),
+    getExpenseTotalsByPaymentSource: () => Promise.resolve([]),
     findRecent: () => Promise.resolve([]),
     ...overrides,
   };
