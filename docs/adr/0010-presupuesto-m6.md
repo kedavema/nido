@@ -29,6 +29,10 @@ existe en `GET /households/:householdId/reports/monthly-summary` y su respuesta 
 - `GET` devuelve `budgetMonth: null` cuando el mes todavía no tiene presupuesto.
 - `PUT` reemplaza atómicamente el límite y el conjunto completo de asignaciones.
 - `POST .../copy` recibe `sourceMonth` explícito y devuelve un presupuesto independiente.
+- `POST .../copy` rechaza con conflicto si el mes destino ya tiene presupuesto; copiar nunca
+  sobrescribe silenciosamente una planificación existente.
+- El API valida que cada `categoryId` sea una categoría raíz `EXPENSE` activa o archivada del mismo
+  hogar; la migración repite la regla como backstop contra carreras concurrentes.
 - `MonthlySummaryResponseSchema` conserva los campos de M3 y agrega `budget: BudgetSummary | null`.
   La API devuelve `null` mientras M6 todavía no calcula métricas; API, mobile y tests evolucionan
   juntos porque comparten el paquete de contratos.
