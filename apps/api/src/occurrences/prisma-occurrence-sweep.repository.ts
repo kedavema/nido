@@ -2,14 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { FREQUENCY_KINDS, type FrequencyKind } from '@nido/domain-types';
 
 import { PrismaService } from '../database/prisma.service.js';
-import { generateOccurrenceSchedule } from '../recurring-items/occurrence-generation.js';
+import {
+  generateOccurrenceSchedule,
+  truncateToUtcDate,
+} from '../recurring-items/occurrence-generation.js';
+import { deriveLocalDate } from '../transactions/local-date.js';
 import type { OccurrenceSweepRepository } from './occurrence-sweep.repository.js';
 
 @Injectable()
 export class PrismaOccurrenceSweepRepository implements OccurrenceSweepRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async sweep(householdId: string, today: Date): Promise<void> {
+  async sweep(householdId: string, now: Date): Promise<void> {
+    const today = truncateToUtcDate(now);
     // No-lock fast path: the overwhelming majority of authenticated requests in a day are not the
     // first, so a single indexed primary-key read lets them skip opening a transaction and taking
     // the advisory lock entirely. The authoritative once-per-day guarantee still lives under the
@@ -17,7 +22,7 @@ export class PrismaOccurrenceSweepRepository implements OccurrenceSweepRepositor
     // no-op. A stale read here at worst lets a request fall through to the locked re-check.
     const marker = await this.prisma.household.findUnique({
       where: { id: householdId },
-      select: { lastSweptOn: true },
+      select: { lastSweptOn: true, timezone: true },
     });
     if (marker === null || sameUtcDay(marker.lastSweptOn, today)) {
       return;
@@ -39,7 +44,7 @@ export class PrismaOccurrenceSweepRepository implements OccurrenceSweepRepositor
       // what makes the whole "primera apertura del día" trigger exactly-once under concurrency.
       const household = await transaction.household.findUnique({
         where: { id: householdId },
-        select: { lastSweptOn: true },
+        select: { lastSweptOn: true, timezone: true },
       });
       if (household === null || sameUtcDay(household.lastSweptOn, today)) {
         return;
@@ -83,6 +88,36 @@ export class PrismaOccurrenceSweepRepository implements OccurrenceSweepRepositor
         where: { householdId, status: 'PENDING', dueDate: { lt: today } },
         data: { status: 'OVERDUE' },
       });
+
+      // M7 (ADR 0012), still inside this transaction and lock: queue the reminders that fall due
+      // today. Only EXPENSE rules notify, only the occurrence's responsible user receives one,
+      // and an occurrence without a responsible user produces nothing. The offsets come from
+      // `recurring_items.notification_offsets`, so a rule with an empty array simply contributes
+      // no rows; nothing is ever back-filled with defaults.
+      //
+      // The `[today - 1, today]` window absorbs one missed scheduler day without letting a first
+      // run over a database with history fire months of stale reminders at once. The day is the
+      // household-local one because a due date is a financial date (§14), not a UTC instant.
+      //
+      // `ON CONFLICT DO NOTHING` against the (occurrence_id, offset_days) unique index is what
+      // makes a repeated sweep — or the cron racing an app open — insert nothing the second time.
+      const localToday = deriveLocalDate(now, household.timezone);
+      await transaction.$executeRaw`
+        INSERT INTO notification_deliveries
+          (household_id, occurrence_id, user_id, offset_days, scheduled_for, updated_at)
+        SELECT o.household_id, o.id, o.responsible_user_id, "offset".value,
+               (o.due_date - "offset".value), now()
+        FROM occurrences o
+        JOIN recurring_items r ON r.id = o.recurring_item_id
+        CROSS JOIN LATERAL unnest(r.notification_offsets) AS "offset"(value)
+        WHERE o.household_id = ${householdId}::uuid
+          AND r.kind = 'EXPENSE'
+          AND o.responsible_user_id IS NOT NULL
+          AND o.status IN ('PENDING', 'OVERDUE')
+          AND (o.due_date - "offset".value)
+              BETWEEN (${localToday}::date - 1) AND ${localToday}::date
+        ON CONFLICT (occurrence_id, offset_days) DO NOTHING
+      `;
 
       // Stamp the daily marker inside the same locked transaction: the next request that reads
       // `last_swept_on === today` short-circuits before ever opening a transaction or taking the
