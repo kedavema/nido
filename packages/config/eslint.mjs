@@ -10,6 +10,7 @@ export const eslintConfig = tseslint.config(
       '**/.turbo/**',
       '**/coverage/**',
       '**/dist/**',
+      '**/dist-android/**',
       '**/node_modules/**',
       '.agents/**',
       'design/**',
