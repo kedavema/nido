@@ -11,7 +11,11 @@ import { classifyWebPushError, WebPushSender } from '../src/notifications/web-pu
 const sendNotification = vi.hoisted(() => vi.fn());
 vi.mock('web-push', async () => {
   const actual = await vi.importActual<typeof WebPushModule>('web-push');
-  return { ...actual, sendNotification };
+  return {
+    ...actual,
+    default: { ...actual, sendNotification },
+    sendNotification,
+  };
 });
 
 const vapid: VapidKeys = {
