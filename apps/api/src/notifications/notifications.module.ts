@@ -9,7 +9,11 @@ import { createCredentialKeyring } from './credential-keyring.js';
 import { DevicesController } from './devices.controller.js';
 import { DEVICES_REPOSITORY } from './devices.repository.js';
 import { DevicesService } from './devices.service.js';
+import { NOTIFICATION_DELIVERIES_REPOSITORY } from './notification-deliveries.repository.js';
+import { NotificationDispatcherService } from './notification-dispatcher.service.js';
 import { PrismaDevicesRepository } from './prisma-devices.repository.js';
+import { PrismaNotificationDeliveriesRepository } from './prisma-notification-deliveries.repository.js';
+import { PUSH_SENDERS } from './push-sender.js';
 
 @Module({
   imports: [AuthModule],
@@ -18,6 +22,18 @@ import { PrismaDevicesRepository } from './prisma-devices.repository.js';
     DevicesService,
     PrismaDevicesRepository,
     { provide: DEVICES_REPOSITORY, useExisting: PrismaDevicesRepository },
+    NotificationDispatcherService,
+    PrismaNotificationDeliveriesRepository,
+    {
+      provide: NOTIFICATION_DELIVERIES_REPOSITORY,
+      useExisting: PrismaNotificationDeliveriesRepository,
+    },
+    {
+      // Empty until the Expo and Web Push adapters land in their own slices. Nothing invokes the
+      // dispatcher over HTTP yet, so an unreachable channel cannot burn attempts in production.
+      provide: PUSH_SENDERS,
+      useValue: [],
+    },
     SystemClock,
     { provide: CLOCK, useExisting: SystemClock },
     {
