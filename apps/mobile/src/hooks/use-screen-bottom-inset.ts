@@ -1,12 +1,13 @@
 import { useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { TAB_BAR_BASE_HEIGHT } from '@/navigation/tabs';
+import { resolveScreenBottomInset } from '@/navigation/tabs';
 
 /**
  * Bottom padding (in px) that a scrollable screen must reserve so its last row
- * clears the home indicator and — when the screen lives under `(tabs)` — the
- * bottom tab bar that floats over it.
+ * clears the home indicator. Screens under `(tabs)` need no extra inset because
+ * the persistent, non-absolute tab bar already shortens their viewport by its
+ * full height, including the device safe area.
  *
  * The unified screen primitives (`AppScreen`, `AppListScreen`, `AppFormScreen`)
  * own the bottom edge through this value instead of a `SafeAreaView` `bottom`
@@ -19,5 +20,5 @@ export function useScreenBottomInset(): number {
   const segments = useSegments();
   const insideTabs = (segments as readonly string[]).includes('(tabs)');
 
-  return insets.bottom + (insideTabs ? TAB_BAR_BASE_HEIGHT : 0);
+  return resolveScreenBottomInset(insets.bottom, insideTabs);
 }
