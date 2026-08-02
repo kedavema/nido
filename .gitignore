@@ -42,3 +42,4 @@ apps/mobile/GoogleService-Info.plist
 
 # Local AI tooling caches
 .atl/
+.playwright-mcp/

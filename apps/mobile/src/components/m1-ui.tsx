@@ -84,8 +84,8 @@ interface AppScreenProps extends PropsWithChildren {
   readonly onRefresh?: () => void;
   /**
    * A floating overlay (e.g. a FAB) pinned to the bottom-right, rendered as a
-   * sibling of the scroll view inside the safe area so it never scrolls and sits
-   * above the tab bar via `useScreenBottomInset`.
+   * sibling of the scroll view inside the safe area so it never scrolls. The tab
+   * navigator already keeps the screen viewport above its persistent bar.
    */
   readonly floatingAction?: ReactNode;
 }
@@ -155,7 +155,7 @@ function FloatingActionSlot({
     <View
       onLayout={onLayout}
       pointerEvents="box-none"
-      style={[styles.floatingAction, { bottom: bottomInset }]}
+      style={[styles.floatingAction, { bottom: bottomInset + themeTokens.spacing.screen }]}
     >
       {children}
     </View>

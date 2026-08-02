@@ -133,30 +133,34 @@ export default function InformesScreen() {
   return (
     <AppScreen onRefresh={refresh} refreshing={refreshing}>
       <View style={styles.header}>
-        <PressableScale
-          accessibilityLabel="Volver"
-          haptic
-          onPress={() => {
-            router.back();
-          }}
-          style={styles.backButton}
-        >
-          <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={22} />
-        </PressableScale>
-        <View style={styles.headerCopy}>
-          <Text accessibilityRole="header" style={styles.title}>
-            Informes
-          </Text>
-          <Text numberOfLines={1} style={styles.householdName}>
-            {household.name}
-          </Text>
+        <View style={styles.headerTitleRow}>
+          <PressableScale
+            accessibilityLabel="Volver"
+            haptic
+            onPress={() => {
+              router.back();
+            }}
+            style={styles.backButton}
+          >
+            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={22} />
+          </PressableScale>
+          <View style={styles.headerCopy}>
+            <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
+              Informes
+            </Text>
+            <Text numberOfLines={1} style={styles.householdName}>
+              {household.name}
+            </Text>
+          </View>
         </View>
-        <MonthPicker
-          onChange={(selected) => {
-            setMonth(selected);
-          }}
-          value={month}
-        />
+        <View style={styles.monthPicker}>
+          <MonthPicker
+            onChange={(selected) => {
+              setMonth(selected);
+            }}
+            value={month}
+          />
+        </View>
       </View>
 
       <View accessibilityRole="tablist" style={styles.tabs}>
@@ -247,7 +251,8 @@ function BudgetReport({
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  header: { gap: 8 },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backButton: {
     width: themeTokens.touchTarget.minimum,
     height: themeTokens.touchTarget.minimum,
@@ -256,7 +261,7 @@ const styles = StyleSheet.create({
     borderRadius: themeTokens.radii.chip,
     backgroundColor: themeTokens.colors.surface,
   },
-  headerCopy: { flex: 1, minWidth: 64 },
+  headerCopy: { flex: 1, minWidth: 0 },
   title: {
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.displaySemibold,
@@ -266,6 +271,9 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.secondary,
+  },
+  monthPicker: {
+    marginLeft: themeTokens.touchTarget.minimum + 12,
   },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tab: {

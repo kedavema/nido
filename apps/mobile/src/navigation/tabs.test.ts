@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TAB_DEFINITIONS } from './tabs';
+import { resolveScreenBottomInset, TAB_DEFINITIONS } from './tabs';
 
 describe('persistent tab navigation', () => {
   it('contains exactly the five canonical tabs in order', () => {
@@ -22,5 +22,13 @@ describe('persistent tab navigation', () => {
       expect(tab.icon).not.toHaveLength(0);
       expect(tab.activeIcon).not.toHaveLength(0);
     }
+  });
+
+  it('does not reserve the non-overlay tab bar twice inside tab screens', () => {
+    expect(resolveScreenBottomInset(24, true)).toBe(0);
+  });
+
+  it('keeps the device safe area for screens outside the tab navigator', () => {
+    expect(resolveScreenBottomInset(24, false)).toBe(24);
   });
 });

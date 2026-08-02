@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { NotificationChannel } from '@nido/contracts';
-import { sendNotification, WebPushError } from 'web-push';
+import webPush from 'web-push';
 
 import type { PushMessage, PushSender, PushSendResult, PushTarget } from './push-sender.js';
 import { VAPID_KEYS, type VapidKeys } from './vapid-keys.js';
@@ -36,7 +36,7 @@ export class WebPushSender implements PushSender {
     }
 
     try {
-      await sendNotification(
+      await webPush.sendNotification(
         {
           endpoint: target.credential.endpoint,
           keys: { p256dh: target.credential.keys.p256dh, auth: target.credential.keys.auth },
@@ -65,7 +65,7 @@ export class WebPushSender implements PushSender {
 
 /** Maps push-service responses onto the four outcome classes the dispatcher understands. */
 export function classifyWebPushError(error: unknown): PushSendResult {
-  if (!(error instanceof WebPushError)) {
+  if (!(error instanceof webPush.WebPushError)) {
     // No status code means the request never got an answer: DNS, TLS, socket, timeout.
     return { kind: 'transient' };
   }
