@@ -96,13 +96,15 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  createdHouseholds      Household[]       @relation("HouseholdCreator")
+  createdHouseholds      Household[]            @relation("HouseholdCreator")
   memberships            HouseholdMember[]
-  ownedPaymentSources    PaymentSource[]   @relation("PaymentSourceOwner")
-  createdTransactions    Transaction[]     @relation("TransactionCreatedBy")
-  updatedTransactions    Transaction[]     @relation("TransactionUpdatedBy")
-  responsibleRecurring   RecurringItem[]   @relation("RecurringItemResponsible")
-  responsibleOccurrences Occurrence[]      @relation("OccurrenceResponsible")
+  ownedPaymentSources    PaymentSource[]        @relation("PaymentSourceOwner")
+  createdTransactions    Transaction[]          @relation("TransactionCreatedBy")
+  updatedTransactions    Transaction[]          @relation("TransactionUpdatedBy")
+  responsibleRecurring   RecurringItem[]        @relation("RecurringItemResponsible")
+  responsibleOccurrences Occurrence[]           @relation("OccurrenceResponsible")
+  deviceInstallations    DeviceInstallation[]
+  notificationDeliveries NotificationDelivery[]
 
   @@map("users")
 }
@@ -129,6 +131,8 @@ model Household {
   recurringItems RecurringItem[]
   occurrences    Occurrence[]
   budgetMonths   BudgetMonth[]
+
+  notificationDeliveries NotificationDelivery[]
 
   @@index([createdByUserId], map: "households_created_by_idx")
   @@map("households")
@@ -331,6 +335,8 @@ model Occurrence {
   responsibleUser User?         @relation("OccurrenceResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   transaction     Transaction?  @relation("TransactionSourceOccurrence")
 
+  notificationDeliveries NotificationDelivery[]
+
   // Settling/skipping an occurrence (status transitions + settledAt + linking a Transaction via
   // Transaction.sourceOccurrenceId) is T-506 — out of scope here. This model only guarantees the
   // shape: a SETTLED occurrence's one-to-one link to its Transaction is enforced by
@@ -373,4 +379,121 @@ model BudgetAllocation {
   @@id([budgetMonthId, categoryId], map: "budget_allocations_pkey")
   @@index([categoryId], map: "budget_allocations_category_id_idx")
   @@map("budget_allocations")
+}
+
+enum DevicePlatform {
+  ANDROID
+  WEB
+
+  @@map("device_platform")
+}
+
+enum NotificationChannel {
+  EXPO
+  WEB_PUSH
+
+  @@map("notification_channel")
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+
+  @@map("notification_delivery_status")
+}
+
+enum NotificationErrorKind {
+  TRANSIENT
+  PERMANENT
+  INVALID_CREDENTIAL
+
+  @@map("notification_error_kind")
+}
+
+// One app install on one device (ADR 0012). This is an identity-scoped resource, not a
+// household-scoped one: a phone belongs to a person, not to a home, so there is no `household_id`
+// here. The ADR 0002 household boundary lives on `notification_deliveries`, which is where the
+// financial data is.
+model DeviceInstallation {
+  id                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // The authenticated owner of this install. Always derived from the verified Firebase token.
+  userId                String              @map("user_id") @db.Uuid
+  // Client-generated and persisted in expo-secure-store / localStorage, so it survives provider
+  // token rotation and re-login. Unique on this column ALONE, not composed with `user_id`: a
+  // second user signing in on the same phone must overwrite the row, because a composite key
+  // would leave the previous user still subscribed on a device they signed out of.
+  installationId        String              @unique(map: "device_installations_installation_id_key") @map("installation_id")
+  platform              DevicePlatform
+  channel               NotificationChannel
+  // AES-256-GCM envelope, `v1.<keyId>.<iv>.<ct+tag>`, with AAD bound to installation + channel.
+  // Null once the install is deactivated — the credential is destroyed, the row is kept for
+  // delivery history.
+  credentialCiphertext  String?             @map("credential_ciphertext")
+  // HMAC-SHA256 of the plaintext credential under a separate pepper. Deterministic so it can be
+  // indexed, one-way so the index never exposes the token. See the partial unique index below.
+  credentialFingerprint String?             @map("credential_fingerprint") @db.Char(64)
+  lastSeenAt            DateTime            @map("last_seen_at") @db.Timestamptz(3)
+  deactivatedAt         DateTime?           @map("deactivated_at") @db.Timestamptz(3)
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // The partial unique index on `credential_fingerprint WHERE deactivated_at IS NULL` cannot be
+  // expressed in Prisma schema syntax, so it is created as raw SQL in the migration
+  // (`device_installations_credential_fingerprint_active_key`). It is what stops a reinstall —
+  // same provider token under a fresh installation id — from producing duplicate push.
+  @@index([userId, deactivatedAt], map: "device_installations_user_id_deactivated_at_idx")
+  @@map("device_installations")
+}
+
+// One row is one logical notification to the occurrence's responsible user, NOT one per device
+// (ADR 0012). Fan-out to that user's active installations happens at send time, so the idempotency
+// key stays independent of a device inventory that changes between enqueue and dispatch.
+model NotificationDelivery {
+  id            String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  householdId   String                     @map("household_id") @db.Uuid
+  occurrenceId  String                     @map("occurrence_id") @db.Uuid
+  // The responsible user frozen at enqueue time. Editing the rule afterwards must not redirect a
+  // reminder that was already queued for someone else.
+  userId        String                     @map("user_id") @db.Uuid
+  offsetDays    Int                        @map("offset_days")
+  // Local America/Asuncion calendar day this reminder belongs to: `due_date - offset_days`.
+  scheduledFor  DateTime                   @map("scheduled_for") @db.Date
+  status        NotificationDeliveryStatus @default(PENDING)
+  // Incremented when the row is CLAIMED, not when it fails, so a process that dies mid-send has
+  // already consumed its attempt and the ceiling of three holds across a crash.
+  attempts      Int                        @default(0)
+  // Only the class, never the provider's raw message: a message can carry an endpoint or token.
+  lastErrorKind NotificationErrorKind?     @map("last_error_kind")
+  claimedAt     DateTime?                  @map("claimed_at") @db.Timestamptz(3)
+  sentAt        DateTime?                  @map("sent_at") @db.Timestamptz(3)
+  createdAt     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  household  Household  @relation(fields: [householdId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // The idempotency key of the enqueue step: the sweep inserts with ON CONFLICT DO NOTHING, so
+  // running it twice — or concurrently with the cron — never queues the same reminder twice.
+  @@unique([occurrenceId, offsetDays], map: "notification_deliveries_occurrence_id_offset_days_key")
+  // Dispatch reads by status and due day; the household index serves per-household dispatch.
+  @@index([status, scheduledFor], map: "notification_deliveries_status_scheduled_for_idx")
+  @@index([householdId, scheduledFor], map: "notification_deliveries_household_id_scheduled_for_idx")
+  @@map("notification_deliveries")
+}
+
+// Replay protection for the HMAC-authenticated internal job endpoint. A table rather than an
+// in-memory set on purpose: the free API instance sleeps on inactivity, which is exactly the
+// scenario where an in-memory nonce store would silently forget everything (ADR 0004).
+model InternalJobNonce {
+  nonce     String   @id
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt], map: "internal_job_nonces_created_at_idx")
+  @@map("internal_job_nonces")
 }
