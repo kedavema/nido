@@ -52,15 +52,15 @@ class FakeOccurrencesRepository implements OccurrencesRepository {
 }
 
 class FakeSweepRepository implements OccurrenceSweepRepository {
-  public calls: { readonly householdId: string; readonly today: Date }[] = [];
+  public calls: { readonly householdId: string; readonly now: Date }[] = [];
   public listedBeforeSweep = false;
   constructor(private readonly repository: FakeOccurrencesRepository) {}
 
-  sweep(householdId: string, today: Date): Promise<void> {
+  sweep(householdId: string, now: Date): Promise<void> {
     // Records whether the list already ran when the sweep is invoked, so the test can assert the
     // sweep is triggered strictly before the read (lazy-on-read must refresh first, then list).
     this.listedBeforeSweep = this.repository.lastFilters !== undefined;
-    this.calls.push({ householdId, today });
+    this.calls.push({ householdId, now });
     return Promise.resolve();
   }
 }
@@ -78,7 +78,7 @@ const clock: Clock = { now: () => now };
 const settlement = new FakeSettlementRepository();
 
 describe('OccurrencesService', () => {
-  it('triggers the sweep for the household before listing, at the current UTC calendar day', async () => {
+  it('triggers the sweep for the household before listing, at the current instant', async () => {
     const repository = new FakeOccurrencesRepository([]);
     const sweep = new FakeSweepRepository(repository);
     const service = new OccurrencesService(repository, sweep, settlement, clock);
@@ -87,7 +87,9 @@ describe('OccurrencesService', () => {
 
     expect(sweep.calls).toHaveLength(1);
     expect(sweep.calls[0]?.householdId).toBe(access.householdId);
-    expect(sweep.calls[0]?.today.toISOString()).toBe('2026-07-23T00:00:00.000Z');
+    // The sweep receives the instant, not a pre-truncated day: generation and overdue marking
+    // still use the UTC day, but delivery scheduling needs the household-local calendar date.
+    expect(sweep.calls[0]?.now.toISOString()).toBe('2026-07-23T09:30:00.000Z');
     expect(sweep.listedBeforeSweep).toBe(false);
   });
 

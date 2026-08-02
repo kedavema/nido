@@ -10,7 +10,6 @@ import type {
 
 import { CLOCK, type Clock } from '../common/clock.js';
 import type { HouseholdAccess } from '../households/household.js';
-import { truncateToUtcDate } from '../recurring-items/occurrence-generation.js';
 import { formatLocalDate, parseLocalDate } from '../transactions/local-date.js';
 import { toTransaction } from '../transactions/transactions.service.js';
 import type { OccurrenceRecord } from './occurrence.js';
@@ -47,7 +46,7 @@ export class OccurrencesService {
     // where the once-per-day sweep is triggered. The sweep no-ops cheaply when already run today,
     // and generates/marks-overdue under an advisory lock otherwise, so the list below always
     // reflects a freshly-swept horizon without depending on the (not-yet-built, M7) scheduler.
-    await this.sweepRepository.sweep(access.householdId, truncateToUtcDate(this.clock.now()));
+    await this.sweepRepository.sweep(access.householdId, this.clock.now());
 
     const occurrences = await this.occurrencesRepository.list(access.householdId, {
       ...(query.status !== undefined ? { statuses: query.status } : {}),

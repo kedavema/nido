@@ -98,11 +98,14 @@ export class PrismaOccurrenceSettlementRepository implements OccurrenceSettlemen
       });
 
       // Step 5: mark the occurrence SETTLED, stamped with the same instant the transaction records.
-      // Step 6 (cancel pending notification deliveries) is a no-op until M7 adds that table.
       const settledOccurrence = await transaction.occurrence.update({
         where: { id: occurrence.id },
         data: { status: 'SETTLED', settledAt: occurredAt },
       });
+
+      // Step 6: cancel every retryable reminder for this occurrence, in the same transaction that
+      // settled it, so a paid expense can never be reminded again on a later retry.
+      await cancelRetryableDeliveries(transaction, occurrence.id);
 
       // Step 7: return both, mapped through the shared record mappers.
       return {
@@ -136,9 +139,32 @@ export class PrismaOccurrenceSettlementRepository implements OccurrenceSettlemen
         where: { id: occurrence.id },
         data: { status: 'SKIPPED' },
       });
+      await cancelRetryableDeliveries(transaction, occurrence.id);
       return { kind: 'skipped', occurrence: toOccurrenceRecord(skippedOccurrence) };
     });
   }
+}
+
+/**
+ * Cancels the reminders that could still be sent for an occurrence (ADR 0012). Runs inside the
+ * settle/skip transaction, so cancellation commits together with the status change and never
+ * leaves a window where a paid occurrence is still queued.
+ *
+ * SENT and FAILED rows are left alone: they are history. A row already claimed as SENDING is
+ * included, but that is at-least-once and not exactly-once — if the dispatcher is inside the
+ * provider call at that exact moment the notification has already left, and the cancel only takes
+ * effect once the claim transaction releases its lock. The window is milliseconds and the worst
+ * case is one extra reminder for a just-paid expense; closing it entirely would need coordination
+ * that the USD 0 profile of ADR 0004 rules out.
+ */
+async function cancelRetryableDeliveries(
+  transaction: Pick<Prisma.TransactionClient, 'notificationDelivery'>,
+  occurrenceId: string,
+): Promise<void> {
+  await transaction.notificationDelivery.updateMany({
+    where: { occurrenceId, status: { in: ['PENDING', 'SENDING'] } },
+    data: { status: 'CANCELLED' },
+  });
 }
 
 function toOccurrenceStatus(value: string): OccurrenceStatus {
