@@ -9,11 +9,12 @@ import { createCredentialKeyring } from './credential-keyring.js';
 import { DevicesController } from './devices.controller.js';
 import { DEVICES_REPOSITORY } from './devices.repository.js';
 import { DevicesService } from './devices.service.js';
+import { ExpoPushSender } from './expo-push.sender.js';
 import { NOTIFICATION_DELIVERIES_REPOSITORY } from './notification-deliveries.repository.js';
 import { NotificationDispatcherService } from './notification-dispatcher.service.js';
 import { PrismaDevicesRepository } from './prisma-devices.repository.js';
 import { PrismaNotificationDeliveriesRepository } from './prisma-notification-deliveries.repository.js';
-import { PUSH_SENDERS } from './push-sender.js';
+import { PUSH_SENDERS, type PushSender } from './push-sender.js';
 
 @Module({
   imports: [AuthModule],
@@ -28,11 +29,13 @@ import { PUSH_SENDERS } from './push-sender.js';
       provide: NOTIFICATION_DELIVERIES_REPOSITORY,
       useExisting: PrismaNotificationDeliveriesRepository,
     },
+    ExpoPushSender,
     {
-      // Empty until the Expo and Web Push adapters land in their own slices. Nothing invokes the
-      // dispatcher over HTTP yet, so an unreachable channel cannot burn attempts in production.
+      // Web Push joins this list in its own slice; the dispatcher picks a sender by channel, so an
+      // installation on a channel with no adapter simply fails rather than crashing the run.
       provide: PUSH_SENDERS,
-      useValue: [],
+      useFactory: (expo: ExpoPushSender): readonly PushSender[] => [expo],
+      inject: [ExpoPushSender],
     },
     SystemClock,
     { provide: CLOCK, useExisting: SystemClock },
