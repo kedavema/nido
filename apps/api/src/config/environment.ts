@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { createCredentialKeyring } from '../notifications/credential-keyring.js';
+
 const CorsOriginsSchema = z
   .string()
   .default('http://localhost:8081,http://localhost:19006')
@@ -21,6 +23,13 @@ export const EnvironmentSchema = z
     FIREBASE_AUTH_EMULATOR_HOST: z.string().trim().min(1).optional(),
     GOOGLE_APPLICATION_CREDENTIALS: z.string().trim().min(1).optional(),
     CORS_ORIGINS: CorsOriginsSchema,
+    // Push credential encryption at rest (ADR 0012). Optional as a set: leaving all three unset
+    // disables device registration rather than blocking boot, which is what local development and
+    // every test that does not touch notifications need. Setting some but not all is a deployment
+    // mistake and fails here, at startup.
+    NOTIFICATION_CREDENTIAL_KEYS: z.string().trim().min(1).optional(),
+    NOTIFICATION_CREDENTIAL_ACTIVE_KEY_ID: z.string().trim().min(1).optional(),
+    NOTIFICATION_CREDENTIAL_PEPPER: z.string().trim().min(1).optional(),
   })
   .superRefine((environment, context) => {
     if (
@@ -31,6 +40,16 @@ export const EnvironmentSchema = z
         code: 'custom',
         path: ['FIREBASE_AUTH_EMULATOR_HOST'],
         message: 'Firebase Auth emulator mode is forbidden in production',
+      });
+    }
+
+    try {
+      createCredentialKeyring(environment);
+    } catch (error) {
+      context.addIssue({
+        code: 'custom',
+        path: ['NOTIFICATION_CREDENTIAL_KEYS'],
+        message: error instanceof Error ? error.message : 'Invalid notification credential keyring',
       });
     }
   });
