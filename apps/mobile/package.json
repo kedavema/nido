@@ -30,7 +30,6 @@
     "@expo-google-fonts/bricolage-grotesque": "0.4.1",
     "@expo-google-fonts/ibm-plex-sans": "0.4.1",
     "@expo/vector-icons": "15.1.1",
-    "@gorhom/bottom-sheet": "5.2.14",
     "@nido/contracts": "workspace:*",
     "@react-native-community/netinfo": "12.0.1",
     "expo": "~57.0.7",
