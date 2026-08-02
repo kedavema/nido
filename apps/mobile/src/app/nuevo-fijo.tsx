@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import { AppBottomSheet } from '@/components/app-bottom-sheet';
+import { CategoryPickerSheet } from '@/components/category-picker-sheet';
 import { DayOfMonthPicker, LocalDatePicker } from '@/components/date-picker';
 import {
   ActionButton,
@@ -25,6 +25,7 @@ import {
 } from '@/components/m1-ui';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
+import { nextRequiredCategoryId, selectedRootCategoryId } from '@/utils/category-selection';
 import { monthlyFirstDueDate } from '@/utils/date-picker';
 import {
   amountToWireDecimal,
@@ -174,7 +175,18 @@ export default function NuevoFijoScreen() {
   const expenseRoots = categories.filter(
     (category) => category.kind === 'EXPENSE' && category.isActive && category.parentId === null,
   );
-  const rootChips = expenseRoots.slice(0, 3);
+  const selectedCategory = categories.find((category) => category.id === draft.categoryId);
+  const selectedRootId = selectedRootCategoryId(draft.categoryId, categories);
+  const rootChips = [
+    ...new Set(
+      [selectedRootId, ...expenseRoots.map((root) => root.id)].filter(
+        (id): id is string => id !== undefined,
+      ),
+    ),
+  ]
+    .map((id) => expenseRoots.find((root) => root.id === id))
+    .filter((root): root is Category => root !== undefined)
+    .slice(0, 3);
   const selectedCategoryLabel =
     draft.categoryId === undefined ? undefined : categoryLabel(draft.categoryId, categories);
 
@@ -186,6 +198,10 @@ export default function NuevoFijoScreen() {
 
   function update(patch: Partial<Draft>): void {
     setDraft((current) => (current === null ? current : { ...current, ...patch }));
+  }
+
+  function selectCategory(category: Category): void {
+    update({ categoryId: nextRequiredCategoryId(draft?.categoryId, category) });
   }
 
   function toggleOffset(value: number): void {
@@ -302,27 +318,25 @@ export default function NuevoFijoScreen() {
                 key={root.id}
                 label={root.name}
                 onPress={() => {
-                  update({ categoryId: root.id });
+                  selectCategory(root);
                 }}
-                selected={draft.categoryId === root.id}
+                selected={selectedRootId === root.id}
               />
             ))}
             <Chip
-              label={
-                selectedCategoryLabel !== undefined &&
-                !rootChips.some((root) => root.id === draft.categoryId)
-                  ? selectedCategoryLabel
-                  : 'Todas ›'
-              }
+              label="Todas ›"
               onPress={() => {
                 setShowCategoryPicker(true);
               }}
-              selected={
-                draft.categoryId !== undefined &&
-                !rootChips.some((root) => root.id === draft.categoryId)
-              }
+              selected={showCategoryPicker}
             />
           </View>
+          {selectedCategoryLabel === undefined ? null : (
+            <Text style={styles.categorySelection}>
+              {selectedCategory?.parentId === null ? 'Categoría' : 'Subcategoría'} seleccionada:{' '}
+              {selectedCategoryLabel}
+            </Text>
+          )}
         </Field>
 
         <Field
@@ -436,18 +450,19 @@ export default function NuevoFijoScreen() {
         {submitError === undefined ? null : <InlineNotice tone="error">{submitError}</InlineNotice>}
       </AppFormScreen>
 
-      <CategoryPickerModal
+      <CategoryPickerSheet
         categories={categories.filter(
           (category) => category.kind === 'EXPENSE' && category.isActive,
         )}
         onClose={() => {
           setShowCategoryPicker(false);
         }}
-        onSelect={(categoryId) => {
-          update({ categoryId });
+        onSelect={(category) => {
+          selectCategory(category);
           setShowCategoryPicker(false);
         }}
         selectedCategoryId={draft.categoryId}
+        subtitle="Para este gasto fijo"
         visible={showCategoryPicker}
       />
     </>
@@ -490,7 +505,11 @@ function Chip({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected]}
+      style={({ pressed }) => [
+        styles.chip,
+        selected && styles.chipSelected,
+        pressed && styles.pressed,
+      ]}
     >
       <Text numberOfLines={1} style={[styles.chipText, selected && styles.chipTextSelected]}>
         {label}
@@ -514,7 +533,11 @@ function SoftChip({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={[styles.softChip, selected && styles.softChipSelected]}
+      style={({ pressed }) => [
+        styles.softChip,
+        selected && styles.softChipSelected,
+        pressed && styles.pressed,
+      ]}
     >
       <Text style={[styles.softChipText, selected && styles.softChipTextSelected]}>{label}</Text>
     </Pressable>
@@ -556,65 +579,6 @@ function Stepper({
       </Pressable>
       <Text style={m1TextStyles.body}>{unit}</Text>
     </View>
-  );
-}
-
-function CategoryPickerModal({
-  visible,
-  categories,
-  selectedCategoryId,
-  onSelect,
-  onClose,
-}: {
-  readonly visible: boolean;
-  readonly categories: readonly Category[];
-  readonly selectedCategoryId: string | undefined;
-  readonly onSelect: (categoryId: string) => void;
-  readonly onClose: () => void;
-}) {
-  const roots = categories.filter((category) => category.parentId === null);
-
-  return (
-    <AppBottomSheet onClose={onClose} title="Elegir categoría" visible={visible}>
-      {roots.map((root) => {
-        const children = categories.filter((category) => category.parentId === root.id);
-        return (
-          <View key={root.id} style={styles.pickerGroup}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                onSelect(root.id);
-              }}
-              style={styles.pickerRootRow}
-            >
-              <View style={[styles.pickerAvatar, { backgroundColor: `${root.color}26` }]}>
-                <Text style={[styles.pickerAvatarText, { color: root.color }]}>
-                  {root.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <Text style={[m1TextStyles.body, styles.pickerRootName]}>{root.name}</Text>
-              {selectedCategoryId === root.id ? (
-                <Ionicons color={themeTokens.colors.primary} name="checkmark" size={18} />
-              ) : null}
-            </Pressable>
-            {children.length > 0 ? (
-              <View style={styles.chipRow}>
-                {children.map((child) => (
-                  <Chip
-                    key={child.id}
-                    label={child.name}
-                    onPress={() => {
-                      onSelect(child.id);
-                    }}
-                    selected={selectedCategoryId === child.id}
-                  />
-                ))}
-              </View>
-            ) : null}
-          </View>
-        );
-      })}
-    </AppBottomSheet>
   );
 }
 
@@ -698,6 +662,11 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: themeTokens.colors.surface,
   },
+  categorySelection: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
   softChip: {
     minHeight: themeTokens.touchTarget.minimum,
     justifyContent: 'center',
@@ -718,6 +687,9 @@ const styles = StyleSheet.create({
   },
   softChipTextSelected: {
     color: themeTokens.colors.primary,
+  },
+  pressed: {
+    opacity: 0.72,
   },
   stepper: {
     flexDirection: 'row',
@@ -752,31 +724,5 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.secondary,
     textAlign: 'center',
-  },
-  pickerGroup: {
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: themeTokens.colors.border,
-    paddingBottom: themeTokens.spacing.cardGap,
-  },
-  pickerRootRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: themeTokens.touchTarget.minimum,
-  },
-  pickerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pickerAvatarText: {
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
-  },
-  pickerRootName: {
-    flex: 1,
   },
 });
