@@ -36,6 +36,9 @@ export const EnvironmentSchema = z
     VAPID_PUBLIC_KEY: z.string().trim().min(1).optional(),
     VAPID_PRIVATE_KEY: z.string().trim().min(1).optional(),
     VAPID_SUBJECT: z.string().trim().min(1).optional(),
+    // Shared secret the daily scheduler signs with (ADR 0012). Optional: without it the internal
+    // job endpoint stays closed, which is the safe direction for an unauthenticated route.
+    NOTIFICATIONS_JOB_HMAC_SECRET: z.string().trim().min(32).optional(),
   })
   .superRefine((environment, context) => {
     if (

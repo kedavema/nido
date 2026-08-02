@@ -8,7 +8,10 @@ import { AppModule } from './app.module.js';
 import { configureApplication } from './configure-application.js';
 import type { Environment } from './config/environment.js';
 
-const app = await NestFactory.create<NestExpressApplication>(AppModule);
+// rawBody keeps the exact bytes of each request available, which the internal job's HMAC guard
+// needs: signing a parsed-and-reserialized body would let key order or whitespace changes slip
+// past the signature.
+const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 const config = app.get<ConfigService<Environment, true>>(ConfigService);
 
 configureApplication(app, {
