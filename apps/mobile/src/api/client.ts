@@ -26,6 +26,9 @@ import {
   ListRecurringItemsResponseSchema,
   ListTransactionsQuerySchema,
   ListTransactionsResponseSchema,
+  RegisterDeviceRequestSchema,
+  RegisterDeviceResponseSchema,
+  VapidPublicKeyResponseSchema,
   MonthSchema,
   MonthlySummaryQuerySchema,
   MonthlySummaryResponseSchema,
@@ -67,6 +70,9 @@ import {
   type ListRecurringItemsResponse,
   type ListTransactionsQuery,
   type ListTransactionsResponse,
+  type RegisterDeviceRequest,
+  type RegisterDeviceResponse,
+  type VapidPublicKeyResponse,
   type MonthlySummaryQuery,
   type MonthlySummaryResponse,
   type ReportMonthQuery,
@@ -283,6 +289,13 @@ export interface NidoApiClient {
     occurrenceId: string,
     input: SettleOccurrenceRequest,
   ): Promise<SettleOccurrenceResponse>;
+  /**
+   * Device endpoints carry no `householdId`: an installation belongs to the authenticated person,
+   * not to a home (ADR 0012). The user is derived from the token, never sent in the body.
+   */
+  getVapidPublicKey(): Promise<VapidPublicKeyResponse>;
+  registerDevice(input: RegisterDeviceRequest): Promise<RegisterDeviceResponse>;
+  deleteDevice(deviceId: string): Promise<void>;
 }
 
 export function createNidoApiClient({
@@ -602,6 +615,21 @@ export function createNidoApiClient({
         SettleOccurrenceResponseSchema,
         { method: 'POST', body },
       );
+    },
+    getVapidPublicKey() {
+      return request('/v1/notifications/vapid-public-key', VapidPublicKeyResponseSchema);
+    },
+    registerDevice(input) {
+      const body = RegisterDeviceRequestSchema.parse(input);
+      return request('/v1/devices/register', RegisterDeviceResponseSchema, {
+        method: 'POST',
+        body,
+      });
+    },
+    deleteDevice(deviceId) {
+      return request(`/v1/devices/${encodeURIComponent(deviceId)}`, z.void(), {
+        method: 'DELETE',
+      });
     },
   };
 }

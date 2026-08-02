@@ -58,6 +58,14 @@ export const eslintConfig = tseslint.config(
     },
   },
   {
+    // The service worker is shipped verbatim from `public/`, never bundled, so it runs in the
+    // service-worker global scope rather than Node's.
+    files: ['apps/mobile/public/**/*.js'],
+    languageOptions: {
+      globals: globals.serviceworker,
+    },
+  },
+  {
     files: ['apps/api/src/**/*module.ts'],
     rules: {
       // Nest modules are intentionally declarative decorator hosts.
