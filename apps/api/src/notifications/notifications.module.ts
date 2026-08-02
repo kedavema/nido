@@ -14,11 +14,14 @@ import { NOTIFICATION_DELIVERIES_REPOSITORY } from './notification-deliveries.re
 import { NotificationDispatcherService } from './notification-dispatcher.service.js';
 import { PrismaDevicesRepository } from './prisma-devices.repository.js';
 import { PrismaNotificationDeliveriesRepository } from './prisma-notification-deliveries.repository.js';
+import { NotificationsController } from './notifications.controller.js';
 import { PUSH_SENDERS, type PushSender } from './push-sender.js';
+import { createVapidKeys, VAPID_KEYS } from './vapid-keys.js';
+import { WebPushSender } from './web-push.sender.js';
 
 @Module({
   imports: [AuthModule],
-  controllers: [DevicesController],
+  controllers: [DevicesController, NotificationsController],
   providers: [
     DevicesService,
     PrismaDevicesRepository,
@@ -30,12 +33,13 @@ import { PUSH_SENDERS, type PushSender } from './push-sender.js';
       useExisting: PrismaNotificationDeliveriesRepository,
     },
     ExpoPushSender,
+    WebPushSender,
     {
-      // Web Push joins this list in its own slice; the dispatcher picks a sender by channel, so an
-      // installation on a channel with no adapter simply fails rather than crashing the run.
+      // The dispatcher picks a sender by channel, so an installation on a channel with no adapter
+      // fails that delivery rather than crashing the run.
       provide: PUSH_SENDERS,
-      useFactory: (expo: ExpoPushSender): readonly PushSender[] => [expo],
-      inject: [ExpoPushSender],
+      useFactory: (expo: ExpoPushSender, web: WebPushSender): readonly PushSender[] => [expo, web],
+      inject: [ExpoPushSender, WebPushSender],
     },
     SystemClock,
     { provide: CLOCK, useExisting: SystemClock },
@@ -59,6 +63,18 @@ import { PUSH_SENDERS, type PushSender } from './push-sender.js';
         });
         return keyring === null ? null : new AesGcmCredentialCipher(keyring);
       },
+      inject: [ConfigService],
+    },
+    {
+      // Null disables the Web Push channel and makes the public-key endpoint answer 503, instead
+      // of the API refusing to boot. A half-configured pair already failed at startup validation.
+      provide: VAPID_KEYS,
+      useFactory: (config: ConfigService<Environment, true>) =>
+        createVapidKeys({
+          VAPID_PUBLIC_KEY: config.get('VAPID_PUBLIC_KEY', { infer: true }),
+          VAPID_PRIVATE_KEY: config.get('VAPID_PRIVATE_KEY', { infer: true }),
+          VAPID_SUBJECT: config.get('VAPID_SUBJECT', { infer: true }),
+        }),
       inject: [ConfigService],
     },
   ],

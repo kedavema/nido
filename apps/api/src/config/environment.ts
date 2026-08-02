@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { createCredentialKeyring } from '../notifications/credential-keyring.js';
+import { createVapidKeys } from '../notifications/vapid-keys.js';
 
 const CorsOriginsSchema = z
   .string()
@@ -30,6 +31,11 @@ export const EnvironmentSchema = z
     NOTIFICATION_CREDENTIAL_KEYS: z.string().trim().min(1).optional(),
     NOTIFICATION_CREDENTIAL_ACTIVE_KEY_ID: z.string().trim().min(1).optional(),
     NOTIFICATION_CREDENTIAL_PEPPER: z.string().trim().min(1).optional(),
+    // Web Push VAPID pair (ADR 0012), optional as a set for the same reason as the keyring above.
+    // The private key is API-only and must never reach the client bundle.
+    VAPID_PUBLIC_KEY: z.string().trim().min(1).optional(),
+    VAPID_PRIVATE_KEY: z.string().trim().min(1).optional(),
+    VAPID_SUBJECT: z.string().trim().min(1).optional(),
   })
   .superRefine((environment, context) => {
     if (
@@ -50,6 +56,16 @@ export const EnvironmentSchema = z
         code: 'custom',
         path: ['NOTIFICATION_CREDENTIAL_KEYS'],
         message: error instanceof Error ? error.message : 'Invalid notification credential keyring',
+      });
+    }
+
+    try {
+      createVapidKeys(environment);
+    } catch (error) {
+      context.addIssue({
+        code: 'custom',
+        path: ['VAPID_PUBLIC_KEY'],
+        message: error instanceof Error ? error.message : 'Invalid VAPID configuration',
       });
     }
   });
