@@ -276,7 +276,7 @@ export default function MasScreen() {
           onPress={() => {
             router.push('/categories');
           }}
-          subtitle="7 raíces fijas · subcategorías editables"
+          subtitle="Categorías y subcategorías editables"
           title="Categorías y subcategorías"
         />
       </Card>
