@@ -6,14 +6,23 @@ import type {
   RecurringItem,
   UpdateRecurringItemRequest,
 } from '@nido/contracts';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { CategoryPickerSheet } from '@/components/category-picker-sheet';
 import { DayOfMonthPicker, LocalDatePicker } from '@/components/date-picker';
+import {
+  AmountField,
+  Chip,
+  ChipRow,
+  formFieldStyles,
+  FormField,
+  FormSection,
+  SoftChip,
+  Stepper,
+} from '@/components/expense-form-fields';
 import {
   ActionButton,
   AppFormScreen,
@@ -25,16 +34,16 @@ import {
 } from '@/components/m1-ui';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
-import { nextRequiredCategoryId, selectedRootCategoryId } from '@/utils/category-selection';
-import { monthlyFirstDueDate } from '@/utils/date-picker';
 import {
-  amountToWireDecimal,
-  formatAmountDisplay,
-  isValidLocalDateString,
-  sanitizeAmountInput,
-} from '@/utils/expense-form';
+  nextRequiredCategoryId,
+  rootCategoryChips,
+  selectedRootCategoryId,
+  subcategoryChips,
+} from '@/utils/category-selection';
+import { monthlyFirstDueDate } from '@/utils/date-picker';
+import { amountToWireDecimal, isValidLocalDateString } from '@/utils/expense-form';
 import { dayOfMonth, NOTIFICATION_OFFSET_OPTIONS } from '@/utils/fijos-format';
-import { categoryLabel, todayLocalDate } from '@/utils/movement-format';
+import { todayLocalDate } from '@/utils/movement-format';
 
 const FREQUENCY_OPTIONS: readonly (readonly [FrequencyKind, string])[] = [
   ['ONE_TIME', 'Una vez'],
@@ -172,23 +181,12 @@ export default function NuevoFijoScreen() {
   }
 
   const { categories, members } = screenState;
-  const expenseRoots = categories.filter(
-    (category) => category.kind === 'EXPENSE' && category.isActive && category.parentId === null,
+  const expenseCategories = categories.filter(
+    (category) => category.kind === 'EXPENSE' && category.isActive,
   );
-  const selectedCategory = categories.find((category) => category.id === draft.categoryId);
   const selectedRootId = selectedRootCategoryId(draft.categoryId, categories);
-  const rootChips = [
-    ...new Set(
-      [selectedRootId, ...expenseRoots.map((root) => root.id)].filter(
-        (id): id is string => id !== undefined,
-      ),
-    ),
-  ]
-    .map((id) => expenseRoots.find((root) => root.id === id))
-    .filter((root): root is Category => root !== undefined)
-    .slice(0, 3);
-  const selectedCategoryLabel =
-    draft.categoryId === undefined ? undefined : categoryLabel(draft.categoryId, categories);
+  const rootChips = rootCategoryChips(expenseCategories, [selectedRootId], 3);
+  const childChips = subcategoryChips(expenseCategories, selectedRootId, draft.categoryId, 3);
 
   const usesDayOfMonth = draft.frequency === 'MONTHLY' || draft.frequency === 'EVERY_N_MONTHS';
   const nameValid = draft.name.trim() !== '';
@@ -289,7 +287,7 @@ export default function NuevoFijoScreen() {
           />
         }
       >
-        <Field
+        <FormField
           label="Nombre"
           error={showValidation && !nameValid ? 'Completá este campo' : undefined}
         >
@@ -301,18 +299,24 @@ export default function NuevoFijoScreen() {
             }}
             placeholder="ANDE · luz"
             placeholderTextColor={themeTokens.colors.inkSecondary}
-            style={[styles.input, showValidation && !nameValid && styles.inputError]}
+            style={[
+              formFieldStyles.textField,
+              showValidation && !nameValid && formFieldStyles.textFieldError,
+            ]}
             value={draft.name}
           />
-        </Field>
+        </FormField>
 
-        <Field
+        <FormSection
           label="Categoría"
           error={
             showValidation && draft.categoryId === undefined ? 'Completá este campo' : undefined
           }
+          onSeeAll={() => {
+            setShowCategoryPicker(true);
+          }}
         >
-          <View style={styles.chipRow}>
+          <ChipRow>
             {rootChips.map((root) => (
               <Chip
                 key={root.id}
@@ -323,47 +327,45 @@ export default function NuevoFijoScreen() {
                 selected={selectedRootId === root.id}
               />
             ))}
-            <Chip
-              label="Todas ›"
-              onPress={() => {
-                setShowCategoryPicker(true);
-              }}
-              selected={showCategoryPicker}
-            />
-          </View>
-          {selectedCategoryLabel === undefined ? null : (
-            <Text style={styles.categorySelection}>
-              {selectedCategory?.parentId === null ? 'Categoría' : 'Subcategoría'} seleccionada:{' '}
-              {selectedCategoryLabel}
-            </Text>
-          )}
-        </Field>
+          </ChipRow>
+        </FormSection>
 
-        <Field
+        {childChips.length === 0 ? null : (
+          <FormSection label="Subcategoría (opcional)">
+            <ChipRow>
+              {childChips.map((child) => (
+                <Chip
+                  key={child.id}
+                  label={child.name}
+                  onPress={() => {
+                    selectCategory(child);
+                  }}
+                  selected={draft.categoryId === child.id}
+                />
+              ))}
+            </ChipRow>
+          </FormSection>
+        )}
+
+        <FormField
           label="Importe estimado"
           error={showValidation && !amountValid ? 'Completá este campo' : undefined}
         >
-          <View style={[styles.amountField, showValidation && !amountValid && styles.inputError]}>
-            <Text style={styles.amountPrefix}>Gs.</Text>
-            <TextInput
-              accessibilityLabel="Importe estimado"
-              keyboardType="number-pad"
-              onChangeText={(text) => {
-                update({ amount: sanitizeAmountInput(text, 'PYG') });
-              }}
-              placeholder="0"
-              placeholderTextColor={themeTokens.colors.inkSecondary}
-              style={styles.amountInput}
-              value={formatAmountDisplay(draft.amount, 'PYG')}
-            />
-          </View>
+          <AmountField
+            accessibilityLabel="Importe estimado"
+            currency="PYG"
+            onChangeText={(amount) => {
+              update({ amount });
+            }}
+            value={draft.amount}
+          />
           <Text style={m1TextStyles.secondary}>
             Al marcarlo pagado confirmás el importe real de ese mes.
           </Text>
-        </Field>
+        </FormField>
 
-        <Field label="Recurrencia">
-          <View style={styles.chipRow}>
+        <FormSection label="Recurrencia">
+          <ChipRow>
             {FREQUENCY_OPTIONS.map(([value, label]) => (
               <Chip
                 key={value}
@@ -374,7 +376,7 @@ export default function NuevoFijoScreen() {
                 selected={draft.frequency === value}
               />
             ))}
-          </View>
+          </ChipRow>
           {draft.frequency === 'EVERY_N_MONTHS' ? (
             <Stepper
               label="cada"
@@ -388,9 +390,9 @@ export default function NuevoFijoScreen() {
               value={draft.intervalMonths}
             />
           ) : null}
-        </Field>
+        </FormSection>
 
-        <Field label="Vencimiento">
+        <FormField label="Vencimiento">
           {usesDayOfMonth ? (
             <DayOfMonthPicker
               accessibilityLabel="Vencimiento"
@@ -412,10 +414,10 @@ export default function NuevoFijoScreen() {
               value={draft.firstDueDate}
             />
           )}
-        </Field>
+        </FormField>
 
-        <Field label="Responsable">
-          <View style={styles.chipRow}>
+        <FormSection label="Responsable">
+          <ChipRow>
             {members.map((member) => (
               <Chip
                 key={member.userId}
@@ -429,11 +431,11 @@ export default function NuevoFijoScreen() {
                 selected={draft.responsibleUserId === member.userId}
               />
             ))}
-          </View>
-        </Field>
+          </ChipRow>
+        </FormSection>
 
-        <Field label="Avisos · podés elegir varios">
-          <View style={styles.chipRow}>
+        <FormSection label="Avisos" sublabel="podés elegir varios">
+          <ChipRow>
             {NOTIFICATION_OFFSET_OPTIONS.map((option) => (
               <SoftChip
                 key={option.value}
@@ -444,8 +446,8 @@ export default function NuevoFijoScreen() {
                 selected={draft.notificationOffsets.includes(option.value)}
               />
             ))}
-          </View>
-        </Field>
+          </ChipRow>
+        </FormSection>
 
         {submitError === undefined ? null : <InlineNotice tone="error">{submitError}</InlineNotice>}
       </AppFormScreen>
@@ -469,256 +471,7 @@ export default function NuevoFijoScreen() {
   );
 }
 
-function Field({
-  label,
-  error,
-  children,
-}: {
-  readonly label: string;
-  readonly error?: string | undefined;
-  readonly children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
-      {error === undefined ? null : (
-        <Text accessibilityLiveRegion="polite" style={styles.errorText}>
-          {error}
-        </Text>
-      )}
-    </View>
-  );
-}
-
-function Chip({
-  label,
-  selected,
-  onPress,
-}: {
-  readonly label: string;
-  readonly selected: boolean;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        selected && styles.chipSelected,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text numberOfLines={1} style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-/** The lighter, outlined "toggle" chip style FIJ-02 uses for the multi-select "Avisos" options. */
-function SoftChip({
-  label,
-  selected,
-  onPress,
-}: {
-  readonly label: string;
-  readonly selected: boolean;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.softChip,
-        selected && styles.softChipSelected,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text style={[styles.softChipText, selected && styles.softChipTextSelected]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function Stepper({
-  label,
-  value,
-  unit,
-  onDecrement,
-  onIncrement,
-}: {
-  readonly label: string;
-  readonly value: number;
-  readonly unit: string;
-  readonly onDecrement: () => void;
-  readonly onIncrement: () => void;
-}) {
-  return (
-    <View style={styles.stepper}>
-      <Text style={m1TextStyles.body}>{label}</Text>
-      <Pressable
-        accessibilityLabel="Restar"
-        accessibilityRole="button"
-        onPress={onDecrement}
-        style={styles.stepperButton}
-      >
-        <Ionicons color={themeTokens.colors.primary} name="remove" size={18} />
-      </Pressable>
-      <Text style={styles.stepperValue}>{value.toString()}</Text>
-      <Pressable
-        accessibilityLabel="Sumar"
-        accessibilityRole="button"
-        onPress={onIncrement}
-        style={styles.stepperButton}
-      >
-        <Ionicons color={themeTokens.colors.primary} name="add" size={18} />
-      </Pressable>
-      <Text style={m1TextStyles.body}>{unit}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  field: {
-    gap: 8,
-  },
-  fieldLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
-  input: {
-    minHeight: themeTokens.touchTarget.minimum,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.button,
-    backgroundColor: themeTokens.colors.surface,
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  inputError: {
-    borderColor: themeTokens.semanticColors.danger.foreground,
-  },
-  errorText: {
-    color: themeTokens.semanticColors.danger.foreground,
-    fontFamily: themeTokens.typography.families.bodyMedium,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
-  amountField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: themeTokens.touchTarget.minimum,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.button,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 12,
-  },
-  amountPrefix: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
-  },
-  amountInput: {
-    flex: 1,
-    minWidth: 0,
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
-    paddingVertical: 10,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    minHeight: themeTokens.touchTarget.minimum,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 16,
-  },
-  chipSelected: {
-    borderColor: themeTokens.colors.primary,
-    backgroundColor: themeTokens.colors.primary,
-  },
-  chipText: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-    maxWidth: 200,
-  },
-  chipTextSelected: {
-    color: themeTokens.colors.surface,
-  },
-  categorySelection: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
-  softChip: {
-    minHeight: themeTokens.touchTarget.minimum,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 16,
-  },
-  softChipSelected: {
-    borderColor: themeTokens.colors.primary,
-    backgroundColor: themeTokens.colors.primaryTint,
-  },
-  softChipText: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
-  softChipTextSelected: {
-    color: themeTokens.colors.primary,
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: themeTokens.touchTarget.minimum,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.button,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  stepperButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.primary,
-  },
-  stepperValue: {
-    minWidth: 28,
-    textAlign: 'center',
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
-  },
   footerHint: {
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodyRegular,

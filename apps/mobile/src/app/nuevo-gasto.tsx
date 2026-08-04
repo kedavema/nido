@@ -18,6 +18,13 @@ import { messageForActionError, useSession } from '@/auth/session-provider';
 import { AppBottomSheet } from '@/components/app-bottom-sheet';
 import { CategoryPickerSheet } from '@/components/category-picker-sheet';
 import {
+  AmountField,
+  Chip,
+  ChipRow,
+  formFieldStyles,
+  FormSection,
+} from '@/components/expense-form-fields';
+import {
   ActionButton,
   AppFormScreen,
   AppScreen,
@@ -32,7 +39,12 @@ import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { cardShadowStyle } from '@/theme/styles';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
-import { nextRequiredCategoryId, selectedRootCategoryId } from '@/utils/category-selection';
+import {
+  nextRequiredCategoryId,
+  rootCategoryChips,
+  selectedRootCategoryId,
+  subcategoryChips,
+} from '@/utils/category-selection';
 import {
   amountToWireDecimal,
   favoritePaymentSourceIds,
@@ -45,7 +57,6 @@ import {
   mostRecentUsdRate,
   previewUsdToBasePyg,
   recentRootCategoryIds,
-  sanitizeAmountInput,
   sanitizeFxRateInput,
   shiftLocalDate,
 } from '@/utils/expense-form';
@@ -265,47 +276,22 @@ export default function NuevoGastoScreen() {
     [transactions, categories, categoryKind, todayLocal],
   );
 
-  const selectedCategory = categories.find((category) => category.id === draft?.categoryId);
   const selectedRootId = selectedRootCategoryId(draft?.categoryId, categories);
 
-  const rootCategoryChips = useMemo(() => {
-    const roots = categories.filter(
-      (category) =>
-        category.kind === categoryKind && category.isActive && category.parentId === null,
-    );
-    const ids = [
-      ...new Set([selectedRootId, ...recentRootIds].filter((id): id is string => id !== undefined)),
-    ];
-    const chips = ids
-      .map((id) => roots.find((root) => root.id === id))
-      .filter((root): root is Category => root !== undefined);
-    if (chips.length > 0) return chips.slice(0, 3);
-    // No usage history yet: fall back to the first 3 active roots so the form isn't empty.
-    return roots.slice(0, 3);
-  }, [categories, categoryKind, recentRootIds, selectedRootId]);
+  const kindCategories = useMemo(
+    () => categories.filter((category) => category.kind === categoryKind && category.isActive),
+    [categories, categoryKind],
+  );
 
-  const subcategoryChips = useMemo(() => {
-    if (selectedRootId === undefined) return [];
-    const children = categories.filter(
-      (category) => category.parentId === selectedRootId && category.isActive,
-    );
-    if (children.length === 0) return [];
-    const selectedChildId =
-      selectedCategory?.parentId === null || selectedCategory === undefined
-        ? undefined
-        : selectedCategory.id;
-    const ordered = [
-      ...new Set(
-        [selectedChildId, ...children.map((child) => child.id)].filter(
-          (id): id is string => id !== undefined,
-        ),
-      ),
-    ];
-    return ordered
-      .map((id) => children.find((child) => child.id === id))
-      .filter((child): child is Category => child !== undefined)
-      .slice(0, 3);
-  }, [categories, selectedRootId, selectedCategory]);
+  const rootChips = useMemo(
+    () => rootCategoryChips(kindCategories, [selectedRootId, ...recentRootIds], 3),
+    [kindCategories, recentRootIds, selectedRootId],
+  );
+
+  const childChips = useMemo(
+    () => subcategoryChips(kindCategories, selectedRootId, draft?.categoryId, 3),
+    [kindCategories, selectedRootId, draft?.categoryId],
+  );
 
   const activePaymentSourceIds = useMemo(
     () => new Set(paymentSources.filter((source) => source.isActive).map((source) => source.id)),
@@ -537,6 +523,8 @@ export default function NuevoGastoScreen() {
         }
       >
         <AmountField
+          accessibilityLabel="Monto"
+          autoFocus
           currency={draft.currency}
           onChangeText={(amount) => {
             updateDraft({ amount });
@@ -575,17 +563,17 @@ export default function NuevoGastoScreen() {
           </View>
         ) : null}
 
-        <Section
+        <FormSection
           label="Categoría"
           onSeeAll={() => {
             setShowCategoryPicker(true);
           }}
           sublabel={
-            rootCategoryChips.length > 0 && selectedRootId !== undefined ? 'recientes' : undefined
+            rootChips.length > 0 && selectedRootId !== undefined ? 'recientes' : undefined
           }
         >
           <ChipRow>
-            {rootCategoryChips.map((category) => (
+            {rootChips.map((category) => (
               <Chip
                 key={category.id}
                 label={category.name}
@@ -596,12 +584,12 @@ export default function NuevoGastoScreen() {
               />
             ))}
           </ChipRow>
-        </Section>
+        </FormSection>
 
-        {subcategoryChips.length === 0 ? null : (
-          <Section label="Subcategoría (opcional)">
+        {childChips.length === 0 ? null : (
+          <FormSection label="Subcategoría (opcional)">
             <ChipRow>
-              {subcategoryChips.map((child) => (
+              {childChips.map((child) => (
                 <Chip
                   key={child.id}
                   label={child.name}
@@ -612,10 +600,10 @@ export default function NuevoGastoScreen() {
                 />
               ))}
             </ChipRow>
-          </Section>
+          </FormSection>
         )}
 
-        <Section
+        <FormSection
           label="Pagado con"
           onSeeAll={() => {
             setShowPaymentSourcePicker(true);
@@ -634,26 +622,26 @@ export default function NuevoGastoScreen() {
               />
             ))}
           </ChipRow>
-        </Section>
+        </FormSection>
 
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Fecha</Text>
+        <View style={formFieldStyles.field}>
+          <Text style={formFieldStyles.fieldLabel}>Fecha</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => {
               setShowDatePicker(true);
             }}
-            style={({ pressed }) => [styles.dateField, pressed && styles.fieldPressed]}
+            style={({ pressed }) => [formFieldStyles.dateField, pressed && formFieldStyles.fieldPressed]}
           >
-            <Text numberOfLines={1} style={[m1TextStyles.body, styles.dateFieldText]}>
+            <Text numberOfLines={1} style={[m1TextStyles.body, formFieldStyles.dateFieldText]}>
               {draft.localDate === todayLocal ? 'Hoy · ' : ''}
               {formatFullLocalDate(draft.localDate)}
             </Text>
             <Ionicons color={themeTokens.colors.inkSecondary} name="chevron-down" size={16} />
           </Pressable>
         </View>
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Comercio</Text>
+        <View style={formFieldStyles.field}>
+          <Text style={formFieldStyles.fieldLabel}>Comercio</Text>
           <TextInput
             accessibilityLabel="Comercio"
             maxLength={200}
@@ -662,14 +650,14 @@ export default function NuevoGastoScreen() {
             }}
             placeholder="¿Dónde fue?"
             placeholderTextColor={themeTokens.colors.inkSecondary}
-            style={styles.textField}
+            style={formFieldStyles.textField}
             value={draft.description}
           />
         </View>
 
         {notesExpanded ? (
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Nota (opcional)</Text>
+          <View style={formFieldStyles.field}>
+            <Text style={formFieldStyles.fieldLabel}>Nota (opcional)</Text>
             <TextInput
               accessibilityLabel="Nota"
               maxLength={2000}
@@ -682,7 +670,7 @@ export default function NuevoGastoScreen() {
               // The field has no max height, so it can grow instead and leave
               // scrolling to the screen.
               scrollEnabled={false}
-              style={[styles.textField, styles.notesField]}
+              style={[formFieldStyles.textField, styles.notesField]}
               value={draft.notes}
             />
           </View>
@@ -793,98 +781,6 @@ function CurrencyToggle({
   );
 }
 
-function AmountField({
-  currency,
-  value,
-  onChangeText,
-}: {
-  readonly currency: TransactionCurrency;
-  readonly value: string;
-  readonly onChangeText: (value: string) => void;
-}) {
-  return (
-    <View style={styles.amountRow}>
-      <Text style={styles.amountPrefix}>{currency === 'PYG' ? 'Gs.' : 'USD'}</Text>
-      <TextInput
-        accessibilityLabel="Monto"
-        autoFocus
-        keyboardType={currency === 'PYG' ? 'number-pad' : 'decimal-pad'}
-        onChangeText={(text) => {
-          onChangeText(sanitizeAmountInput(text, currency));
-        }}
-        placeholder="0"
-        placeholderTextColor={themeTokens.colors.inkSecondary}
-        style={styles.amountInput}
-        value={formatAmountDisplay(value, currency)}
-      />
-    </View>
-  );
-}
-
-function Section({
-  label,
-  sublabel,
-  onSeeAll,
-  children,
-}: {
-  readonly label: string;
-  readonly sublabel?: string | undefined;
-  readonly onSeeAll?: () => void;
-  readonly children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.fieldLabel}>
-          {label}
-          {sublabel === undefined ? '' : ` · ${sublabel}`}
-        </Text>
-        {onSeeAll === undefined ? null : (
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={4}
-            onPress={onSeeAll}
-            style={({ pressed }) => [styles.seeAllButton, pressed && styles.chipPressed]}
-          >
-            <Text style={styles.seeAll}>Ver todas ›</Text>
-          </Pressable>
-        )}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function ChipRow({ children }: { readonly children: React.ReactNode }) {
-  return <View style={styles.chipRow}>{children}</View>;
-}
-
-function Chip({
-  label,
-  selected,
-  onPress,
-}: {
-  readonly label: string;
-  readonly selected: boolean;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        selected && styles.chipSelected,
-        pressed && styles.chipPressed,
-      ]}
-    >
-      <Text numberOfLines={1} style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
 
 function PaymentSourcePickerModal({
   visible,
@@ -1026,14 +922,14 @@ function DatePickerModal({
               variant="secondary"
             />
           </View>
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Otra fecha (aaaa-mm-dd)</Text>
+          <View style={formFieldStyles.field}>
+            <Text style={formFieldStyles.fieldLabel}>Otra fecha (aaaa-mm-dd)</Text>
             <TextInput
               accessibilityLabel="Otra fecha"
               onChangeText={setManualDate}
               placeholder="2026-07-15"
               placeholderTextColor={themeTokens.colors.inkSecondary}
-              style={styles.textField}
+              style={formFieldStyles.textField}
               value={manualDate}
             />
           </View>
@@ -1216,31 +1112,6 @@ const styles = StyleSheet.create({
   currencyOptionTextActive: {
     color: themeTokens.colors.ink,
   },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingVertical: themeTokens.spacing.cardGap,
-  },
-  amountPrefix: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.cardTitle,
-    paddingBottom: 6,
-  },
-  amountInput: {
-    flex: 1,
-    // On web, react-native-web renders this as a plain <input>, and the browser's UA default
-    // min-content width for a text input scales with fontSize (here 40px) — without an explicit
-    // minWidth override, Chrome refuses to shrink the flex item below that intrinsic width
-    // (~470px+ at this font size), overflowing `amountRow` and the whole form's ScrollView
-    // horizontally. minWidth: 0 lets the flex-basis:0/flex-grow:1 sizing actually apply.
-    minWidth: 0,
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displayBold,
-    fontSize: 40,
-    padding: 0,
-  },
   fxCard: {
     gap: 8,
     borderWidth: 1,
@@ -1282,91 +1153,8 @@ const styles = StyleSheet.create({
     fontSize: themeTokens.typography.scale.body,
     textAlign: 'center',
   },
-  section: {
-    gap: 8,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  fieldLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
-  seeAll: {
-    color: themeTokens.colors.primary,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
-  seeAllButton: {
-    minHeight: themeTokens.touchTarget.minimum,
-    justifyContent: 'center',
-    paddingLeft: 12,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    minHeight: themeTokens.touchTarget.minimum,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 14,
-  },
-  chipSelected: {
-    borderColor: themeTokens.colors.primary,
-    backgroundColor: themeTokens.colors.primary,
-  },
   chipPressed: {
     opacity: 0.72,
-  },
-  chipText: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-    maxWidth: 160,
-  },
-  chipTextSelected: {
-    color: themeTokens.colors.surface,
-  },
-  field: {
-    gap: 8,
-  },
-  dateField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: themeTokens.touchTarget.minimum,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.button,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 12,
-  },
-  dateFieldText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  fieldPressed: {
-    backgroundColor: themeTokens.colors.surfaceMuted,
-  },
-  textField: {
-    minHeight: themeTokens.touchTarget.minimum,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.button,
-    backgroundColor: themeTokens.colors.surface,
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
   notesField: {
     minHeight: 80,

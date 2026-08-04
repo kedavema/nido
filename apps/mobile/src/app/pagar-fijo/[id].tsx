@@ -8,9 +8,15 @@ import type {
 } from '@nido/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import {
+  AmountField,
+  Chip,
+  ChipRow,
+  formFieldStyles,
+} from '@/components/expense-form-fields';
 import {
   ActionButton,
   AppFormScreen,
@@ -24,10 +30,8 @@ import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
 import {
   amountToWireDecimal,
-  formatAmountDisplay,
   isValidLocalDateString,
   localDateToOccurredAt,
-  sanitizeAmountInput,
 } from '@/utils/expense-form';
 import { formatOccurrenceAmount } from '@/utils/fijos-format';
 import {
@@ -174,29 +178,26 @@ export default function PagarFijoScreen() {
         />
       }
     >
-      <Text style={styles.amountLabel}>Importe real {verb}</Text>
-      <View style={styles.amountRow}>
-        <Text style={styles.amountPrefix}>{currency === 'PYG' ? 'Gs.' : 'USD'}</Text>
-        <TextInput
-          accessibilityLabel="Importe real"
-          autoFocus
-          keyboardType={currency === 'PYG' ? 'number-pad' : 'decimal-pad'}
-          onChangeText={(text) => {
-            setAmount(sanitizeAmountInput(text, currency));
-          }}
-          placeholder="0"
-          placeholderTextColor={themeTokens.colors.inkSecondary}
-          style={styles.amountInput}
-          value={formatAmountDisplay(amount, currency)}
-        />
-      </View>
-      <Text style={styles.amountHint}>
-        Estimado: {formatOccurrenceAmount(occurrence.amount, currency)} · editá si{' '}
-        {verb === 'pagado' ? 'pagaron' : 'recibieron'} otro monto
-      </Text>
+      <AmountField
+        accessibilityLabel="Importe real"
+        autoFocus
+        currency={currency}
+        hint={
+          <>
+            Estimado: {formatOccurrenceAmount(occurrence.amount, currency)} · editá si{' '}
+            {verb === 'pagado' ? 'pagaron' : 'recibieron'} otro monto
+          </>
+        }
+        label={`Importe real ${verb}`}
+        onChangeText={setAmount}
+        value={amount}
+        variant="centered"
+      />
 
-      <Text style={styles.fieldLabel}>{verb === 'pagado' ? 'Pagado con' : 'Recibido en'}</Text>
-      <View style={styles.chipRow}>
+      <Text style={formFieldStyles.fieldLabel}>
+        {verb === 'pagado' ? 'Pagado con' : 'Recibido en'}
+      </Text>
+      <ChipRow>
         {activeSources.map((source) => (
           <Chip
             key={source.id}
@@ -210,10 +211,10 @@ export default function PagarFijoScreen() {
         {activeSources.length === 0 ? (
           <Text style={m1TextStyles.secondary}>Sin medios de pago cargados.</Text>
         ) : null}
-      </View>
+      </ChipRow>
 
-      <Text style={styles.fieldLabel}>Fecha de pago</Text>
-      <View style={styles.chipRow}>
+      <Text style={formFieldStyles.fieldLabel}>Fecha de pago</Text>
+      <ChipRow>
         <Chip
           label={`Hoy · ${formatFullLocalDate(todayLocal).replace(/\s\d{4}$/u, '')}`}
           onPress={() => {
@@ -229,9 +230,9 @@ export default function PagarFijoScreen() {
           }}
           selected={choosingDate || payDate !== todayLocal}
         />
-      </View>
+      </ChipRow>
       {choosingDate ? (
-        <View style={styles.field}>
+        <View style={formFieldStyles.field}>
           <TextInput
             accessibilityLabel="Otra fecha (aaaa-mm-dd)"
             onChangeText={(text) => {
@@ -242,7 +243,7 @@ export default function PagarFijoScreen() {
             }}
             placeholder="2026-07-15"
             placeholderTextColor={themeTokens.colors.inkSecondary}
-            style={styles.dateInput}
+            style={formFieldStyles.textField}
             value={manualDate}
           />
         </View>
@@ -260,108 +261,3 @@ export default function PagarFijoScreen() {
     </AppFormScreen>
   );
 }
-
-function Chip({
-  label,
-  selected,
-  onPress,
-}: {
-  readonly label: string;
-  readonly selected: boolean;
-  readonly onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected]}
-    >
-      <Text numberOfLines={1} style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  amountLabel: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-    textAlign: 'center',
-  },
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  amountPrefix: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.cardTitle,
-    paddingBottom: 8,
-  },
-  amountInput: {
-    minWidth: 0,
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displayBold,
-    fontSize: 44,
-    padding: 0,
-    textAlign: 'center',
-  },
-  amountHint: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.secondary,
-    textAlign: 'center',
-  },
-  fieldLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    minHeight: themeTokens.touchTarget.minimum,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 16,
-  },
-  chipSelected: {
-    borderColor: themeTokens.colors.primary,
-    backgroundColor: themeTokens.colors.primary,
-  },
-  chipText: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-    maxWidth: 200,
-  },
-  chipTextSelected: {
-    color: themeTokens.colors.surface,
-  },
-  field: {
-    gap: 8,
-  },
-  dateInput: {
-    minHeight: themeTokens.touchTarget.minimum,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.button,
-    backgroundColor: themeTokens.colors.surface,
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-});
