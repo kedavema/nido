@@ -16,6 +16,7 @@ import {
   m1TextStyles,
 } from '@/components/m1-ui';
 import { createInvitationRequestGuard } from '@/invitations/invitation-request-guard';
+import { navigateToIngresos } from '@/navigation/ingresos-routes';
 import {
   CREATE_TRANSACTION_MUTATION_TYPE,
   decideSignOutFlow,
@@ -278,6 +279,17 @@ export default function MasScreen() {
           }}
           subtitle="Categorías y subcategorías editables"
           title="Categorías y subcategorías"
+        />
+        {/* The only other way into the expected-income list is the Balance card's income figure
+            on Inicio, and that card is not rendered for a month with no movements — which left
+            the flow unreachable exactly when a user is most likely to be setting it up. This row
+            is unconditional. */}
+        <ConfigRow
+          onPress={() => {
+            navigateToIngresos();
+          }}
+          subtitle="Lo que esperás cobrar este mes"
+          title="Ingresos esperados"
         />
       </Card>
 
