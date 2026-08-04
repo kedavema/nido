@@ -568,9 +568,7 @@ export default function NuevoGastoScreen() {
           onSeeAll={() => {
             setShowCategoryPicker(true);
           }}
-          sublabel={
-            rootChips.length > 0 && selectedRootId !== undefined ? 'recientes' : undefined
-          }
+          sublabel={rootChips.length > 0 && selectedRootId !== undefined ? 'recientes' : undefined}
         >
           <ChipRow>
             {rootChips.map((category) => (
@@ -631,7 +629,10 @@ export default function NuevoGastoScreen() {
             onPress={() => {
               setShowDatePicker(true);
             }}
-            style={({ pressed }) => [formFieldStyles.dateField, pressed && formFieldStyles.fieldPressed]}
+            style={({ pressed }) => [
+              formFieldStyles.dateField,
+              pressed && formFieldStyles.fieldPressed,
+            ]}
           >
             <Text numberOfLines={1} style={[m1TextStyles.body, formFieldStyles.dateFieldText]}>
               {draft.localDate === todayLocal ? 'Hoy · ' : ''}
@@ -780,7 +781,6 @@ function CurrencyToggle({
     </View>
   );
 }
-
 
 function PaymentSourcePickerModal({
   visible,

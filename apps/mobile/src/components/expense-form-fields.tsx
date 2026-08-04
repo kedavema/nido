@@ -104,7 +104,11 @@ export function Chip({
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => [styles.chip, selected && styles.chipSelected, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.chip,
+        selected && styles.chipSelected,
+        pressed && styles.pressed,
+      ]}
     >
       <Text numberOfLines={1} style={[styles.chipText, selected && styles.chipTextSelected]}>
         {label}

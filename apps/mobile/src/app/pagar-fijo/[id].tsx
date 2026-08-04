@@ -11,12 +11,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
-import {
-  AmountField,
-  Chip,
-  ChipRow,
-  formFieldStyles,
-} from '@/components/expense-form-fields';
+import { AmountField, Chip, ChipRow, formFieldStyles } from '@/components/expense-form-fields';
 import {
   ActionButton,
   AppFormScreen,

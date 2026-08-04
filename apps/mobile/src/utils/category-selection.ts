@@ -100,9 +100,7 @@ function orderedByPreference(
   preferred: readonly (string | undefined)[],
   rest: readonly string[],
 ): readonly Category[] {
-  const ids = [
-    ...new Set([...preferred, ...rest].filter((id): id is string => id !== undefined)),
-  ];
+  const ids = [...new Set([...preferred, ...rest].filter((id): id is string => id !== undefined))];
   return ids
     .map((id) => pool.find((candidate) => candidate.id === id))
     .filter((candidate): candidate is Category => candidate !== undefined);
