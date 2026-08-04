@@ -18,11 +18,11 @@ import {
 } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
 
-// MAS-03 caption, binding product rule: root categories keep budget/report comparability across
-// households, so they can never be renamed, archived, or created from this screen — only their
-// subcategories can.
+// MAS-03 caption. The 12 seeded roots exist so budget and report comparisons hold across
+// households; roots are now creatable and editable, so the caption explains the tradeoff rather
+// than asserting a restriction the screen no longer enforces.
 const ROOT_RULE_NOTICE =
-  'Las 7 categorías raíz no se pueden renombrar ni borrar: mantienen comparables presupuesto e informes.';
+  'Las categorías raíz que vienen por defecto mantienen comparables presupuesto e informes. Podés agregar las tuyas, pero solo vos las vas a ver en tus reportes.';
 
 type LoadState =
   | { readonly kind: 'loading' }
@@ -37,7 +37,8 @@ interface EditDraft {
   readonly name: string;
   readonly icon: string;
   readonly color: string;
-  readonly parentId: string;
+  /** `null` when the draft is a root — roots have no parent to reassign. */
+  readonly parentId: string | null;
   readonly isActive: boolean;
 }
 
@@ -50,6 +51,18 @@ interface NewSubcategoryDraft {
   readonly name: string;
 }
 
+/** Creating a root is the opposite case: a root has no parent to inherit from, so it must carry
+ * its own icon and color and the form asks for all three. */
+interface NewRootDraft {
+  readonly kind: CategoryKind;
+  readonly name: string;
+  readonly icon: string;
+  readonly color: string;
+}
+
+const NEW_ROOT_DEFAULT_ICON = 'pricetag';
+const NEW_ROOT_DEFAULT_COLOR = '#6F42C1';
+
 export default function CategoriesScreen() {
   const { catalog, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
@@ -57,6 +70,7 @@ export default function CategoriesScreen() {
   const [expandedRoots, setExpandedRoots] = useState<Record<string, boolean>>({});
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [newSubcategory, setNewSubcategory] = useState<NewSubcategoryDraft | null>(null);
+  const [newRoot, setNewRoot] = useState<NewRootDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [formError, setFormError] = useState<string>();
@@ -105,6 +119,7 @@ export default function CategoriesScreen() {
 
   function openEdit(category: Category): void {
     setNewSubcategory(null);
+    setNewRoot(null);
     setFormError(undefined);
     setEditDraft({
       id: category.id,
@@ -112,15 +127,32 @@ export default function CategoriesScreen() {
       name: category.name,
       icon: category.icon,
       color: category.color,
-      parentId: category.parentId ?? category.id,
+      // A root keeps `null` here. Coercing it to `category.id` — as this did while only
+      // subcategories were editable, to give the parent picker a non-null selection — makes the
+      // category its own parent: the API rejects the save outright, and worse, the picker stays
+      // visible and can demote a childless root into a subcategory of another root.
+      parentId: category.parentId,
       isActive: category.isActive,
     });
   }
 
   function openCreate(rootId: string, kind: CategoryKind): void {
     setEditDraft(null);
+    setNewRoot(null);
     setFormError(undefined);
     setNewSubcategory({ rootId, kind, name: '' });
+  }
+
+  function openCreateRoot(kind: CategoryKind): void {
+    setEditDraft(null);
+    setNewSubcategory(null);
+    setFormError(undefined);
+    setNewRoot({
+      kind,
+      name: '',
+      icon: NEW_ROOT_DEFAULT_ICON,
+      color: NEW_ROOT_DEFAULT_COLOR,
+    });
   }
 
   async function saveEdit(): Promise<void> {
@@ -183,6 +215,37 @@ export default function CategoriesScreen() {
     }
   }
 
+  async function createRoot(): Promise<void> {
+    if (newRoot === null) return;
+    setSaving(true);
+    setFormError(undefined);
+    try {
+      // No parentId: omitting it is what makes the API create a root rather than a child.
+      //
+      // sortOrder is explicit and deliberately last. The seed assigns it per root
+      // (prisma-households.repository.ts: `sortOrder: rootIndex`), and `listCategories` orders by
+      // sortOrder then name. `firstIncomeRootCategory` in nuevo-ingreso.tsx takes the first active
+      // INCOME root as the auto-assigned category for every expected income — so a new root left
+      // at the schema default of 0 would sort ahead of every seeded root and silently hijack that
+      // default. Appending past the current maximum keeps new roots out of that position.
+      const kindRoots = roots.filter((root) => root.kind === newRoot.kind);
+      const sortOrder = kindRoots.reduce((max, root) => Math.max(max, root.sortOrder), 0) + 1;
+      await catalog.createCategory(householdId, {
+        kind: newRoot.kind,
+        name: newRoot.name,
+        icon: newRoot.icon,
+        color: newRoot.color,
+        sortOrder,
+      });
+      setNewRoot(null);
+      await load();
+    } catch (error) {
+      setFormError(messageForActionError(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // Both editors take over the whole screen instead of appearing as a card above
   // the accordion: it is the only way their "Guardar" CTA can ride the keyboard
   // rather than sit buried under it, and it is the shape this content will keep
@@ -208,7 +271,7 @@ export default function CategoriesScreen() {
               setEditDraft(null);
               setFormError(undefined);
             }}
-            title="Editar subcategoría"
+            title={editDraft.parentId === null ? 'Editar categoría' : 'Editar subcategoría'}
           />
         }
       >
@@ -237,16 +300,20 @@ export default function CategoriesScreen() {
           }}
           value={editDraft.color}
         />
-        <ChoiceRow
-          label="Raíz"
-          onSelect={(parentId) => {
-            setEditDraft({ ...editDraft, parentId });
-          }}
-          options={roots
-            .filter((root) => root.kind === editDraft.kind)
-            .map((root) => [root.id, root.name] as const)}
-          selected={editDraft.parentId}
-        />
+        {/* A root has no parent to reassign, and offering itself as an option would let the
+            user create a cycle. Only subcategories get the picker. */}
+        {editDraft.parentId === null ? null : (
+          <ChoiceRow
+            label="Raíz"
+            onSelect={(parentId) => {
+              setEditDraft({ ...editDraft, parentId });
+            }}
+            options={roots
+              .filter((root) => root.kind === editDraft.kind)
+              .map((root) => [root.id, root.name] as const)}
+            selected={editDraft.parentId}
+          />
+        )}
         <ChoiceRow
           label="Estado"
           onSelect={(isActive) => {
@@ -267,6 +334,63 @@ export default function CategoriesScreen() {
             variant="danger"
           />
         ) : null}
+      </AppFormScreen>
+    );
+  }
+
+  if (newRoot !== null) {
+    return (
+      <AppFormScreen
+        footer={
+          <ActionButton
+            disabled={
+              newRoot.name.trim() === '' ||
+              newRoot.icon.trim() === '' ||
+              !/^#[0-9A-Fa-f]{6}$/u.test(newRoot.color)
+            }
+            label="Guardar"
+            loading={saving}
+            onPress={() => void createRoot()}
+          />
+        }
+        header={
+          <FormHeader
+            onDismiss={() => {
+              setNewRoot(null);
+              setFormError(undefined);
+            }}
+            subtitle={newRoot.kind === 'EXPENSE' ? 'Egresos' : 'Ingresos'}
+            title="Nueva categoría"
+          />
+        }
+      >
+        <FormField
+          autoFocus
+          label="Nombre"
+          maxLength={100}
+          onChangeText={(name) => {
+            setNewRoot({ ...newRoot, name });
+          }}
+          value={newRoot.name}
+        />
+        <FormField
+          label="Ícono"
+          maxLength={50}
+          onChangeText={(icon) => {
+            setNewRoot({ ...newRoot, icon });
+          }}
+          value={newRoot.icon}
+        />
+        <FormField
+          autoCapitalize="characters"
+          label="Color hexadecimal"
+          maxLength={7}
+          onChangeText={(color) => {
+            setNewRoot({ ...newRoot, color });
+          }}
+          value={newRoot.color}
+        />
+        {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
       </AppFormScreen>
     );
   }
@@ -321,7 +445,7 @@ export default function CategoriesScreen() {
           onDismiss={() => {
             router.back();
           }}
-          subtitle="7 raíces fijas · subcategorías del hogar"
+          subtitle="Categorías y subcategorías del hogar"
           title="Categorías"
         />
       }
@@ -338,7 +462,11 @@ export default function CategoriesScreen() {
 
       {(['EXPENSE', 'INCOME'] as const).map((kind) => {
         const kindRoots = roots.filter((root) => root.kind === kind);
-        if (loadState.kind !== 'loaded' || kindRoots.length === 0) return null;
+        // Render the section even with zero roots of this kind: it carries the only
+        // "+ Nueva categoría" affordance, so hiding it would make the first root of an
+        // emptied kind impossible to create — the exact state nuevo-ingreso tells the user
+        // to fix ("Creá una y volvé a intentar").
+        if (loadState.kind !== 'loaded') return null;
 
         return (
           <View key={kind} style={styles.section}>
@@ -355,6 +483,9 @@ export default function CategoriesScreen() {
                     openCreate(root.id, root.kind);
                   }}
                   onEditChild={openEdit}
+                  onEditRoot={() => {
+                    openEdit(root);
+                  }}
                   onToggle={() => {
                     toggleRoot(root.id);
                   }}
@@ -362,6 +493,15 @@ export default function CategoriesScreen() {
                   subcategories={categories.filter((child) => child.parentId === root.id)}
                 />
               ))}
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  openCreateRoot(kind);
+                }}
+                style={styles.newRootRow}
+              >
+                <Text style={styles.newRootLabel}>+ Nueva categoría</Text>
+              </Pressable>
             </Card>
           </View>
         );
@@ -379,6 +519,7 @@ function RootAccordion({
   isFirst,
   onToggle,
   onEditChild,
+  onEditRoot,
   onAddChild,
 }: {
   readonly root: Category;
@@ -387,6 +528,7 @@ function RootAccordion({
   readonly isFirst: boolean;
   readonly onToggle: () => void;
   readonly onEditChild: (category: Category) => void;
+  readonly onEditRoot: () => void;
   readonly onAddChild: () => void;
 }) {
   return (
@@ -411,6 +553,19 @@ function RootAccordion({
           size={20}
         />
       </Pressable>
+      {/* Editing the root lives inside the expanded body rather than on the row itself: the row
+          is one big Pressable that toggles, so a nested button there would fight it for taps. */}
+      {isExpanded ? (
+        <Pressable
+          accessibilityLabel={`Editar ${root.name}`}
+          accessibilityRole="button"
+          onPress={onEditRoot}
+          style={styles.editRootRow}
+        >
+          <Ionicons color={themeTokens.colors.primary} name="pencil" size={14} />
+          <Text style={styles.editRootLabel}>Editar categoría</Text>
+        </Pressable>
+      ) : null}
       {isExpanded ? (
         <View style={styles.chipWrap}>
           {subcategories.map((child) => (
@@ -530,6 +685,30 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.primary,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
+  },
+  newRootRow: {
+    minHeight: themeTokens.touchTarget.minimum,
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: themeTokens.colors.border,
+    paddingHorizontal: 16,
+  },
+  newRootLabel: {
+    color: themeTokens.colors.primary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.body,
+  },
+  editRootRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: themeTokens.touchTarget.minimum,
+    paddingHorizontal: 16,
+  },
+  editRootLabel: {
+    color: themeTokens.colors.primary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
   },
   choices: { gap: 8 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
