@@ -447,6 +447,16 @@ export default function InicioScreen() {
                     navigateToNewExpense();
                   }}
                 />
+                {/* Without this the empty month is a dead end for income: the Balance card that
+                    carries the only other route to the expected-income list is not rendered
+                    here, so the copy above invites an action the screen cannot perform. */}
+                <ActionButton
+                  label="Registrar un ingreso"
+                  onPress={() => {
+                    navigateToIngresos(monthParam);
+                  }}
+                  variant="secondary"
+                />
               </Card>
             )
           ) : (
