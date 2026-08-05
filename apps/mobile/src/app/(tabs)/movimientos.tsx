@@ -29,6 +29,16 @@ import { navigateToNewExpense } from '@/navigation/new-expense-route';
 import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import type { QueuedMutation } from '@/sync/sync-store.types';
+import type {
+  MovementFilterGroup,
+  MovementFilterOption,
+} from '@/components/movement-filters-sheet';
+import {
+  ActiveFilterChips,
+  activeFilterCount,
+  FiltersButton,
+  MovementFiltersSheet,
+} from '@/components/movement-filters-sheet';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
 import { previewUsdToBasePyg } from '@/utils/expense-form';
@@ -56,19 +66,12 @@ interface Filters {
   readonly currency?: TransactionCurrency | undefined;
 }
 
-type FilterKey = keyof Filters;
-
-interface FilterOption<T extends string> {
-  readonly value: T;
-  readonly label: string;
-}
-
-const TYPE_OPTIONS: readonly FilterOption<TransactionType>[] = [
+const TYPE_OPTIONS: readonly MovementFilterOption<TransactionType>[] = [
   { value: 'EXPENSE', label: 'Gastos' },
   { value: 'INCOME', label: 'Ingresos' },
 ];
 
-const CURRENCY_OPTIONS: readonly FilterOption<TransactionCurrency>[] = [
+const CURRENCY_OPTIONS: readonly MovementFilterOption<TransactionCurrency>[] = [
   { value: 'PYG', label: 'Guaraníes' },
   { value: 'USD', label: 'Dólares' },
 ];
@@ -99,7 +102,7 @@ export default function MovimientosScreen() {
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filters, setFilters] = useState<Filters>({});
-  const [expandedFilter, setExpandedFilter] = useState<FilterKey | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: 'loading' });
   const [transactionsState, setTransactionsState] = useState<TransactionsState>({
     kind: 'loading',
@@ -190,26 +193,41 @@ export default function MovimientosScreen() {
   const paymentSources =
     catalogState.kind === 'loaded' ? catalogState.paymentSources : EMPTY_PAYMENT_SOURCES;
 
-  const categoryOptions = useMemo<readonly FilterOption<string>[]>(
-    () =>
-      categories
-        .filter((category) => category.isActive)
-        .map((category) => ({
-          value: category.id,
-          label: categoryLabel(category.id, categories) ?? category.name,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'es')),
-    [categories],
-  );
+  // A filter can outlive the record it points at: archive that category and it drops out of the
+  // active list, but the filter keeps narrowing the query. Keeping the selected one in the list —
+  // labelled as archived — is what lets its chip stay on screen and stay removable.
+  const categoryOptions = useMemo<readonly MovementFilterOption<string>[]>(() => {
+    const active = categories
+      .filter((category) => category.isActive)
+      .map((category) => ({
+        value: category.id,
+        label: categoryLabel(category.id, categories) ?? category.name,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    const selected = filters.categoryId;
+    if (selected === undefined || active.some((option) => option.value === selected)) return active;
+    const archived = categories.find((category) => category.id === selected);
+    if (archived === undefined) return active;
+    return [
+      {
+        value: selected,
+        label: `${categoryLabel(selected, categories) ?? archived.name} · Archivada`,
+      },
+      ...active,
+    ];
+  }, [categories, filters.categoryId]);
 
-  const paymentSourceOptions = useMemo<readonly FilterOption<string>[]>(
-    () =>
-      paymentSources
-        .filter((source) => source.isActive)
-        .map((source) => ({ value: source.id, label: source.name }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'es')),
-    [paymentSources],
-  );
+  const paymentSourceOptions = useMemo<readonly MovementFilterOption<string>[]>(() => {
+    const active = paymentSources
+      .filter((source) => source.isActive)
+      .map((source) => ({ value: source.id, label: source.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    const selected = filters.paymentSourceId;
+    if (selected === undefined || active.some((option) => option.value === selected)) return active;
+    const archived = paymentSources.find((source) => source.id === selected);
+    if (archived === undefined) return active;
+    return [{ value: selected, label: `${archived.name} · Archivado` }, ...active];
+  }, [paymentSources, filters.paymentSourceId]);
 
   // Only mutations this screen knows how to render — a "Pendientes" section, not merged into
   // `dayGroups` (queued items have no server-assigned localDate/baseAmountPyg/id yet).
@@ -223,23 +241,33 @@ export default function MovimientosScreen() {
     [pending],
   );
 
-  function selectFilter<K extends FilterKey>(key: K, value: Filters[K]): void {
-    setFilters((current) => ({ ...current, [key]: value }));
-    setExpandedFilter(null);
-  }
+  const filterGroups = useMemo<readonly MovementFilterGroup[]>(
+    () => [
+      { key: 'type', label: 'Tipo', options: TYPE_OPTIONS, selected: filters.type },
+      {
+        key: 'categoryId',
+        label: 'Categoría',
+        options: categoryOptions,
+        selected: filters.categoryId,
+      },
+      {
+        key: 'paymentSourceId',
+        label: 'Medio de pago',
+        options: paymentSourceOptions,
+        selected: filters.paymentSourceId,
+      },
+      { key: 'currency', label: 'Moneda', options: CURRENCY_OPTIONS, selected: filters.currency },
+    ],
+    [filters, categoryOptions, paymentSourceOptions],
+  );
 
-  function toggleFilterOpen(key: FilterKey): void {
-    setExpandedFilter((current) => (current === key ? null : key));
-  }
-
-  const hasActiveFiltersOrSearch =
-    Object.values(filters).some((value) => value !== undefined) || debouncedSearch !== '';
+  const filterCount = activeFilterCount(filterGroups);
+  const hasActiveFiltersOrSearch = filterCount > 0 || debouncedSearch !== '';
 
   function clearFilters(): void {
     setFilters({});
     setSearchInput('');
     setDebouncedSearch('');
-    setExpandedFilter(null);
   }
 
   if (household === null) {
@@ -257,9 +285,10 @@ export default function MovimientosScreen() {
   const todayLocal = todayLocalDate();
   const hasDayGroups = dayGroups.length > 0;
 
-  // Fixed above the list: title, month stepper, search, and filter chips. The chips' dropdowns are
-  // absolutely positioned; inside a scrolling `ListHeaderComponent` later list cells would paint
-  // over them on Android, so this whole block stays pinned via `AppListScreen`'s `header` slot.
+  // Fixed above the list via `AppListScreen`'s `header` slot: title, month stepper, search, the
+  // Filtros button and the applied-filter chips. Nothing here overlays the list any more — the
+  // filters open in a modal — but the month stepper and the active filters have to stay reachable
+  // without scrolling back up, which is what the pinned slot is for.
   const listHeader = (
     <>
       <View style={styles.headerRow}>
@@ -304,55 +333,20 @@ export default function MovimientosScreen() {
       </View>
 
       <View style={styles.filterRow}>
-        <FilterPicker
-          isOpen={expandedFilter === 'type'}
-          label="Tipo"
-          onSelect={(value) => {
-            selectFilter('type', value);
+        <FiltersButton
+          count={filterCount}
+          onPress={() => {
+            setFiltersOpen(true);
           }}
-          onToggleOpen={() => {
-            toggleFilterOpen('type');
-          }}
-          options={TYPE_OPTIONS}
-          selected={filters.type}
-        />
-        <FilterPicker
-          isOpen={expandedFilter === 'categoryId'}
-          label="Categoría"
-          onSelect={(value) => {
-            selectFilter('categoryId', value);
-          }}
-          onToggleOpen={() => {
-            toggleFilterOpen('categoryId');
-          }}
-          options={categoryOptions}
-          selected={filters.categoryId}
-        />
-        <FilterPicker
-          isOpen={expandedFilter === 'paymentSourceId'}
-          label="Medio de pago"
-          onSelect={(value) => {
-            selectFilter('paymentSourceId', value);
-          }}
-          onToggleOpen={() => {
-            toggleFilterOpen('paymentSourceId');
-          }}
-          options={paymentSourceOptions}
-          selected={filters.paymentSourceId}
-        />
-        <FilterPicker
-          isOpen={expandedFilter === 'currency'}
-          label="Moneda"
-          onSelect={(value) => {
-            selectFilter('currency', value);
-          }}
-          onToggleOpen={() => {
-            toggleFilterOpen('currency');
-          }}
-          options={CURRENCY_OPTIONS}
-          selected={filters.currency}
         />
       </View>
+
+      <ActiveFilterChips
+        groups={filterGroups}
+        onRemove={(key) => {
+          setFilters((current) => ({ ...current, [key]: undefined }));
+        }}
+      />
 
       {hasActiveFiltersOrSearch ? (
         <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clearFilters}>
@@ -459,141 +453,90 @@ export default function MovimientosScreen() {
     ) : null;
 
   return (
-    <AppListScreen
-      data={dayGroups}
-      floatingAction={
-        <PressableScale
-          accessibilityLabel="Nuevo gasto"
-          haptic
-          onPress={() => {
-            navigateToNewExpense();
-          }}
-          style={styles.fab}
-        >
-          <Text style={styles.fabLabel}>+ Nuevo gasto</Text>
-        </PressableScale>
-      }
-      header={listHeader}
-      ItemSeparatorComponent={DayGroupSeparator}
-      keyExtractor={(group) => group.localDate}
-      ListEmptyComponent={listEmpty}
-      ListHeaderComponent={scrollHeader}
-      onRefresh={onRefresh}
-      refreshing={refreshing}
-      renderItem={({ item: group }) => {
-        const subtotal = formatSignedPygAmount(group.netBaseAmountPyg);
-        return (
-          <View style={styles.dayGroup}>
-            <View style={styles.dayHeaderRow}>
-              <Text style={styles.dayHeading}>{formatDayHeading(group.localDate, todayLocal)}</Text>
-              <Text
-                style={[
-                  styles.daySubtotal,
-                  subtotal.isPositive ? styles.positiveAmount : styles.negativeAmount,
-                ]}
-              >
-                {subtotal.text}
-              </Text>
+    <>
+      <MovementFiltersSheet
+        groups={filterGroups}
+        onApply={(next) => {
+          setFilters({
+            type: next.type as TransactionType | undefined,
+            categoryId: next.categoryId,
+            paymentSourceId: next.paymentSourceId,
+            currency: next.currency as TransactionCurrency | undefined,
+          });
+        }}
+        onClose={() => {
+          setFiltersOpen(false);
+        }}
+        visible={filtersOpen}
+      />
+      <AppListScreen
+        data={dayGroups}
+        floatingAction={
+          <PressableScale
+            accessibilityLabel="Nuevo gasto"
+            haptic
+            onPress={() => {
+              navigateToNewExpense();
+            }}
+            style={styles.fab}
+          >
+            <Text style={styles.fabLabel}>+ Nuevo gasto</Text>
+          </PressableScale>
+        }
+        header={listHeader}
+        ItemSeparatorComponent={DayGroupSeparator}
+        keyExtractor={(group) => group.localDate}
+        ListEmptyComponent={listEmpty}
+        ListHeaderComponent={scrollHeader}
+        onRefresh={onRefresh}
+        refreshing={refreshing}
+        renderItem={({ item: group }) => {
+          const subtotal = formatSignedPygAmount(group.netBaseAmountPyg);
+          return (
+            <View style={styles.dayGroup}>
+              <View style={styles.dayHeaderRow}>
+                <Text style={styles.dayHeading}>
+                  {formatDayHeading(group.localDate, todayLocal)}
+                </Text>
+                <Text
+                  style={[
+                    styles.daySubtotal,
+                    subtotal.isPositive ? styles.positiveAmount : styles.negativeAmount,
+                  ]}
+                >
+                  {subtotal.text}
+                </Text>
+              </View>
+              <Card>
+                {group.transactions.map((transaction, index) => (
+                  <MovementRow
+                    category={categories.find((c) => c.id === transaction.categoryId)}
+                    categoryLabelText={categoryLabel(transaction.categoryId, categories)}
+                    isLast={index === group.transactions.length - 1}
+                    key={transaction.id}
+                    onPress={() => {
+                      router.push(`/movimiento/${transaction.id}`);
+                    }}
+                    paymentSourceName={
+                      transaction.paymentSourceId === null
+                        ? undefined
+                        : paymentSources.find((s) => s.id === transaction.paymentSourceId)?.name
+                    }
+                    transaction={transaction}
+                  />
+                ))}
+              </Card>
             </View>
-            <Card>
-              {group.transactions.map((transaction, index) => (
-                <MovementRow
-                  category={categories.find((c) => c.id === transaction.categoryId)}
-                  categoryLabelText={categoryLabel(transaction.categoryId, categories)}
-                  isLast={index === group.transactions.length - 1}
-                  key={transaction.id}
-                  onPress={() => {
-                    router.push(`/movimiento/${transaction.id}`);
-                  }}
-                  paymentSourceName={
-                    transaction.paymentSourceId === null
-                      ? undefined
-                      : paymentSources.find((s) => s.id === transaction.paymentSourceId)?.name
-                  }
-                  transaction={transaction}
-                />
-              ))}
-            </Card>
-          </View>
-        );
-      }}
-    />
+          );
+        }}
+      />
+    </>
   );
 }
 
 /** Vertical gap between day-group cards in the Movimientos list. */
 function DayGroupSeparator() {
   return <View style={styles.dayGroupSeparator} />;
-}
-
-function FilterPicker<T extends string>({
-  label,
-  options,
-  selected,
-  isOpen,
-  onToggleOpen,
-  onSelect,
-}: {
-  readonly label: string;
-  readonly options: readonly FilterOption<T>[];
-  readonly selected: T | undefined;
-  readonly isOpen: boolean;
-  readonly onToggleOpen: () => void;
-  readonly onSelect: (value: T | undefined) => void;
-}) {
-  const activeOption = options.find((option) => option.value === selected);
-
-  return (
-    <View style={styles.filterColumn}>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => {
-          if (activeOption !== undefined) {
-            onSelect(undefined);
-          } else {
-            onToggleOpen();
-          }
-        }}
-        style={[styles.chip, activeOption !== undefined && styles.activeChip]}
-      >
-        <Text
-          numberOfLines={1}
-          style={[styles.chipText, activeOption !== undefined && styles.activeChipText]}
-        >
-          {activeOption?.label ?? label}
-        </Text>
-        <Ionicons
-          color={
-            activeOption !== undefined
-              ? themeTokens.colors.surface
-              : themeTokens.colors.inkSecondary
-          }
-          name={activeOption !== undefined ? 'close' : 'chevron-down'}
-          size={14}
-        />
-      </Pressable>
-      {isOpen ? (
-        <View style={[styles.optionsPanel, cardShadowStyle]}>
-          {options.length === 0 ? (
-            <Text style={styles.optionEmpty}>No hay opciones disponibles.</Text>
-          ) : (
-            options.map((option) => (
-              <Pressable
-                accessibilityRole="button"
-                key={option.value}
-                onPress={() => {
-                  onSelect(option.value);
-                }}
-                style={styles.optionRow}
-              >
-                <Text style={m1TextStyles.body}>{option.label}</Text>
-              </Pressable>
-            ))
-          )}
-        </View>
-      ) : null}
-    </View>
-  );
 }
 
 function MovementRow({
@@ -785,57 +728,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: themeTokens.spacing.screen,
     marginTop: themeTokens.spacing.cardGap,
-  },
-  filterColumn: {
-    position: 'relative',
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: themeTokens.touchTarget.minimum,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 14,
-  },
-  activeChip: {
-    borderColor: themeTokens.colors.primary,
-    backgroundColor: themeTokens.colors.primary,
-  },
-  chipText: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-    maxWidth: 140,
-  },
-  activeChipText: {
-    color: themeTokens.colors.surface,
-  },
-  optionsPanel: {
-    position: 'absolute',
-    top: themeTokens.touchTarget.minimum + 6,
-    left: 0,
-    zIndex: 10,
-    minWidth: 200,
-    maxHeight: 260,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.border,
-    borderRadius: themeTokens.radii.card,
-    backgroundColor: themeTokens.colors.surface,
-    paddingVertical: 4,
-  },
-  optionRow: {
-    minHeight: themeTokens.touchTarget.minimum,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  optionEmpty: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.secondary,
-    padding: 16,
   },
   clearFilters: {
     alignSelf: 'flex-start',
