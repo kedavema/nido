@@ -375,7 +375,11 @@ export function ScreenHeader({
       <Text accessibilityRole="header" style={size === 'hero' ? styles.title : styles.titleCompact}>
         {title}
       </Text>
-      {description === undefined ? null : <Text style={styles.description}>{description}</Text>}
+      {description === undefined ? null : (
+        <Text style={size === 'hero' ? styles.description : styles.descriptionCompact}>
+          {description}
+        </Text>
+      )}
     </View>
   );
 
@@ -952,6 +956,15 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.body,
     lineHeight: 23,
+  },
+  // A compact header scales as a whole. Left at body size, the subtitle came out larger than the
+  // screen-local style it replaced, which is the kind of silent redesign this issue set out to
+  // avoid; every sibling screen uses the secondary scale for the same subtitle role.
+  descriptionCompact: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+    lineHeight: 19,
   },
   card: {
     gap: themeTokens.spacing.cardGap,
