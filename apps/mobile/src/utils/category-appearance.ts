@@ -3,9 +3,11 @@ import type { ComponentProps } from 'react';
 
 /**
  * Ionicons' own name union. The import is type-only on purpose: it gives `tsc` the vocabulary to
- * reject a misspelled icon at build time — the failure the free-text field used to allow, which
- * rendered a blank glyph — while keeping this module free of the native dependency so it stays
- * testable in node, the same trick `navigation/tabs.ts` uses.
+ * reject a misspelled icon at build time, while keeping this module free of the native dependency
+ * so it stays testable in node — the same trick `navigation/tabs.ts` uses.
+ *
+ * It only constrains names written in this repo. Names read back from the API need
+ * `resolveCategoryIcon` below.
  */
 export type CategoryIconName = ComponentProps<typeof Ionicons>['name'];
 

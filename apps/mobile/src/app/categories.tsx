@@ -35,8 +35,9 @@ type LoadState =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'loaded'; readonly categories: readonly Category[] };
 
-/** Editing an existing subcategory: reuses the full form, but `parentId` is never `null` — only
- * root categories may have a null parent, and roots aren't editable from here. */
+/** Editing an existing category. Since #186 this covers roots too, so `parentId` is `null` for a
+ * root — the form branches on that to title itself, to offer the icon and colour pickers, and to
+ * hide the parent picker. */
 interface EditDraft {
   readonly id: string;
   readonly kind: CategoryKind;
