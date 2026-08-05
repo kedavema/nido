@@ -30,6 +30,15 @@ function selectionOf(groups: readonly MovementFilterGroup[]): MovementFilterSele
   return Object.fromEntries(groups.map((group) => [group.key, group.selected]));
 }
 
+/** A selection whose record no longer exists in the group at all, rather than merely archived. */
+function orphanSelection(
+  group: MovementFilterGroup,
+  selected: string | undefined,
+): string | undefined {
+  if (selected === undefined) return undefined;
+  return group.options.some((option) => option.value === selected) ? undefined : selected;
+}
+
 /**
  * Filters live in a sheet rather than in the header. The dropdowns this replaces were absolutely
  * positioned `View`s that lost a z-index fight with their own siblings and with the list; a modal
@@ -79,6 +88,23 @@ export function MovementFiltersSheet({
             <Text style={styles.empty}>No hay opciones disponibles.</Text>
           ) : (
             <View style={styles.optionWrap}>
+              {/* A hard-deleted record leaves the catalogue entirely, so no option carries its id
+                  and the group would show nothing selected while still narrowing the list. Render
+                  the orphan so it can be seen and cleared here, not only from the chip outside. */}
+              {orphanSelection(group, draft[group.key]) === undefined ? null : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: true }}
+                  onPress={() => {
+                    setDraft((current) => ({ ...current, [group.key]: undefined }));
+                  }}
+                  style={[styles.option, styles.optionSelected]}
+                >
+                  <Text numberOfLines={1} style={[styles.optionText, styles.optionTextSelected]}>
+                    Filtro anterior · quitar
+                  </Text>
+                </Pressable>
+              )}
               {group.options.map((option) => {
                 const isSelected = draft[group.key] === option.value;
                 return (
@@ -214,6 +240,7 @@ const styles = StyleSheet.create({
   },
   optionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   option: {
+    maxWidth: '100%',
     minHeight: themeTokens.touchTarget.minimum,
     justifyContent: 'center',
     paddingHorizontal: 14,
@@ -227,6 +254,7 @@ const styles = StyleSheet.create({
     backgroundColor: themeTokens.colors.primaryTint,
   },
   optionText: {
+    flexShrink: 1,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.body,
@@ -266,6 +294,7 @@ const styles = StyleSheet.create({
   },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   activeChip: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -281,6 +310,7 @@ const styles = StyleSheet.create({
     fontSize: themeTokens.typography.scale.secondary,
   },
   button: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -296,6 +326,7 @@ const styles = StyleSheet.create({
     backgroundColor: themeTokens.colors.primaryTint,
   },
   buttonText: {
+    flexShrink: 1,
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
