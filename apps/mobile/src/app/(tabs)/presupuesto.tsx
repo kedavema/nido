@@ -7,10 +7,9 @@ import {
   type Occurrence,
   type RecurringItem,
 } from '@nido/contracts';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { BudgetOverview } from '@/components/budget-overview';
@@ -24,9 +23,11 @@ import {
   PressableScale,
   SummarySkeleton,
   m1TextStyles,
+  ScreenHeader,
 } from '@/components/m1-ui';
 import { navigateToFijoDetail, navigateToSettleOccurrence } from '@/navigation/fijos-routes';
 import { themeTokens } from '@/theme/tokens';
+import { MonthStepper } from '@/components/month-stepper';
 import {
   formatMonthLabel,
   formatMonthQueryParam,
@@ -163,34 +164,20 @@ export default function PresupuestoScreen() {
       onRefresh={onRefresh}
       refreshing={refreshing}
     >
-      <View style={styles.headerRow}>
-        <Text accessibilityRole="header" style={styles.title}>
-          Presupuesto
-        </Text>
-        <View style={styles.monthPill}>
-          <Pressable
-            accessibilityLabel="Mes anterior"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              moveMonth(-1);
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={17} />
-          </Pressable>
-          <Text style={styles.monthLabel}>{formatMonthLabel(month)}</Text>
-          <Pressable
-            accessibilityLabel="Mes siguiente"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
+      <ScreenHeader
+        title="Presupuesto"
+        trailing={
+          <MonthStepper
+            label={formatMonthLabel(month)}
+            onNext={() => {
               moveMonth(1);
             }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={17} />
-          </Pressable>
-        </View>
-      </View>
+            onPrevious={() => {
+              moveMonth(-1);
+            }}
+          />
+        }
+      />
 
       {screen.kind === 'loading' ? <SummarySkeleton /> : null}
       {screen.kind === 'error' ? (
@@ -244,33 +231,6 @@ export default function PresupuestoScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  title: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.hero,
-  },
-  monthPill: {
-    minHeight: themeTokens.touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.border,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 14,
-  },
-  monthLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
-  },
   fab: {
     minHeight: themeTokens.touchTarget.minimum,
     justifyContent: 'center',

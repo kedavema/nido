@@ -19,6 +19,7 @@ import { getSummaryCache } from '@/cache/summary-cache';
 import { BudgetCommitmentsCard } from '@/components/budget-projection';
 import { categoryTint } from '@/utils/category-appearance';
 import { DashboardBudget } from '@/components/dashboard-budget';
+import { MonthStepper } from '@/components/month-stepper';
 import {
   ActionButton,
   AppScreen,
@@ -348,28 +349,14 @@ export default function InicioScreen() {
         </View>
         <View style={styles.headerRightGroup}>
           <HeaderAvatars members={members} />
-          <View style={styles.monthPill}>
-            <Pressable
-              accessibilityLabel="Mes anterior"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => {
-                setMonth((current) => shiftMonth(current, -1));
-              }}
-            >
-              <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={16} />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Mes siguiente"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => {
-                setMonth((current) => shiftMonth(current, 1));
-              }}
-            >
-              <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={16} />
-            </Pressable>
-          </View>
+          <MonthStepper
+            onNext={() => {
+              setMonth((current) => shiftMonth(current, 1));
+            }}
+            onPrevious={() => {
+              setMonth((current) => shiftMonth(current, -1));
+            }}
+          />
         </View>
       </View>
 
@@ -1004,17 +991,6 @@ const styles = StyleSheet.create({
     color: themeTokens.colors.surface,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
-  },
-  monthPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
   },
   cardLabel: {
     color: themeTokens.colors.inkSecondary,

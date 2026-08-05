@@ -338,19 +338,60 @@ export function AppFormScreen({ children, testID, header, footer }: AppFormScree
 }
 
 interface ScreenHeaderProps {
-  readonly title: string;
+  readonly title: ReactNode;
   readonly description?: string;
   readonly eyebrow?: string;
+  /**
+   * Rendered left of the copy — the back affordance on a pushed screen. One size for every
+   * screen; they had drifted to 20 and 22 while hand-rolling this.
+   */
+  readonly leading?: ReactNode;
+  /**
+   * Rendered right of the copy, vertically centred against it: the month stepper, an avatar row.
+   * Its absence is why six screens hand-rolled a header — a screen with a trailing control had
+   * nowhere to put it.
+   */
+  readonly trailing?: ReactNode;
+  /**
+   * `hero` (28px) is the standalone-screen title. `compact` (20px) is what the tab screens
+   * already used before adopting this component, kept as a variant on purpose: #6 is about the
+   * spacing disagreement, and unifying the *size* would silently redesign five screens. Picking
+   * one size is a separate decision.
+   */
+  readonly size?: 'hero' | 'compact';
 }
 
-export function ScreenHeader({ title, description, eyebrow }: ScreenHeaderProps) {
-  return (
-    <View style={styles.header}>
+export function ScreenHeader({
+  title,
+  description,
+  eyebrow,
+  leading,
+  trailing,
+  size = 'hero',
+}: ScreenHeaderProps) {
+  const copy = (
+    <View style={styles.headerCopy}>
       {eyebrow === undefined ? null : <Text style={styles.eyebrow}>{eyebrow}</Text>}
-      <Text accessibilityRole="header" style={styles.title}>
+      <Text accessibilityRole="header" style={size === 'hero' ? styles.title : styles.titleCompact}>
         {title}
       </Text>
-      {description === undefined ? null : <Text style={styles.description}>{description}</Text>}
+      {description === undefined ? null : (
+        <Text style={size === 'hero' ? styles.description : styles.descriptionCompact}>
+          {description}
+        </Text>
+      )}
+    </View>
+  );
+
+  if (leading === undefined && trailing === undefined) {
+    return <View style={styles.header}>{copy}</View>;
+  }
+
+  return (
+    <View style={[styles.header, styles.headerRow]}>
+      {leading}
+      {copy}
+      {trailing}
     </View>
   );
 }
@@ -360,6 +401,21 @@ export function ScreenHeader({ title, description, eyebrow }: ScreenHeaderProps)
  * `PageHeader` keep working; new code should use `ScreenHeader`.
  */
 export const PageHeader = ScreenHeader;
+
+/** The back affordance for a pushed screen's `ScreenHeader`. Hand-rolled at 20 and 22 before. */
+export function HeaderBackButton({ onPress }: { readonly onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel="Volver"
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={onPress}
+      style={styles.headerBackButton}
+    >
+      <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={20} />
+    </Pressable>
+  );
+}
 
 /**
  * Diameter of the header's circular icon button. Matches the hand-rolled headers
@@ -857,6 +913,25 @@ const styles = StyleSheet.create({
     gap: themeTokens.spacing.base,
     marginBottom: themeTokens.spacing.base,
   },
+  // Slots sit beside the copy, not above it, and the copy takes the slack so a long title wraps
+  // rather than pushing a stepper off the edge.
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: themeTokens.spacing.cardGap,
+  },
+  headerCopy: {
+    flexGrow: 1,
+    flexShrink: 1,
+    gap: themeTokens.spacing.base,
+  },
+  headerBackButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -10,
+  },
   eyebrow: {
     color: themeTokens.colors.accent,
     fontFamily: themeTokens.typography.families.bodySemibold,
@@ -870,11 +945,26 @@ const styles = StyleSheet.create({
     fontSize: themeTokens.typography.scale.hero,
     lineHeight: 34,
   },
+  titleCompact: {
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.displaySemibold,
+    fontSize: themeTokens.typography.scale.screenTitle,
+    lineHeight: 26,
+  },
   description: {
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.body,
     lineHeight: 23,
+  },
+  // A compact header scales as a whole. Left at body size, the subtitle came out larger than the
+  // screen-local style it replaced, which is the kind of silent redesign this issue set out to
+  // avoid; every sibling screen uses the secondary scale for the same subtitle role.
+  descriptionCompact: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+    lineHeight: 19,
   },
   card: {
     gap: themeTokens.spacing.cardGap,

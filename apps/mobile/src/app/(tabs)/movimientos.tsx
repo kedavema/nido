@@ -17,6 +17,7 @@ import { categoryTint } from '@/utils/category-appearance';
 import {
   ActionButton,
   AppListScreen,
+  ScreenHeader,
   AppScreen,
   Card,
   InlineNotice,
@@ -26,6 +27,7 @@ import {
   SyncStatusPill,
 } from '@/components/m1-ui';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
+import { MonthStepper } from '@/components/month-stepper';
 import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import type { QueuedMutation } from '@/sync/sync-store.types';
@@ -291,33 +293,22 @@ export default function MovimientosScreen() {
   // without scrolling back up, which is what the pinned slot is for.
   const listHeader = (
     <>
-      <View style={styles.headerRow}>
-        <Text accessibilityRole="header" style={styles.title}>
-          Movimientos
-        </Text>
-        <View style={styles.monthPill}>
-          <Pressable
-            accessibilityLabel="Mes anterior"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, -1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={16} />
-          </Pressable>
-          <Text style={styles.monthLabel}>{formatMonthLabel(month)}</Text>
-          <Pressable
-            accessibilityLabel="Mes siguiente"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, 1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={16} />
-          </Pressable>
-        </View>
+      <View style={styles.headerBlock}>
+        <ScreenHeader
+          size="compact"
+          title="Movimientos"
+          trailing={
+            <MonthStepper
+              label={formatMonthLabel(month)}
+              onNext={() => {
+                setMonth((current) => shiftMonth(current, 1));
+              }}
+              onPrevious={() => {
+                setMonth((current) => shiftMonth(current, -1));
+              }}
+            />
+          }
+        />
       </View>
 
       <View style={styles.searchRow}>
@@ -673,34 +664,12 @@ function PendingMutationRow({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // #6: this used spacing.base — four pixels above the title, where every comparable surface
+  // uses screen. The block keeps its own padding because it is pinned outside the scroll view,
+  // which is what supplies it everywhere else.
+  headerBlock: {
     paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-  },
-  title: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.screenTitle,
-    lineHeight: 26,
-  },
-  monthPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  monthLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
+    paddingTop: themeTokens.spacing.screen,
   },
   searchRow: {
     flexDirection: 'row',
