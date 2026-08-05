@@ -192,11 +192,7 @@ export default function InformesScreen() {
         </>
       ) : null}
       {screen.kind === 'ready' && view === 'categories' ? (
-        <CategoryReport
-          categories={screen.categories}
-          key={screen.categoryReport.month}
-          report={screen.categoryReport}
-        />
+        <CategoryReport key={screen.categoryReport.month} report={screen.categoryReport} />
       ) : null}
       {screen.kind === 'ready' && view === 'budget' ? (
         <BudgetReport month={month} screen={screen} />

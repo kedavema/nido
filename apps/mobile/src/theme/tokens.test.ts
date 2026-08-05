@@ -38,6 +38,17 @@ describe('canonical Nido v0.3 theme tokens', () => {
     });
   });
 
+  // The mark is a single validated hue, not a per-category colour: every bar in the app
+  // sits beside its own name and amount, so colour would re-encode what the row already
+  // says. Measured at 7.73:1 against the track, above the 3:1 floor for chart marks —
+  // changing either value means re-measuring, which is why they are pinned here.
+  it('exposes one validated chart mark on its track', () => {
+    expect(themeTokens.chartColors).toEqual({
+      mark: '#1C4F47',
+      track: '#EDEAE2',
+    });
+  });
+
   it('keeps the canonical web type, spacing, shape, shadow, and touch scales', () => {
     // themeTokens resolves the web/node density baseline (density.ts).
     expect(themeTokens.typography.scale).toEqual({

@@ -1,4 +1,4 @@
-import type { Category, CategoryBreakdownReportResponse } from '@nido/contracts';
+import type { CategoryBreakdownReportResponse } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -9,11 +9,10 @@ import { formatBudgetPyg } from '@/utils/budget-overview';
 import { formatReportPercentage, largestReportAmount, reportBarWidth } from '@/utils/report-format';
 
 interface CategoryReportProps {
-  readonly categories: readonly Category[];
   readonly report: CategoryBreakdownReportResponse;
 }
 
-export function CategoryReport({ categories, report }: CategoryReportProps) {
+export function CategoryReport({ report }: CategoryReportProps) {
   const [expandedId, setExpandedId] = useState<string | undefined>(
     report.categories[0]?.categoryId,
   );
@@ -36,9 +35,6 @@ export function CategoryReport({ categories, report }: CategoryReportProps) {
       <Text style={styles.total}>{formatBudgetPyg(report.totalExpensePyg)}</Text>
       {report.categories.map((item) => {
         const expanded = expandedId === item.categoryId;
-        const color =
-          categories.find((category) => category.id === item.categoryId)?.color ??
-          themeTokens.colors.primary;
         const percentage = formatReportPercentage(item.percentageOfTotal);
 
         return (
@@ -73,13 +69,7 @@ export function CategoryReport({ categories, report }: CategoryReportProps) {
                 style={styles.track}
               >
                 <View
-                  style={[
-                    styles.fill,
-                    {
-                      backgroundColor: color,
-                      width: reportBarWidth(item.amountPyg, largestAmount),
-                    },
-                  ]}
+                  style={[styles.fill, { width: reportBarWidth(item.amountPyg, largestAmount) }]}
                 />
               </View>
             </PressableScale>
@@ -152,9 +142,13 @@ const styles = StyleSheet.create({
     height: 8,
     overflow: 'hidden',
     borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surfaceMuted,
+    backgroundColor: themeTokens.chartColors.track,
   },
-  fill: { height: '100%', borderRadius: themeTokens.radii.chip },
+  fill: {
+    height: '100%',
+    borderRadius: themeTokens.radii.chip,
+    backgroundColor: themeTokens.chartColors.mark,
+  },
   subcategories: {
     gap: 8,
     borderLeftWidth: 2,
