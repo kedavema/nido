@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import { categoryTint } from '@/utils/category-appearance';
 import {
   ActionButton,
   AppListScreen,
@@ -630,7 +631,7 @@ function MovementRow({
       onPress={onPress}
       style={[styles.movementRow, !isLast && styles.movementRowDivider]}
     >
-      <View style={[styles.avatar, { backgroundColor: `${accentColor}26` }]}>
+      <View style={[styles.avatar, { backgroundColor: categoryTint(accentColor) }]}>
         <Text style={[styles.avatarText, { color: accentColor }]}>{initial}</Text>
       </View>
       <View style={styles.movementCopy}>

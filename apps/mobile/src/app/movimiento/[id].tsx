@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import { categoryTint } from '@/utils/category-appearance';
 import {
   ActionButton,
   AppScreen,
@@ -183,7 +184,7 @@ function DetailBody({
     <>
       <Card>
         <View style={styles.heroRow}>
-          <View style={[styles.avatar, { backgroundColor: `${accentColor}26` }]}>
+          <View style={[styles.avatar, { backgroundColor: categoryTint(accentColor) }]}>
             <Text style={[styles.avatarText, { color: accentColor }]}>{initial}</Text>
           </View>
           <View style={styles.heroCopy}>

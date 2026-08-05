@@ -68,6 +68,24 @@ export const themeTokens = {
     mark: '#1C4F47',
     track: '#EDEAE2',
   },
+  // Colours the category form offers. A category avatar draws its glyph in the colour on a 15%
+  // tint of that same colour, so the gate here is WCAG text contrast against that tint, not
+  // separation between categories — each avatar sits beside its own name. Every entry clears
+  // 4.5:1 (worst 4.52), derived by holding each hue and lowering lightness until it passed, then
+  // maximising separation so no two cells of the picker grid look alike. Six of the seed colours
+  // do not clear it and are deliberately absent; rows that already hold them keep them, and the
+  // picker shows a category's current colour alongside these rather than dropping it.
+  categorySwatches: [
+    '#3E5C76',
+    '#3E6B34',
+    '#7A4B6E',
+    '#A04848',
+    '#5C6862',
+    '#6559C3',
+    '#886108',
+    '#99469F',
+    '#026AB6',
+  ],
   typography: {
     families: {
       displayMedium: 'BricolageGrotesque_500Medium',

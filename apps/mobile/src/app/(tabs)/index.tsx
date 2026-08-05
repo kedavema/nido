@@ -17,6 +17,7 @@ import { ApiError } from '@/api/client';
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { getSummaryCache } from '@/cache/summary-cache';
 import { BudgetCommitmentsCard } from '@/components/budget-projection';
+import { categoryTint } from '@/utils/category-appearance';
 import { DashboardBudget } from '@/components/dashboard-budget';
 import {
   ActionButton,
@@ -814,7 +815,7 @@ function RecentMovementRow({
       onPress={onPress}
       style={[styles.recentRow, !isLast && styles.recentRowDivider]}
     >
-      <View style={[styles.avatar, { backgroundColor: `${accentColor}26` }]}>
+      <View style={[styles.avatar, { backgroundColor: categoryTint(accentColor) }]}>
         <Text style={[styles.avatarText, { color: accentColor }]}>{initial}</Text>
       </View>
       <View style={styles.recentCopy}>

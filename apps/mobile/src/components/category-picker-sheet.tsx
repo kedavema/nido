@@ -6,6 +6,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppBottomSheet } from '@/components/app-bottom-sheet';
 import { m1TextStyles } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
+import { categoryIcon } from '@/components/category-appearance';
+import { categoryTint } from '@/utils/category-appearance';
 import { filterCategoryGroups, selectedRootCategoryId } from '@/utils/category-selection';
 
 interface CategoryPickerSheetProps {
@@ -122,10 +124,8 @@ export function CategoryPickerSheet({
                   pressed && styles.pressed,
                 ]}
               >
-                <View style={[styles.avatar, { backgroundColor: `${root.color}26` }]}>
-                  <Text style={[styles.avatarText, { color: root.color }]}>
-                    {root.name.charAt(0).toUpperCase()}
-                  </Text>
+                <View style={[styles.avatar, { backgroundColor: categoryTint(root.color) }]}>
+                  <Ionicons color={root.color} name={categoryIcon(root.icon)} size={18} />
                 </View>
                 <View style={styles.rootCopy}>
                   <Text
@@ -267,10 +267,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
   },
   rootCopy: {
     flex: 1,

@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { AppBottomSheet } from '@/components/app-bottom-sheet';
+import { categoryTint } from '@/utils/category-appearance';
 import { CategoryPickerSheet } from '@/components/category-picker-sheet';
 import {
   AmountField,
@@ -1052,7 +1053,7 @@ function SavedExpenseConfirmation({
         </Text>
 
         <View style={[styles.confirmationCard, cardShadowStyle]}>
-          <View style={[styles.confirmationAvatar, { backgroundColor: `${accentColor}26` }]}>
+          <View style={[styles.confirmationAvatar, { backgroundColor: categoryTint(accentColor) }]}>
             <Text style={[styles.confirmationAvatarText, { color: accentColor }]}>{initial}</Text>
           </View>
           <View style={styles.confirmationReceiptCopy}>

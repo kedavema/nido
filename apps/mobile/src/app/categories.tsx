@@ -6,6 +6,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import {
+  CategoryColorPicker,
+  CategoryIconPicker,
+  categoryIcon,
+} from '@/components/category-appearance';
+import {
   ActionButton,
   AppFormScreen,
   AppScreen,
@@ -17,6 +22,7 @@ import {
   m1TextStyles,
 } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
+import { categoryTint } from '@/utils/category-appearance';
 
 // MAS-03 caption. The 12 seeded roots exist so budget and report comparisons hold across
 // households; roots are now creatable and editable, so the caption explains the tradeoff rather
@@ -60,8 +66,10 @@ interface NewRootDraft {
   readonly color: string;
 }
 
+// Both defaults must be offerable by the pickers, or every new category would open with an
+// off-palette value sitting in front of the curated set as if it were one of them.
 const NEW_ROOT_DEFAULT_ICON = 'pricetag';
-const NEW_ROOT_DEFAULT_COLOR = '#6F42C1';
+const NEW_ROOT_DEFAULT_COLOR = '#6559C3';
 
 export default function CategoriesScreen() {
   const { catalog, state } = useSession();
@@ -125,7 +133,9 @@ export default function CategoriesScreen() {
       id: category.id,
       kind: category.kind,
       name: category.name,
-      icon: category.icon,
+      // Normalised on the way in: a legacy icon Ionicons cannot render would otherwise stay
+      // in the draft and be written straight back out by an unrelated save.
+      icon: categoryIcon(category.icon),
       color: category.color,
       // A root keeps `null` here. Coercing it to `category.id` — as this did while only
       // subcategories were editable, to give the parent picker a non-null selection — makes the
@@ -255,11 +265,9 @@ export default function CategoriesScreen() {
       <AppFormScreen
         footer={
           <ActionButton
-            disabled={
-              editDraft.name.trim() === '' ||
-              editDraft.icon.trim() === '' ||
-              !/^#[0-9A-Fa-f]{6}$/u.test(editDraft.color)
-            }
+            // Icon and colour come from pickers now, so they are valid by construction and only
+            // the name can be empty.
+            disabled={editDraft.name.trim() === ''}
             label="Guardar"
             loading={saving}
             onPress={() => void saveEdit()}
@@ -283,30 +291,45 @@ export default function CategoriesScreen() {
           }}
           value={editDraft.name}
         />
-        <FormField
-          label="Ícono"
-          maxLength={50}
-          onChangeText={(icon) => {
-            setEditDraft({ ...editDraft, icon });
-          }}
-          value={editDraft.icon}
-        />
-        <FormField
-          autoCapitalize="characters"
-          label="Color hexadecimal"
-          maxLength={7}
-          onChangeText={(color) => {
-            setEditDraft({ ...editDraft, color });
-          }}
-          value={editDraft.color}
-        />
+        {/* Icon and colour are root-level: a subcategory renders neither — its chip is name-only —
+            and inherits both from its root at creation. Offering them here would let the two
+            representations drift apart with nothing to show for it. */}
+        {editDraft.parentId !== null ? null : (
+          <>
+            <CategoryIconPicker
+              color={editDraft.color}
+              label="Ícono"
+              onSelect={(icon) => {
+                setEditDraft({ ...editDraft, icon });
+              }}
+              selected={editDraft.icon}
+            />
+            <CategoryColorPicker
+              icon={editDraft.icon}
+              label="Color"
+              onSelect={(color) => {
+                setEditDraft({ ...editDraft, color });
+              }}
+              selected={editDraft.color}
+            />
+          </>
+        )}
         {/* A root has no parent to reassign, and offering itself as an option would let the
             user create a cycle. Only subcategories get the picker. */}
         {editDraft.parentId === null ? null : (
           <ChoiceRow
             label="Raíz"
             onSelect={(parentId) => {
-              setEditDraft({ ...editDraft, parentId });
+              // Reassigning adopts the new root's appearance, keeping the inheritance that
+              // createSubcategory establishes true after the move rather than leaving the old
+              // root's icon and colour on a child that no longer belongs to it.
+              const nextRoot = roots.find((root) => root.id === parentId);
+              setEditDraft({
+                ...editDraft,
+                parentId,
+                icon: nextRoot?.icon ?? editDraft.icon,
+                color: nextRoot?.color ?? editDraft.color,
+              });
             }}
             options={roots
               .filter((root) => root.kind === editDraft.kind)
@@ -343,11 +366,7 @@ export default function CategoriesScreen() {
       <AppFormScreen
         footer={
           <ActionButton
-            disabled={
-              newRoot.name.trim() === '' ||
-              newRoot.icon.trim() === '' ||
-              !/^#[0-9A-Fa-f]{6}$/u.test(newRoot.color)
-            }
+            disabled={newRoot.name.trim() === ''}
             label="Guardar"
             loading={saving}
             onPress={() => void createRoot()}
@@ -373,22 +392,21 @@ export default function CategoriesScreen() {
           }}
           value={newRoot.name}
         />
-        <FormField
+        <CategoryIconPicker
+          color={newRoot.color}
           label="Ícono"
-          maxLength={50}
-          onChangeText={(icon) => {
+          onSelect={(icon) => {
             setNewRoot({ ...newRoot, icon });
           }}
-          value={newRoot.icon}
+          selected={newRoot.icon}
         />
-        <FormField
-          autoCapitalize="characters"
-          label="Color hexadecimal"
-          maxLength={7}
-          onChangeText={(color) => {
+        <CategoryColorPicker
+          icon={newRoot.icon}
+          label="Color"
+          onSelect={(color) => {
             setNewRoot({ ...newRoot, color });
           }}
-          value={newRoot.color}
+          selected={newRoot.color}
         />
         {formError === undefined ? null : <InlineNotice tone="error">{formError}</InlineNotice>}
       </AppFormScreen>
@@ -534,10 +552,8 @@ function RootAccordion({
   return (
     <View style={!isFirst && styles.rootDivider}>
       <Pressable accessibilityRole="button" onPress={onToggle} style={styles.rootRow}>
-        <View style={[styles.avatar, { backgroundColor: `${root.color}26` }]}>
-          <Text style={[styles.avatarText, { color: root.color }]}>
-            {root.name.charAt(0).toUpperCase()}
-          </Text>
+        <View style={[styles.avatar, { backgroundColor: categoryTint(root.color) }]}>
+          <Ionicons color={root.color} name={categoryIcon(root.icon)} size={20} />
         </View>
         <View style={styles.rootCopy}>
           <Text style={m1TextStyles.body}>{root.name}</Text>
@@ -643,10 +659,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
   },
   rootCopy: { flex: 1 },
   chipWrap: {
