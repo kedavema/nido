@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import { categoryTint } from '@/utils/category-appearance';
 import {
   ActionButton,
   AppScreen,
@@ -389,7 +390,7 @@ function FijoListRow({
       onPress={onPress}
       style={[styles.row, !isFirst && styles.rowDivider]}
     >
-      <View style={[styles.avatar, { backgroundColor: `${row.accentColor}26` }]}>
+      <View style={[styles.avatar, { backgroundColor: categoryTint(row.accentColor) }]}>
         <Text style={[styles.avatarText, { color: row.accentColor }]}>{row.initial}</Text>
       </View>
       <View style={styles.rowCopy}>
