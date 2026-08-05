@@ -84,7 +84,7 @@ export function MovementFiltersSheet({
       {groups.map((group) => (
         <View key={group.key} style={styles.group}>
           <Text style={m1TextStyles.secondary}>{group.label}</Text>
-          {group.options.length === 0 ? (
+          {group.options.length === 0 && orphanSelection(group, draft[group.key]) === undefined ? (
             <Text style={styles.empty}>No hay opciones disponibles.</Text>
           ) : (
             <View style={styles.optionWrap}>
