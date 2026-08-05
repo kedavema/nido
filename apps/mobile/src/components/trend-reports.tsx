@@ -17,14 +17,6 @@ import {
   reportBarWidth,
 } from '@/utils/report-format';
 
-const SOURCE_COLORS = [
-  themeTokens.colors.primary,
-  themeTokens.categoryColors.vivienda.foreground,
-  themeTokens.categoryColors.transporte.foreground,
-  themeTokens.colors.accent,
-  themeTokens.categoryColors.salud.foreground,
-] as const;
-
 function monthLabel(month: string): string {
   return formatMonthLabel(monthFromLocalDate(`${month}-01`));
 }
@@ -180,7 +172,7 @@ export function PaymentSourcesReport({
     <Card>
       <Text style={styles.sectionLabel}>GASTO POR MEDIO DE PAGO</Text>
       <Text style={styles.total}>{formatBudgetPyg(report.totalExpensePyg)}</Text>
-      {report.paymentSources.map((source, index) => (
+      {report.paymentSources.map((source) => (
         <View key={source.paymentSourceId ?? 'unassigned'} style={styles.sourceRow}>
           <View style={styles.sourceHeader}>
             <Text numberOfLines={1} style={styles.rowName}>
@@ -193,7 +185,6 @@ export function PaymentSourcesReport({
             </Text>
           </View>
           <ReportBar
-            color={SOURCE_COLORS[index % SOURCE_COLORS.length] ?? themeTokens.colors.primary}
             label={`${source.paymentSourceName}: ${formatReportPercentage(source.percentageOfExpense)} por ciento del gasto`}
             width={reportBarWidth(source.amountPyg, largest)}
           />
@@ -214,12 +205,15 @@ function sourceOwner(source: ReportPaymentSource, members: readonly HouseholdMem
   );
 }
 
+// `color` is only passed where the chart carries two series that mean opposite things
+// (ingresos vs gastos, each with its own dot and label). A single-series bar list omits
+// it and takes the one chart mark — its row label already carries the identity.
 function ReportBar({
-  color,
+  color = themeTokens.chartColors.mark,
   label,
   width,
 }: {
-  readonly color: string;
+  readonly color?: string;
   readonly label: string;
   readonly width: `${number}%`;
 }) {
@@ -313,7 +307,7 @@ const styles = StyleSheet.create({
     height: 8,
     overflow: 'hidden',
     borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surfaceMuted,
+    backgroundColor: themeTokens.chartColors.track,
   },
   fill: { height: '100%', borderRadius: themeTokens.radii.chip },
   footer: {

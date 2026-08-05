@@ -497,10 +497,7 @@ export default function InicioScreen() {
 
           {!isEmptyMonth(summaryState.summary) &&
           summaryState.summary.categoryBreakdown.length > 0 ? (
-            <CategoryBreakdownCard
-              categories={categories}
-              items={summaryState.summary.categoryBreakdown}
-            />
+            <CategoryBreakdownCard items={summaryState.summary.categoryBreakdown} />
           ) : null}
 
           {!isEmptyMonth(summaryState.summary) ? (
@@ -755,25 +752,13 @@ function BalanceCard({
   );
 }
 
-function CategoryBreakdownCard({
-  items,
-  categories,
-}: {
-  readonly items: readonly CategoryBreakdownItem[];
-  readonly categories: readonly Category[];
-}) {
+function CategoryBreakdownCard({ items }: { readonly items: readonly CategoryBreakdownItem[] }) {
   const topItems = items.slice(0, MAX_CATEGORY_ROWS);
 
   return (
     <Card>
       <Text style={styles.cardLabel}>TOP CATEGORÍAS DEL MES</Text>
       {topItems.map((item) => {
-        // categoryBreakdown items are always root categories (see attributeToRootCategories in
-        // monthly-summary.service.ts), so a direct id lookup — not the parent-aware
-        // `categoryLabel` helper — is enough to find its color.
-        const barColor =
-          categories.find((category) => category.id === item.categoryId)?.color ??
-          themeTokens.colors.primary;
         const widthPercent = `${Math.min(item.percentage, 100).toFixed(4)}%` as `${number}%`;
 
         return (
@@ -787,9 +772,7 @@ function CategoryBreakdownCard({
               </Text>
             </View>
             <View style={styles.progressTrack}>
-              <View
-                style={[styles.progressFill, { width: widthPercent, backgroundColor: barColor }]}
-              />
+              <View style={[styles.progressFill, { width: widthPercent }]} />
             </View>
           </View>
         );
@@ -1146,13 +1129,13 @@ const styles = StyleSheet.create({
   progressTrack: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: themeTokens.colors.surfaceMuted,
+    backgroundColor: themeTokens.chartColors.track,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     borderRadius: 3,
-    backgroundColor: themeTokens.colors.primary,
+    backgroundColor: themeTokens.chartColors.mark,
   },
   checklistRow: {
     flexDirection: 'row',

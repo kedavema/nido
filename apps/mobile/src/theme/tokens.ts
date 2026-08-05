@@ -58,6 +58,16 @@ export const themeTokens = {
       background: '#EDEAE2',
     },
   },
+  // Chart marks. Every bar in the app sits in a row that already names its category
+  // or payment source and prints its amount, so the bar encodes magnitude only —
+  // identity is carried by the text beside it. One hue for every bar keeps that
+  // channel free and stops `categoryColors` (chosen for chips, where a label sits
+  // next to the tint) from being read as chart marks, where nothing disambiguates
+  // them. Measured at 7.73:1 against `track`, above the 3:1 floor for marks.
+  chartColors: {
+    mark: '#1C4F47',
+    track: '#EDEAE2',
+  },
   typography: {
     families: {
       displayMedium: 'BricolageGrotesque_500Medium',
