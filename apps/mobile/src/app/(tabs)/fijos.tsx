@@ -14,6 +14,7 @@ import {
   LoadingContent,
   m1TextStyles,
   PressableScale,
+  ScreenHeader,
 } from '@/components/m1-ui';
 import {
   navigateToFijoDetail,
@@ -188,20 +189,21 @@ export default function FijosScreen() {
 
   return (
     <AppScreen onRefresh={onRefresh} refreshing={refreshing}>
-      <View style={styles.headerRow}>
-        <Text accessibilityRole="header" style={styles.title}>
-          Fijos
-        </Text>
-        <MonthStepper
-          label={monthLabel}
-          onNext={() => {
-            setMonth((current) => shiftMonth(current, 1));
-          }}
-          onPrevious={() => {
-            setMonth((current) => shiftMonth(current, -1));
-          }}
-        />
-      </View>
+      <ScreenHeader
+        size="compact"
+        title="Fijos"
+        trailing={
+          <MonthStepper
+            label={monthLabel}
+            onNext={() => {
+              setMonth((current) => shiftMonth(current, 1));
+            }}
+            onPrevious={() => {
+              setMonth((current) => shiftMonth(current, -1));
+            }}
+          />
+        }
+      />
 
       {loadState.kind === 'loading' ? <LoadingContent label="Cargando fijos…" /> : null}
 
@@ -423,22 +425,6 @@ function OutlineButton({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  title: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.screenTitle,
-    lineHeight: 26,
-  },
-  monthLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
   summaryEyebrow: {
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodySemibold,

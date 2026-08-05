@@ -14,6 +14,8 @@ import {
   LoadingContent,
   m1TextStyles,
   PressableScale,
+  HeaderBackButton,
+  ScreenHeader,
 } from '@/components/m1-ui';
 import {
   navigateToExpectedIncomeForm,
@@ -185,25 +187,18 @@ export default function IngresosScreen() {
 
   return (
     <AppScreen onRefresh={onRefresh} refreshing={refreshing}>
-      <View style={styles.headerRow}>
-        <Pressable
-          accessibilityLabel="Volver"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => {
-            router.back();
-          }}
-          style={styles.backButton}
-        >
-          <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={20} />
-        </Pressable>
-        <View style={styles.headerCopy}>
-          <Text accessibilityRole="header" style={styles.title}>
-            Ingresos de {monthNameLower}
-          </Text>
-          <Text style={m1TextStyles.secondary}>{household.name}</Text>
-        </View>
-      </View>
+      <ScreenHeader
+        description={household.name}
+        leading={
+          <HeaderBackButton
+            onPress={() => {
+              router.back();
+            }}
+          />
+        }
+        size="compact"
+        title={`Ingresos de ${monthNameLower}`}
+      />
 
       {loadState.kind === 'loading' ? <LoadingContent label="Cargando ingresos…" /> : null}
 
@@ -354,28 +349,6 @@ function OutlineButton({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-    backgroundColor: themeTokens.colors.surface,
-  },
-  headerCopy: {
-    flex: 1,
-  },
-  title: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.screenTitle,
-    lineHeight: 26,
-  },
   summaryEyebrow: {
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodySemibold,

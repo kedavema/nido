@@ -17,6 +17,7 @@ import { categoryTint } from '@/utils/category-appearance';
 import {
   ActionButton,
   AppListScreen,
+  ScreenHeader,
   AppScreen,
   Card,
   InlineNotice,
@@ -292,18 +293,21 @@ export default function MovimientosScreen() {
   // without scrolling back up, which is what the pinned slot is for.
   const listHeader = (
     <>
-      <View style={styles.headerRow}>
-        <Text accessibilityRole="header" style={styles.title}>
-          Movimientos
-        </Text>
-        <MonthStepper
-          label={formatMonthLabel(month)}
-          onNext={() => {
-            setMonth((current) => shiftMonth(current, 1));
-          }}
-          onPrevious={() => {
-            setMonth((current) => shiftMonth(current, -1));
-          }}
+      <View style={styles.headerBlock}>
+        <ScreenHeader
+          size="compact"
+          title="Movimientos"
+          trailing={
+            <MonthStepper
+              label={formatMonthLabel(month)}
+              onNext={() => {
+                setMonth((current) => shiftMonth(current, 1));
+              }}
+              onPrevious={() => {
+                setMonth((current) => shiftMonth(current, -1));
+              }}
+            />
+          }
         />
       </View>
 
@@ -660,18 +664,12 @@ function PendingMutationRow({
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // #6: this used spacing.base — four pixels above the title, where every comparable surface
+  // uses screen. The block keeps its own padding because it is pinned outside the scroll view,
+  // which is what supplies it everywhere else.
+  headerBlock: {
     paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
-  },
-  title: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.screenTitle,
-    lineHeight: 26,
+    paddingTop: themeTokens.spacing.screen,
   },
   searchRow: {
     flexDirection: 'row',

@@ -6,7 +6,6 @@ import type {
   MonthlySummaryResponse,
   TrendsReportResponse,
 } from '@nido/contracts';
-import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -24,6 +23,8 @@ import {
   PressableScale,
   SummarySkeleton,
   m1TextStyles,
+  HeaderBackButton,
+  ScreenHeader,
 } from '@/components/m1-ui';
 import { IncomeExpenseReport, PaymentSourcesReport } from '@/components/trend-reports';
 import { themeTokens } from '@/theme/tokens';
@@ -133,26 +134,18 @@ export default function InformesScreen() {
   return (
     <AppScreen onRefresh={refresh} refreshing={refreshing}>
       <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <PressableScale
-            accessibilityLabel="Volver"
-            haptic
-            onPress={() => {
-              router.back();
-            }}
-            style={styles.backButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={22} />
-          </PressableScale>
-          <View style={styles.headerCopy}>
-            <Text accessibilityRole="header" numberOfLines={1} style={styles.title}>
-              Informes
-            </Text>
-            <Text numberOfLines={1} style={styles.householdName}>
-              {household.name}
-            </Text>
-          </View>
-        </View>
+        <ScreenHeader
+          description={household.name}
+          leading={
+            <HeaderBackButton
+              onPress={() => {
+                router.back();
+              }}
+            />
+          }
+          size="compact"
+          title="Informes"
+        />
         <View style={styles.monthPicker}>
           <MonthPicker
             onChange={(selected) => {
@@ -248,26 +241,6 @@ function BudgetReport({
 
 const styles = StyleSheet.create({
   header: { gap: 8 },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backButton: {
-    width: themeTokens.touchTarget.minimum,
-    height: themeTokens.touchTarget.minimum,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-  },
-  headerCopy: { flex: 1, minWidth: 0 },
-  title: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.screenTitle,
-  },
-  householdName: {
-    color: themeTokens.colors.inkSecondary,
-    fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.secondary,
-  },
   monthPicker: {
     marginLeft: themeTokens.touchTarget.minimum + 12,
   },

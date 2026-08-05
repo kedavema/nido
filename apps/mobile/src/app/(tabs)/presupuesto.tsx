@@ -9,7 +9,7 @@ import {
 } from '@nido/contracts';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { BudgetOverview } from '@/components/budget-overview';
@@ -23,6 +23,7 @@ import {
   PressableScale,
   SummarySkeleton,
   m1TextStyles,
+  ScreenHeader,
 } from '@/components/m1-ui';
 import { navigateToFijoDetail, navigateToSettleOccurrence } from '@/navigation/fijos-routes';
 import { themeTokens } from '@/theme/tokens';
@@ -163,20 +164,20 @@ export default function PresupuestoScreen() {
       onRefresh={onRefresh}
       refreshing={refreshing}
     >
-      <View style={styles.headerRow}>
-        <Text accessibilityRole="header" style={styles.title}>
-          Presupuesto
-        </Text>
-        <MonthStepper
-          label={formatMonthLabel(month)}
-          onNext={() => {
-            moveMonth(1);
-          }}
-          onPrevious={() => {
-            moveMonth(-1);
-          }}
-        />
-      </View>
+      <ScreenHeader
+        title="Presupuesto"
+        trailing={
+          <MonthStepper
+            label={formatMonthLabel(month)}
+            onNext={() => {
+              moveMonth(1);
+            }}
+            onPrevious={() => {
+              moveMonth(-1);
+            }}
+          />
+        }
+      />
 
       {screen.kind === 'loading' ? <SummarySkeleton /> : null}
       {screen.kind === 'error' ? (
@@ -230,17 +231,6 @@ export default function PresupuestoScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  title: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.displaySemibold,
-    fontSize: themeTokens.typography.scale.hero,
-  },
   fab: {
     minHeight: themeTokens.touchTarget.minimum,
     justifyContent: 'center',
