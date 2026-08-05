@@ -20,6 +20,7 @@ import {
   navigateToRecurringItemForm,
   navigateToSettleOccurrence,
 } from '@/navigation/fijos-routes';
+import { MonthStepper } from '@/components/month-stepper';
 import { themeTokens } from '@/theme/tokens';
 import {
   deriveOccurrenceDisplayStatus,
@@ -191,29 +192,15 @@ export default function FijosScreen() {
         <Text accessibilityRole="header" style={styles.title}>
           Fijos
         </Text>
-        <View style={styles.monthPill}>
-          <Pressable
-            accessibilityLabel="Mes anterior"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, -1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={16} />
-          </Pressable>
-          <Text style={styles.monthLabel}>{monthLabel}</Text>
-          <Pressable
-            accessibilityLabel="Mes siguiente"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, 1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={16} />
-          </Pressable>
-        </View>
+        <MonthStepper
+          label={monthLabel}
+          onNext={() => {
+            setMonth((current) => shiftMonth(current, 1));
+          }}
+          onPrevious={() => {
+            setMonth((current) => shiftMonth(current, -1));
+          }}
+        />
       </View>
 
       {loadState.kind === 'loading' ? <LoadingContent label="Cargando fijos…" /> : null}
@@ -446,17 +433,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.displaySemibold,
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
-  },
-  monthPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
   },
   monthLabel: {
     color: themeTokens.colors.ink,

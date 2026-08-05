@@ -26,6 +26,7 @@ import {
   SyncStatusPill,
 } from '@/components/m1-ui';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
+import { MonthStepper } from '@/components/month-stepper';
 import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import type { QueuedMutation } from '@/sync/sync-store.types';
@@ -295,29 +296,15 @@ export default function MovimientosScreen() {
         <Text accessibilityRole="header" style={styles.title}>
           Movimientos
         </Text>
-        <View style={styles.monthPill}>
-          <Pressable
-            accessibilityLabel="Mes anterior"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, -1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={16} />
-          </Pressable>
-          <Text style={styles.monthLabel}>{formatMonthLabel(month)}</Text>
-          <Pressable
-            accessibilityLabel="Mes siguiente"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => {
-              setMonth((current) => shiftMonth(current, 1));
-            }}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={16} />
-          </Pressable>
-        </View>
+        <MonthStepper
+          label={formatMonthLabel(month)}
+          onNext={() => {
+            setMonth((current) => shiftMonth(current, 1));
+          }}
+          onPrevious={() => {
+            setMonth((current) => shiftMonth(current, -1));
+          }}
+        />
       </View>
 
       <View style={styles.searchRow}>
@@ -685,22 +672,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.displaySemibold,
     fontSize: themeTokens.typography.scale.screenTitle,
     lineHeight: 26,
-  },
-  monthPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    borderWidth: 1,
-    borderColor: themeTokens.colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  monthLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.secondary,
   },
   searchRow: {
     flexDirection: 'row',
