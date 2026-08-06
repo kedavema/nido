@@ -7,6 +7,7 @@ import type {
   TrendsReportResponse,
 } from '@nido/contracts';
 import { router, useFocusEffect } from 'expo-router';
+import type { ReactNode } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -20,7 +21,6 @@ import {
   Card,
   InlineNotice,
   LoadingContent,
-  PressableScale,
   SummarySkeleton,
   m1TextStyles,
   HeaderBackButton,
@@ -35,7 +35,6 @@ import {
   type MonthValue,
 } from '@/utils/movement-format';
 
-type ReportView = 'categories' | 'budget' | 'trends' | 'sources';
 type ScreenState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
@@ -49,18 +48,10 @@ type ScreenState =
       readonly trendsReport: TrendsReportResponse;
     };
 
-const REPORT_TABS: readonly { readonly id: ReportView; readonly label: string }[] = [
-  { id: 'categories', label: 'Categorías' },
-  { id: 'budget', label: 'Presupuesto' },
-  { id: 'trends', label: 'Ingresos y gastos' },
-  { id: 'sources', label: 'Medios de pago' },
-];
-
 export default function InformesScreen() {
   const { catalog, getMembers, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
-  const [view, setView] = useState<ReportView>('categories');
   const [screen, setScreen] = useState<ScreenState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const requestGeneration = useRef(0);
@@ -156,27 +147,6 @@ export default function InformesScreen() {
         </View>
       </View>
 
-      <View accessibilityRole="tablist" style={styles.tabs}>
-        {REPORT_TABS.map((tab) => {
-          const selected = view === tab.id;
-          return (
-            <PressableScale
-              accessibilityState={{ selected }}
-              haptic
-              key={tab.id}
-              onPress={() => {
-                setView(tab.id);
-              }}
-              style={[styles.tab, selected && styles.selectedTab]}
-            >
-              <Text style={[styles.tabLabel, selected && styles.selectedTabLabel]}>
-                {tab.label}
-              </Text>
-            </PressableScale>
-          );
-        })}
-      </View>
-
       {screen.kind === 'loading' ? <SummarySkeleton /> : null}
       {screen.kind === 'error' ? (
         <>
@@ -184,19 +154,50 @@ export default function InformesScreen() {
           <ActionButton label="Reintentar" onPress={() => void load()} variant="secondary" />
         </>
       ) : null}
-      {screen.kind === 'ready' && view === 'categories' ? (
-        <CategoryReport key={screen.categoryReport.month} report={screen.categoryReport} />
-      ) : null}
-      {screen.kind === 'ready' && view === 'budget' ? (
-        <BudgetReport month={month} screen={screen} />
-      ) : null}
-      {screen.kind === 'ready' && view === 'trends' ? (
-        <IncomeExpenseReport report={screen.trendsReport} todayLocal={todayLocalDate()} />
-      ) : null}
-      {screen.kind === 'ready' && view === 'sources' ? (
-        <PaymentSourcesReport members={screen.members} report={screen.trendsReport} />
+      {screen.kind === 'ready' ? (
+        <>
+          <ReportSection title="Cómo venís">
+            <BudgetReport month={month} screen={screen} />
+          </ReportSection>
+          <ReportSection title="En qué se te va">
+            <CategoryReport
+              allocations={screen.budgetMonth?.allocations ?? []}
+              key={screen.categoryReport.month}
+              onEditBudget={() => {
+                router.push(`/editar-presupuesto?month=${formatMonthQueryParam(month)}`);
+              }}
+              report={screen.categoryReport}
+            />
+          </ReportSection>
+          <ReportSection title="Contra meses anteriores">
+            <IncomeExpenseReport report={screen.trendsReport} todayLocal={todayLocalDate()} />
+          </ReportSection>
+          <ReportSection title="Quién puso qué">
+            <PaymentSourcesReport members={screen.members} report={screen.trendsReport} />
+          </ReportSection>
+        </>
       ) : null}
     </AppScreen>
+  );
+}
+
+/**
+ * One band of the report. The four sections used to be tabs; each is three to six rows, so the
+ * tabs hid most of a small screen behind clicks rather than paging a dataset that needed paging.
+ * The heading is what replaces the tab label — without it a reader loses which block they are in.
+ */
+function ReportSection({
+  children,
+  title,
+}: {
+  readonly children: ReactNode;
+  readonly title: string;
+}) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionHeading}>{title.toUpperCase()}</Text>
+      {children}
+    </View>
   );
 }
 
@@ -241,27 +242,14 @@ function BudgetReport({
 
 const styles = StyleSheet.create({
   header: { gap: 8 },
+  section: { gap: themeTokens.spacing.base },
+  sectionHeading: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.label,
+    letterSpacing: 1,
+  },
   monthPicker: {
     marginLeft: themeTokens.touchTarget.minimum + 12,
   },
-  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tab: {
-    minHeight: themeTokens.touchTarget.minimum,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: themeTokens.colors.borderStrong,
-    borderRadius: themeTokens.radii.chip,
-    backgroundColor: themeTokens.colors.surface,
-    paddingHorizontal: 15,
-  },
-  selectedTab: {
-    borderColor: themeTokens.colors.primary,
-    backgroundColor: themeTokens.colors.primary,
-  },
-  tabLabel: {
-    color: themeTokens.colors.ink,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
-  },
-  selectedTabLabel: { color: themeTokens.colors.surface },
 });

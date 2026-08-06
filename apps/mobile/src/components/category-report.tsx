@@ -1,4 +1,4 @@
-import type { CategoryBreakdownReportResponse } from '@nido/contracts';
+import type { BudgetAllocation, CategoryBreakdownReportResponse } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -6,17 +6,26 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Card, PressableScale, m1TextStyles } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
 import { formatBudgetPyg } from '@/utils/budget-overview';
-import { formatReportPercentage, largestReportAmount, reportBarWidth } from '@/utils/report-format';
+import { categoryLimitProgress, formatReportPercentage } from '@/utils/report-format';
 
 interface CategoryReportProps {
   readonly report: CategoryBreakdownReportResponse;
+  /**
+   * The month's per-category limits. A category with spending but no entry here renders its
+   * amount without a bar — see `categoryLimitProgress`.
+   */
+  readonly allocations: readonly BudgetAllocation[];
+  /** Opens the budget editor from the "sin presupuesto" affordance. */
+  readonly onEditBudget: () => void;
 }
 
-export function CategoryReport({ report }: CategoryReportProps) {
+export function CategoryReport({ allocations, onEditBudget, report }: CategoryReportProps) {
   const [expandedId, setExpandedId] = useState<string | undefined>(
     report.categories[0]?.categoryId,
   );
-  const largestAmount = largestReportAmount(report.categories.map((item) => item.amountPyg));
+  const limitByCategory = new Map(
+    allocations.map((allocation) => [allocation.categoryId, allocation.amountPyg]),
+  );
 
   if (report.categories.length === 0) {
     return (
@@ -36,6 +45,10 @@ export function CategoryReport({ report }: CategoryReportProps) {
       {report.categories.map((item) => {
         const expanded = expandedId === item.categoryId;
         const percentage = formatReportPercentage(item.percentageOfTotal);
+        const progress = categoryLimitProgress(
+          item.amountPyg,
+          limitByCategory.get(item.categoryId),
+        );
 
         return (
           <View key={item.categoryId} style={styles.categoryRow}>
@@ -63,15 +76,38 @@ export function CategoryReport({ report }: CategoryReportProps) {
                   {formatBudgetPyg(item.amountPyg)} · {percentage} %
                 </Text>
               </View>
-              <View
-                accessibilityLabel={`${percentage} por ciento del gasto mensual`}
-                accessibilityRole="progressbar"
-                style={styles.track}
-              >
+              {progress === undefined ? null : (
                 <View
-                  style={[styles.fill, { width: reportBarWidth(item.amountPyg, largestAmount) }]}
-                />
-              </View>
+                  accessibilityLabel={
+                    progress.isOver
+                      ? `Excedido por ${formatBudgetPyg(progress.remainingPyg)}`
+                      : `Quedan ${formatBudgetPyg(progress.remainingPyg)}`
+                  }
+                  accessibilityRole="progressbar"
+                  style={styles.track}
+                >
+                  <View
+                    style={[
+                      styles.fill,
+                      progress.isOver && styles.fillOver,
+                      { width: progress.width },
+                    ]}
+                  />
+                </View>
+              )}
+              {progress === undefined ? (
+                // The bar needs a limit; the amount does not. Hiding the row instead would report
+                // a subset of spending as the total — tidy, and wrong.
+                <Text onPress={onEditBudget} style={styles.noBudget}>
+                  sin presupuesto ›
+                </Text>
+              ) : (
+                <Text style={progress.isOver ? styles.overAmount : styles.remainingAmount}>
+                  {progress.isOver
+                    ? `Excedido por ${formatBudgetPyg(progress.remainingPyg)}`
+                    : `Te quedan ${formatBudgetPyg(progress.remainingPyg)}`}
+                </Text>
+              )}
             </PressableScale>
             {expanded ? (
               <View style={styles.subcategories}>
@@ -91,7 +127,7 @@ export function CategoryReport({ report }: CategoryReportProps) {
         );
       })}
       <Text style={styles.footer}>
-        Barras a escala de la categoría mayor. Suma = {formatBudgetPyg(report.totalExpensePyg)} ✓
+        Cada barra mide su propio límite. Suma = {formatBudgetPyg(report.totalExpensePyg)} ✓
       </Text>
     </Card>
   );
@@ -148,6 +184,24 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: themeTokens.radii.chip,
     backgroundColor: themeTokens.chartColors.mark,
+  },
+  // Over-limit is a state, not another series, so it wears the status colour and is always paired
+  // with the words beside it — never colour alone.
+  fillOver: { backgroundColor: themeTokens.semanticColors.danger.foreground },
+  remainingAmount: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
+  overAmount: {
+    color: themeTokens.semanticColors.danger.foreground,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
+  noBudget: {
+    color: themeTokens.colors.primary,
+    fontFamily: themeTokens.typography.families.bodySemibold,
+    fontSize: themeTokens.typography.scale.secondary,
   },
   subcategories: {
     gap: 8,
