@@ -414,6 +414,31 @@ export default function NuevoGastoScreen() {
     });
   }
 
+  // Creating from inside the picker: the new category is pushed into the loaded catalog rather
+  // than refetched, so the sheet can select it immediately and the draft behind it never moves.
+  async function createSubcategory(rootId: string, name: string): Promise<Category> {
+    if (household === null || screenState.kind !== 'ready') {
+      throw new Error('El catálogo todavía no está listo.');
+    }
+    const parent = screenState.categories.find((category) => category.id === rootId);
+    if (parent === undefined) throw new Error('No encontramos esa categoría raíz.');
+    const { category } = await catalog.createCategory(household.id, {
+      kind: parent.kind,
+      name,
+      icon: parent.icon,
+      color: parent.color,
+      parentId: rootId,
+    });
+    // Functional update, not a spread of the captured value: two overlapping creations would
+    // otherwise both write from the same stale base and the first one would vanish.
+    setScreenState((current) =>
+      current.kind === 'ready'
+        ? { ...current, categories: [...current.categories, category] }
+        : current,
+    );
+    return category;
+  }
+
   function selectLocalDate(localDate: string): void {
     updateDraft({ localDate, occurredAt: localDateToOccurredAt(localDate, todayLocal) });
     setShowDatePicker(false);
@@ -702,6 +727,7 @@ export default function NuevoGastoScreen() {
           selectCategory(category);
           setShowCategoryPicker(false);
         }}
+        onCreateSubcategory={createSubcategory}
         selectedCategoryId={draft.categoryId}
         subtitle="Para este gasto"
         visible={showCategoryPicker}

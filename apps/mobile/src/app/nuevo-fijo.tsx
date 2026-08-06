@@ -198,6 +198,31 @@ export default function NuevoFijoScreen() {
     setDraft((current) => (current === null ? current : { ...current, ...patch }));
   }
 
+  // Pushed into the loaded catalog rather than refetched, so the picker can select it
+  // immediately and the draft behind it never moves.
+  async function createSubcategory(rootId: string, name: string): Promise<Category> {
+    if (household === null || screenState.kind !== 'ready') {
+      throw new Error('El catálogo todavía no está listo.');
+    }
+    const parent = screenState.categories.find((category) => category.id === rootId);
+    if (parent === undefined) throw new Error('No encontramos esa categoría raíz.');
+    const { category } = await catalog.createCategory(household.id, {
+      kind: parent.kind,
+      name,
+      icon: parent.icon,
+      color: parent.color,
+      parentId: rootId,
+    });
+    // Functional update, not a spread of the captured value: two overlapping creations would
+    // otherwise both write from the same stale base and the first one would vanish.
+    setScreenState((current) =>
+      current.kind === 'ready'
+        ? { ...current, categories: [...current.categories, category] }
+        : current,
+    );
+    return category;
+  }
+
   function selectCategory(category: Category): void {
     update({ categoryId: nextRequiredCategoryId(draft?.categoryId, category) });
   }
@@ -463,6 +488,7 @@ export default function NuevoFijoScreen() {
           selectCategory(category);
           setShowCategoryPicker(false);
         }}
+        onCreateSubcategory={createSubcategory}
         selectedCategoryId={draft.categoryId}
         subtitle="Para este gasto fijo"
         visible={showCategoryPicker}
