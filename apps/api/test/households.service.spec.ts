@@ -86,6 +86,79 @@ describe('HouseholdsService invitations', () => {
   });
 });
 
+describe('HouseholdsService member cap', () => {
+  // The copy invites a *second* integrante and the header is built for a pair. Nothing enforced it
+  // at any layer, and an invite is a URL — so the button was never the boundary.
+  it('refuses to mint an invite once the household is full', async () => {
+    const createInvite = vi.fn(() => Promise.reject(new Error('must not be called')));
+    const repository = createRepository({
+      createInvite,
+      listMembers: () => Promise.resolve([memberRecord('a'), memberRecord('b')]),
+    });
+    const service = new HouseholdsService(
+      repository,
+      { now: () => now },
+      new InvitationTokenService(),
+    );
+
+    await expect(service.createInvite(access, 'third@example.com')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(createInvite).not.toHaveBeenCalled();
+  });
+
+  it('still mints an invite while there is room', async () => {
+    const repository = createRepository({
+      listMembers: () => Promise.resolve([memberRecord('a')]),
+      createInvite: (input) =>
+        Promise.resolve({
+          id: '0d539fa4-e991-41d7-9d31-258b1307ec31',
+          householdId: input.access.householdId,
+          email: input.email,
+          expiresAt: input.expiresAt,
+        }),
+    });
+    const service = new HouseholdsService(
+      repository,
+      { now: () => now },
+      new InvitationTokenService(),
+    );
+
+    await expect(service.createInvite(access, 'second@example.com')).resolves.toMatchObject({
+      invite: { email: 'second@example.com' },
+    });
+  });
+
+  // The repository decides this one inside its transaction; the service only has to surface it as
+  // a conflict rather than letting it read as a server error.
+  it('surfaces a full household from accept as a conflict', async () => {
+    const repository = createRepository({
+      acceptInvite: () => Promise.resolve({ status: 'household-full' as const }),
+    });
+    const service = new HouseholdsService(
+      repository,
+      { now: () => now },
+      new InvitationTokenService(),
+    );
+
+    await expect(service.acceptInvite(user, 'a'.repeat(43))).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});
+
+function memberRecord(suffix: string) {
+  return {
+    userId: `${access.actorId.slice(0, -1)}${suffix}`,
+    displayName: 'Member',
+    email: `${suffix}@example.com`,
+    avatarUrl: null,
+    role: 'MEMBER' as const,
+    status: 'ACTIVE' as const,
+    joinedAt: now,
+  };
+}
+
 function createRepository(overrides: Partial<HouseholdsRepository> = {}): HouseholdsRepository {
   return {
     listActiveForUser: () => Promise.resolve([]),

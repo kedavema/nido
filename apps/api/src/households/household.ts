@@ -38,7 +38,15 @@ export interface HouseholdInviteRecord {
   readonly expiresAt: Date;
 }
 
+/**
+ * A household is a couple. The copy invites a *second* integrante and the header renders an avatar
+ * row built for a pair, but nothing enforced it — and the invite is a URL, so hiding the button
+ * was never the boundary.
+ */
+export const HOUSEHOLD_MEMBER_LIMIT = 2;
+
 export type AcceptInviteResult =
   | { readonly status: 'accepted'; readonly household: HouseholdSummaryRecord }
   | { readonly status: 'duplicate-membership' }
+  | { readonly status: 'household-full' }
   | { readonly status: 'invalid' };
