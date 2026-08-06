@@ -401,20 +401,6 @@ export default function NuevoGastoScreen() {
     setSubmitError(undefined);
   }
 
-  function selectCurrency(currency: TransactionCurrency): void {
-    if (draft === null || currency === draft.currency) return;
-    updateDraft({
-      currency,
-      amount: '',
-      fxRate:
-        currency === 'USD'
-          ? defaultUsdRate === undefined
-            ? ''
-            : fxRateWireToSanitized(defaultUsdRate.fxRateToBase)
-          : draft.fxRate,
-    });
-  }
-
   function selectCategory(category: Category): void {
     updateDraft({ categoryId: nextRequiredCategoryId(draft?.categoryId, category) });
   }
@@ -562,21 +548,18 @@ export default function NuevoGastoScreen() {
             onPress={() => void submit()}
           />
         }
-        header={
-          <FormHeader
-            onDismiss={handleClose}
-            title={title}
-            trailing={
-              mode === 'create' ? (
-                <KindToggle onSelect={selectKind} selected={draft.type} />
-              ) : undefined
-            }
-          />
-        }
+        header={<FormHeader onDismiss={handleClose} title={title} />}
       >
-        <View style={styles.currencyRow}>
-          <CurrencyToggle onSelect={selectCurrency} selected={draft.currency} />
-        </View>
+        {/*
+          Directly above the amount rather than in the header: this toggle is what decides whether
+          the number below means money out or money in, so it belongs beside the number it governs.
+          Editing does not offer it — an existing transaction's kind is not something to flip.
+        */}
+        {mode === 'create' ? (
+          <View style={styles.kindRow}>
+            <KindToggle onSelect={selectKind} selected={draft.type} />
+          </View>
+        ) : null}
         <AmountField
           accessibilityLabel="Monto"
           autoFocus
@@ -810,7 +793,7 @@ function KindToggle({
   readonly onSelect: (type: TransactionType) => void;
 }) {
   return (
-    <View style={styles.currencyToggle}>
+    <View style={styles.segmented}>
       {(['EXPENSE', 'INCOME'] as const).map((type) => (
         <Pressable
           accessibilityRole="button"
@@ -820,55 +803,18 @@ function KindToggle({
             onSelect(type);
           }}
           style={({ pressed }) => [
-            styles.currencyOption,
-            selected === type && styles.currencyOptionActive,
+            styles.segmentedOption,
+            selected === type && styles.segmentedOptionActive,
             pressed && styles.chipPressed,
           ]}
         >
           <Text
             style={[
-              styles.currencyOptionText,
-              selected === type && styles.currencyOptionTextActive,
+              styles.segmentedOptionText,
+              selected === type && styles.segmentedOptionTextActive,
             ]}
           >
             {type === 'EXPENSE' ? 'Gasto' : 'Ingreso'}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function CurrencyToggle({
-  selected,
-  onSelect,
-}: {
-  readonly selected: TransactionCurrency;
-  readonly onSelect: (currency: TransactionCurrency) => void;
-}) {
-  return (
-    <View style={styles.currencyToggle}>
-      {(['PYG', 'USD'] as const).map((currency) => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ selected: selected === currency }}
-          key={currency}
-          onPress={() => {
-            onSelect(currency);
-          }}
-          style={({ pressed }) => [
-            styles.currencyOption,
-            selected === currency && styles.currencyOptionActive,
-            pressed && styles.chipPressed,
-          ]}
-        >
-          <Text
-            style={[
-              styles.currencyOptionText,
-              selected === currency && styles.currencyOptionTextActive,
-            ]}
-          >
-            {currency === 'PYG' ? 'Gs.' : 'USD'}
           </Text>
         </Pressable>
       ))}
@@ -1169,17 +1115,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: themeTokens.colors.background,
   },
-  // The currency belongs beside the amount it qualifies. It used to sit in the header, which is
-  // the only slot a screen-level toggle can occupy — and the kind toggle needs that slot more,
-  // because it changes what the whole form means rather than one field's unit.
-  currencyRow: { flexDirection: 'row', justifyContent: 'flex-end' },
-  currencyToggle: {
+  // The row the currency toggle used to occupy, now holding the only toggle the form has.
+  kindRow: { flexDirection: 'row', justifyContent: 'flex-end' },
+  segmented: {
     flexDirection: 'row',
     borderRadius: themeTokens.radii.chip,
     backgroundColor: themeTokens.colors.surfaceMuted,
     padding: 4,
   },
-  currencyOption: {
+  segmentedOption: {
     minHeight: themeTokens.touchTarget.minimum,
     minWidth: 56,
     alignItems: 'center',
@@ -1187,16 +1131,16 @@ const styles = StyleSheet.create({
     borderRadius: themeTokens.radii.chip,
     paddingHorizontal: 12,
   },
-  currencyOptionActive: {
+  segmentedOptionActive: {
     backgroundColor: themeTokens.colors.surface,
     ...cardShadowStyle,
   },
-  currencyOptionText: {
+  segmentedOptionText: {
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.secondary,
   },
-  currencyOptionTextActive: {
+  segmentedOptionTextActive: {
     color: themeTokens.colors.ink,
   },
   fxCard: {
