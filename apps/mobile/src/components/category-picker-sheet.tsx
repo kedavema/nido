@@ -45,6 +45,8 @@ export function CategoryPickerSheet({
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string>();
   const createAttempt = useRef(0);
+  /** The attempt currently in flight, or null. One ref, so cancelling both invalidates and releases. */
+  const activeAttempt = useRef<number | null>(null);
   const groups = useMemo(() => filterCategoryGroups(categories, search), [categories, search]);
   const selectedRootId = selectedRootCategoryId(selectedCategoryId, categories);
   const showingAll = search.trim() === '';
@@ -59,6 +61,7 @@ export function CategoryPickerSheet({
   function cancelCreate(): void {
     // Abandons any in-flight attempt as well as the visible state.
     createAttempt.current += 1;
+    activeAttempt.current = null;
     setCreating(false);
     setCreatingUnderRoot(null);
     setNewName('');
@@ -69,12 +72,20 @@ export function CategoryPickerSheet({
   // behind it never moves. On failure the typed name stays put — retyping it is the one thing the
   // user would resent.
   async function createAndSelect(rootId: string): Promise<void> {
-    // Guarded rather than merely disabled: the confirm chip and the keyboard submit both land
-    // here, and two taps would create two identical subcategories before either request returns.
-    if (creating || onCreateSubcategory === undefined || newName.trim() === '') return;
+    // Guarded on a ref, not on `creating`: the confirm chip and the keyboard submit can both fire
+    // from one gesture within a single render cycle, and both would read the same stale state,
+    // each creating an identical subcategory. A ref updates synchronously. Cancelling clears it,
+    // so abandoning a request does not silently swallow the next one.
+    if (
+      activeAttempt.current !== null ||
+      onCreateSubcategory === undefined ||
+      newName.trim() === ''
+    )
+      return;
     // The sheet keeps its children mounted, so a request outlives a dismiss. This marks which
     // attempt is still wanted; anything older resolves into a closed sheet and must not select.
     const attempt = ++createAttempt.current;
+    activeAttempt.current = attempt;
     setCreating(true);
     setCreateError(undefined);
     try {
@@ -86,6 +97,9 @@ export function CategoryPickerSheet({
       if (attempt !== createAttempt.current) return;
       setCreateError(messageForActionError(error));
     } finally {
+      // Only release the claim if it is still ours: an attempt abandoned mid-flight must not
+      // unblock, or wrongly block, the newer one that replaced it.
+      if (activeAttempt.current === attempt) activeAttempt.current = null;
       if (attempt === createAttempt.current) setCreating(false);
     }
   }
@@ -224,6 +238,9 @@ export function CategoryPickerSheet({
                     <CategoryChip
                       label="+ Nueva"
                       onPress={() => {
+                        // Abandons any attempt still running under a different root, so its late
+                        // resolution cannot select a category from the root just left behind.
+                        cancelCreate();
                         setCreatingUnderRoot(root.id);
                         // Whatever they searched for is almost certainly the name they want.
                         setNewName(search.trim());
