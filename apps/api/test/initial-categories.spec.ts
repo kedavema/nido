@@ -64,9 +64,10 @@ describe('initial categories', () => {
     }
   });
 
-  // Two roots of different kinds may share a color, so a data migration that needs to reach one of
-  // them has only the name left to separate it — which is exactly what m8's Servicios statement
-  // does. A duplicated name would make that statement hit a row it was never meant to touch.
+  // A data migration that has to reach one specific root identifies it by the seed signature it
+  // still carries — m8's Servicios statement matches name, icon, sort order and kind together,
+  // because Vivienda shares its color and every one of those fields is editable on its own. A
+  // duplicated name would make that signature match a row it was never meant to touch.
   it('names every root exactly once', () => {
     const names = INITIAL_CATEGORIES.map((category) => category.name);
 
