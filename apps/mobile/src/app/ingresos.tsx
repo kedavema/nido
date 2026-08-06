@@ -22,6 +22,7 @@ import {
   navigateToIngresoDetail,
   navigateToReceiveOccurrence,
 } from '@/navigation/ingresos-routes';
+import { navigateToNewIncome } from '@/navigation/new-expense-route';
 import { themeTokens } from '@/theme/tokens';
 import { formatOccurrenceAmount, formatShortDueDate, settledOnLabel } from '@/utils/fijos-format';
 import { receivedPercentage, sumExpectedPyg, sumSettledPyg } from '@/utils/ingresos-format';
@@ -259,12 +260,22 @@ export default function IngresosScreen() {
       ) : null}
 
       {loadState.kind === 'loaded' ? (
-        <OutlineButton
-          label="+ Agregar ingreso esperado"
-          onPress={() => {
-            navigateToExpectedIncomeForm();
-          }}
-        />
+        <>
+          {/* Money already in hand goes straight in. Declaring that you *expect* something you
+              have already been paid was the eight-step path this replaces. */}
+          <ActionButton
+            label="+ Registrar ingreso recibido"
+            onPress={() => {
+              navigateToNewIncome();
+            }}
+          />
+          <OutlineButton
+            label="+ Agregar ingreso esperado"
+            onPress={() => {
+              navigateToExpectedIncomeForm();
+            }}
+          />
+        </>
       ) : null}
     </AppScreen>
   );

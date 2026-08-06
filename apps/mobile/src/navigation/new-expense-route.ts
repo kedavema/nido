@@ -14,3 +14,12 @@ export function navigateToNewExpense(transactionId?: string): void {
   }
   router.push(`${NEW_EXPENSE_ROUTE}?transactionId=${encodeURIComponent(transactionId)}`);
 }
+
+/**
+ * The same form, opened for money already received. It has always been kind-agnostic apart from
+ * two hardcoded literals — the category picker filters by the draft's kind, so income categories
+ * appear with no new code. Recording income used to mean declaring you *expected* it first.
+ */
+export function navigateToNewIncome(): void {
+  router.push(`${NEW_EXPENSE_ROUTE}?type=INCOME`);
+}
