@@ -160,7 +160,14 @@ export default function InformesScreen() {
             <BudgetReport month={month} screen={screen} />
           </ReportSection>
           <ReportSection title="En qué se te va">
-            <CategoryReport key={screen.categoryReport.month} report={screen.categoryReport} />
+            <CategoryReport
+              allocations={screen.budgetMonth?.allocations ?? []}
+              key={screen.categoryReport.month}
+              onEditBudget={() => {
+                router.push(`/editar-presupuesto?month=${formatMonthQueryParam(month)}`);
+              }}
+              report={screen.categoryReport}
+            />
           </ReportSection>
           <ReportSection title="Contra meses anteriores">
             <IncomeExpenseReport report={screen.trendsReport} todayLocal={todayLocalDate()} />
