@@ -6,9 +6,10 @@ import type {
 } from '@nido/contracts';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
+import { CalendarBoard } from '@/components/date-picker';
 import { AmountField, Chip, ChipRow, formFieldStyles } from '@/components/expense-form-fields';
 import {
   ActionButton,
@@ -19,12 +20,7 @@ import {
   LoadingContent,
 } from '@/components/m1-ui';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
-import { themeTokens } from '@/theme/tokens';
-import {
-  amountToWireDecimal,
-  isValidLocalDateString,
-  localDateToOccurredAt,
-} from '@/utils/expense-form';
+import { amountToWireDecimal, localDateToOccurredAt } from '@/utils/expense-form';
 import { formatOccurrenceAmount } from '@/utils/fijos-format';
 import {
   formatFullLocalDate,
@@ -55,7 +51,6 @@ export default function RecibirIngresoScreen() {
   const [amount, setAmount] = useState('');
   const [payDate, setPayDate] = useState(() => todayLocalDate());
   const [choosingDate, setChoosingDate] = useState(false);
-  const [manualDate, setManualDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
 
@@ -189,23 +184,7 @@ export default function RecibirIngresoScreen() {
           selected={choosingDate || payDate !== todayLocal}
         />
       </ChipRow>
-      {choosingDate ? (
-        <View style={formFieldStyles.field}>
-          <TextInput
-            accessibilityLabel="Otra fecha (aaaa-mm-dd)"
-            onChangeText={(text) => {
-              setManualDate(text);
-              if (isValidLocalDateString(text)) {
-                setPayDate(text);
-              }
-            }}
-            placeholder="2026-07-15"
-            placeholderTextColor={themeTokens.colors.inkSecondary}
-            style={formFieldStyles.textField}
-            value={manualDate}
-          />
-        </View>
-      ) : null}
+      {choosingDate ? <CalendarBoard onChange={setPayDate} value={payDate} /> : null}
 
       <InlineNotice tone="success">
         Se crea el ingreso real en Movimientos y el Balance del mes lo suma al instante. Se recibe

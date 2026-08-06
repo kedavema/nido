@@ -238,14 +238,23 @@ interface LocalDatePickerProps {
 }
 
 /** Controlled picker for one-off and yearly values stored as YYYY-MM-DD. */
-export function LocalDatePicker({
-  accessibilityLabel = 'Fecha',
-  error = false,
+/**
+ * The calendar itself — month navigation, weekday row, day grid — with no chrome of its own.
+ *
+ * It exists separately because `LocalDatePicker` is a trigger *plus* a bottom sheet, and three
+ * screens already have their own date sheet with Hoy / Ayer shortcuts. They need the grid inside
+ * the sheet they already have, not a second sheet inside it. Selecting a day reports the date and
+ * nothing else; whether that also dismisses something is the caller's business.
+ */
+export function CalendarBoard({
   onChange,
   testID,
   value,
-}: LocalDatePickerProps) {
-  const [visible, setVisible] = useState(false);
+}: {
+  readonly onChange: (localDate: string) => void;
+  readonly testID?: string | undefined;
+  readonly value: string;
+}) {
   const [displayMonth, setDisplayMonth] = useState<CalendarMonth>(() => monthFromLocalDate(value));
   const calendarDays = useMemo(() => {
     const emptyDays = Array.from({ length: firstDayOffset(displayMonth) }, () => null);
@@ -256,9 +265,87 @@ export function LocalDatePicker({
     return [...emptyDays, ...monthDays];
   }, [displayMonth]);
 
+  return (
+    <>
+      <View style={styles.monthNavigation}>
+        <PressableScale
+          accessibilityLabel="Mes anterior"
+          haptic
+          onPress={() => {
+            setDisplayMonth((current) => shiftCalendarMonth(current, -1));
+          }}
+          style={styles.monthNavigationButton}
+        >
+          <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={20} />
+        </PressableScale>
+        <Text accessibilityRole="header" style={styles.monthLabel}>
+          {formatCalendarMonthLabel(displayMonth)}
+        </Text>
+        <PressableScale
+          accessibilityLabel="Mes siguiente"
+          haptic
+          onPress={() => {
+            setDisplayMonth((current) => shiftCalendarMonth(current, 1));
+          }}
+          style={styles.monthNavigationButton}
+        >
+          <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={20} />
+        </PressableScale>
+      </View>
+      <View style={styles.weekdayRow}>
+        {CALENDAR_WEEKDAY_LABELS.map((weekday) => (
+          <Text key={weekday} style={styles.weekdayLabel}>
+            {weekday}
+          </Text>
+        ))}
+      </View>
+      <View style={styles.calendarGrid}>
+        {calendarDays.map((day, index) => {
+          if (day === null) {
+            return <View key={`empty-${index.toString()}`} style={styles.calendarCell} />;
+          }
+          const localDate = localDateFromParts(displayMonth.year, displayMonth.month, day);
+          const selected = localDate === value;
+          return (
+            <View key={localDate} style={styles.calendarCell}>
+              <PressableScale
+                accessibilityLabel={formatLocalDatePickerLabel(localDate)}
+                accessibilityState={{ selected }}
+                haptic
+                onPress={() => {
+                  onChange(localDate);
+                }}
+                style={[styles.dayButton, selected && styles.dayButtonSelected]}
+                testID={testID === undefined ? undefined : `${testID}-option-${localDate}`}
+              >
+                <Text style={[styles.dayButtonText, selected && styles.dayButtonTextSelected]}>
+                  {day.toString()}
+                </Text>
+              </PressableScale>
+            </View>
+          );
+        })}
+      </View>
+    </>
+  );
+}
+
+export function LocalDatePicker({
+  accessibilityLabel = 'Fecha',
+  error = false,
+  onChange,
+  testID,
+  value,
+}: LocalDatePickerProps) {
+  const [visible, setVisible] = useState(false);
+
   function open(): void {
-    setDisplayMonth(monthFromLocalDate(value));
     setVisible(true);
+  }
+
+  function selectDay(localDate: string): void {
+    onChange(localDate);
+    setVisible(false);
   }
 
   return (
@@ -278,66 +365,7 @@ export function LocalDatePicker({
         title="Elegir fecha"
         visible={visible}
       >
-        <View style={styles.monthNavigation}>
-          <PressableScale
-            accessibilityLabel="Mes anterior"
-            haptic
-            onPress={() => {
-              setDisplayMonth((current) => shiftCalendarMonth(current, -1));
-            }}
-            style={styles.monthNavigationButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-back" size={20} />
-          </PressableScale>
-          <Text accessibilityRole="header" style={styles.monthLabel}>
-            {formatCalendarMonthLabel(displayMonth)}
-          </Text>
-          <PressableScale
-            accessibilityLabel="Mes siguiente"
-            haptic
-            onPress={() => {
-              setDisplayMonth((current) => shiftCalendarMonth(current, 1));
-            }}
-            style={styles.monthNavigationButton}
-          >
-            <Ionicons color={themeTokens.colors.ink} name="chevron-forward" size={20} />
-          </PressableScale>
-        </View>
-        <View style={styles.weekdayRow}>
-          {CALENDAR_WEEKDAY_LABELS.map((weekday) => (
-            <Text key={weekday} style={styles.weekdayLabel}>
-              {weekday}
-            </Text>
-          ))}
-        </View>
-        <View style={styles.calendarGrid}>
-          {calendarDays.map((day, index) => {
-            if (day === null) {
-              return <View key={`empty-${index.toString()}`} style={styles.calendarCell} />;
-            }
-            const localDate = localDateFromParts(displayMonth.year, displayMonth.month, day);
-            const selected = localDate === value;
-            return (
-              <View key={localDate} style={styles.calendarCell}>
-                <PressableScale
-                  accessibilityLabel={formatLocalDatePickerLabel(localDate)}
-                  accessibilityState={{ selected }}
-                  haptic
-                  onPress={() => {
-                    onChange(localDate);
-                    setVisible(false);
-                  }}
-                  style={[styles.dayButton, selected && styles.dayButtonSelected]}
-                  testID={testID === undefined ? undefined : `${testID}-option-${localDate}`}
-                >
-                  <Text style={[styles.dayButtonText, selected && styles.dayButtonTextSelected]}>
-                    {day.toString()}
-                  </Text>
-                </PressableScale>
-              </View>
-            );
-          })}
-        </View>
+        {visible ? <CalendarBoard onChange={selectDay} testID={testID} value={value} /> : null}
       </AppBottomSheet>
     </>
   );
