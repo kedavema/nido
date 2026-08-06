@@ -111,6 +111,8 @@ type Mode = 'create' | 'edit';
  */
 interface SavedExpenseSummary {
   readonly outcome: CreateExpenseOutcome;
+  /** Carried through so the confirmation names what was actually saved, not always a gasto. */
+  readonly type: TransactionType;
   readonly description: string;
   readonly categoryId: string;
   readonly paymentSourceId: string | null;
@@ -142,10 +144,14 @@ type ScreenState =
       readonly original: Transaction | null;
     };
 
-function buildDraft(original: Transaction | null, todayLocal: string): Draft {
+function buildDraft(
+  original: Transaction | null,
+  todayLocal: string,
+  initialType: TransactionType = 'EXPENSE',
+): Draft {
   if (original === null) {
     return {
-      type: 'EXPENSE',
+      type: initialType,
       currency: 'PYG',
       amount: '',
       fxRate: '',
@@ -172,7 +178,13 @@ function buildDraft(original: Transaction | null, todayLocal: string): Draft {
 }
 
 export default function NuevoGastoScreen() {
-  const { transactionId } = useLocalSearchParams<{ transactionId?: string }>();
+  const { transactionId, type: typeParam } = useLocalSearchParams<{
+    transactionId?: string;
+    type?: string;
+  }>();
+  // Only the entry point decides the initial kind, and anything unrecognised falls back to an
+  // expense — the overwhelmingly common case, and the behaviour every existing caller already has.
+  const initialType: TransactionType = typeParam === 'INCOME' ? 'INCOME' : 'EXPENSE';
   const mode: Mode = transactionId === undefined ? 'create' : 'edit';
   const { catalog, getMembers, state } = useSession();
   const syncQueue = useSyncQueue();
@@ -212,14 +224,14 @@ export default function NuevoGastoScreen() {
       // Initialized here (from the fetch callback), not from a reactive effect keyed on
       // `screenState` — that would call setState synchronously within an effect body, which
       // React's rules flag as a cascading-render risk. This runs exactly once per successful load.
-      const initial = buildDraft(original, todayLocal);
+      const initial = buildDraft(original, todayLocal, initialType);
       setDraft(initial);
       setDirty(false);
       setNotesExpanded(initial.notes !== '');
     } catch (error) {
       setScreenState({ kind: 'error', message: messageForActionError(error) });
     }
-  }, [catalog, household, transactionId, todayLocal]);
+  }, [catalog, household, transactionId, todayLocal, initialType]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
@@ -359,8 +371,8 @@ export default function NuevoGastoScreen() {
 
   const isIncome = draft.type === 'INCOME';
   const noun = isIncome ? 'ingreso' : 'gasto';
-  const title = mode === 'create' ? 'Nuevo gasto' : `Editar ${noun}`;
-  const submitLabel = mode === 'create' ? 'Guardar gasto' : 'Guardar cambios';
+  const title = mode === 'create' ? `Nuevo ${noun}` : `Editar ${noun}`;
+  const submitLabel = mode === 'create' ? `Guardar ${noun}` : 'Guardar cambios';
 
   const canSubmit =
     draft.categoryId !== undefined &&
@@ -381,7 +393,9 @@ export default function NuevoGastoScreen() {
   function startNewExpense(): void {
     setSavedExpense(null);
     setOtherMemberName(undefined);
-    setDraft(buildDraft(null, todayLocal));
+    // Continues in the kind just saved rather than the entry point's: someone who switched to
+    // ingreso and saved is far more likely to be loading another ingreso.
+    setDraft(buildDraft(null, todayLocal, savedExpense?.type ?? initialType));
     setDirty(false);
     setNotesExpanded(false);
     setSubmitError(undefined);
@@ -439,6 +453,13 @@ export default function NuevoGastoScreen() {
     return category;
   }
 
+  // Switching kind clears the category: an expense category is not a legal choice for an income
+  // transaction, and leaving a stale one selected would fail on save with nothing on screen to
+  // explain why.
+  function selectKind(type: TransactionType): void {
+    updateDraft({ type, categoryId: undefined });
+  }
+
   function selectLocalDate(localDate: string): void {
     updateDraft({ localDate, occurredAt: localDateToOccurredAt(localDate, todayLocal) });
     setShowDatePicker(false);
@@ -464,7 +485,7 @@ export default function NuevoGastoScreen() {
 
       if (original === null) {
         const request: CreateTransactionRequest = {
-          type: 'EXPENSE',
+          type: draft.type,
           amount: amountWire,
           currency: draft.currency,
           ...(fxRateWire === null ? {} : { fxRateToBase: fxRateWire }),
@@ -482,6 +503,7 @@ export default function NuevoGastoScreen() {
         const result = await syncQueue.createExpense(household.id, request);
         setSavedExpense({
           outcome: result.outcome,
+          type: draft.type,
           description: trimmedDescription,
           categoryId: draft.categoryId,
           paymentSourceId: draft.paymentSourceId,
@@ -544,10 +566,17 @@ export default function NuevoGastoScreen() {
           <FormHeader
             onDismiss={handleClose}
             title={title}
-            trailing={<CurrencyToggle onSelect={selectCurrency} selected={draft.currency} />}
+            trailing={
+              mode === 'create' ? (
+                <KindToggle onSelect={selectKind} selected={draft.type} />
+              ) : undefined
+            }
           />
         }
       >
+        <View style={styles.currencyRow}>
+          <CurrencyToggle onSelect={selectCurrency} selected={draft.currency} />
+        </View>
         <AmountField
           accessibilityLabel="Monto"
           autoFocus
@@ -729,7 +758,7 @@ export default function NuevoGastoScreen() {
         }}
         onCreateSubcategory={createSubcategory}
         selectedCategoryId={draft.categoryId}
-        subtitle="Para este gasto"
+        subtitle={`Para este ${noun}`}
         visible={showCategoryPicker}
       />
 
@@ -770,6 +799,43 @@ export default function NuevoGastoScreen() {
         visible={showDiscardModal}
       />
     </>
+  );
+}
+
+function KindToggle({
+  selected,
+  onSelect,
+}: {
+  readonly selected: TransactionType;
+  readonly onSelect: (type: TransactionType) => void;
+}) {
+  return (
+    <View style={styles.currencyToggle}>
+      {(['EXPENSE', 'INCOME'] as const).map((type) => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: selected === type }}
+          key={type}
+          onPress={() => {
+            onSelect(type);
+          }}
+          style={({ pressed }) => [
+            styles.currencyOption,
+            selected === type && styles.currencyOptionActive,
+            pressed && styles.chipPressed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.currencyOptionText,
+              selected === type && styles.currencyOptionTextActive,
+            ]}
+          >
+            {type === 'EXPENSE' ? 'Gasto' : 'Ingreso'}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -833,7 +899,7 @@ function PaymentSourcePickerModal({
   return (
     <AppBottomSheet
       onClose={onClose}
-      subtitle="Para este gasto"
+      subtitle="Para este movimiento"
       title="Pagado con"
       visible={visible}
     >
@@ -1027,7 +1093,8 @@ function SavedExpenseConfirmation({
   readonly onListo: () => void;
 }) {
   const isSynced = saved.outcome === 'created';
-  const heading = isSynced ? 'Gasto guardado' : 'Guardado en este teléfono';
+  const savedNoun = saved.type === 'INCOME' ? 'Ingreso' : 'Gasto';
+  const heading = isSynced ? `${savedNoun} guardado` : 'Guardado en este teléfono';
   const monthLabel = formatMonthLabel(monthFromLocalDate(saved.localDate))
     .replace(/\s\d{4}$/u, '')
     .toLowerCase();
@@ -1085,7 +1152,10 @@ function SavedExpenseConfirmation({
       </View>
 
       <View style={styles.footer}>
-        <ActionButton label="Cargar otro gasto" onPress={onCargarOtro} />
+        <ActionButton
+          label={`Cargar otro ${saved.type === 'INCOME' ? 'ingreso' : 'gasto'}`}
+          onPress={onCargarOtro}
+        />
         <Pressable accessibilityRole="button" onPress={onListo} style={styles.confirmationListo}>
           <Text style={styles.confirmationListoText}>Listo</Text>
         </Pressable>
@@ -1099,6 +1169,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: themeTokens.colors.background,
   },
+  // The currency belongs beside the amount it qualifies. It used to sit in the header, which is
+  // the only slot a screen-level toggle can occupy — and the kind toggle needs that slot more,
+  // because it changes what the whole form means rather than one field's unit.
+  currencyRow: { flexDirection: 'row', justifyContent: 'flex-end' },
   currencyToggle: {
     flexDirection: 'row',
     borderRadius: themeTokens.radii.chip,
