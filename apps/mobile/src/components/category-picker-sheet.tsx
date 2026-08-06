@@ -1,8 +1,9 @@
 import type { Category } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { messageForActionError } from '@/auth/session-provider';
 import { AppBottomSheet } from '@/components/app-bottom-sheet';
 import { m1TextStyles } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
@@ -17,6 +18,14 @@ interface CategoryPickerSheetProps {
   readonly visible: boolean;
   readonly onClose: () => void;
   readonly onSelect: (category: Category) => void;
+  /**
+   * Creates a subcategory under `rootId` and resolves with it. Omit to render the sheet read-only.
+   *
+   * Subcategories are the only thing creatable here on purpose: they inherit icon and colour from
+   * their root, so a name is enough. A root needs kind, icon and colour — a form, not a chip, and
+   * not something anyone does in the middle of entering an expense.
+   */
+  readonly onCreateSubcategory?: (rootId: string, name: string) => Promise<Category>;
 }
 
 /** Shared root/subcategory picker for one-time and recurring expenses. */
@@ -27,9 +36,15 @@ export function CategoryPickerSheet({
   visible,
   onClose,
   onSelect,
+  onCreateSubcategory,
 }: CategoryPickerSheetProps) {
   const [search, setSearch] = useState('');
   const [expandedRoots, setExpandedRoots] = useState<Record<string, boolean>>({});
+  const [creatingUnderRoot, setCreatingUnderRoot] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string>();
+  const createAttempt = useRef(0);
   const groups = useMemo(() => filterCategoryGroups(categories, search), [categories, search]);
   const selectedRootId = selectedRootCategoryId(selectedCategoryId, categories);
   const showingAll = search.trim() === '';
@@ -37,7 +52,42 @@ export function CategoryPickerSheet({
   function close(): void {
     setSearch('');
     setExpandedRoots({});
+    cancelCreate();
     onClose();
+  }
+
+  function cancelCreate(): void {
+    // Abandons any in-flight attempt as well as the visible state.
+    createAttempt.current += 1;
+    setCreating(false);
+    setCreatingUnderRoot(null);
+    setNewName('');
+    setCreateError(undefined);
+  }
+
+  // The whole point: the new category is selected and the sheet closes in one step, so the draft
+  // behind it never moves. On failure the typed name stays put — retyping it is the one thing the
+  // user would resent.
+  async function createAndSelect(rootId: string): Promise<void> {
+    // Guarded rather than merely disabled: the confirm chip and the keyboard submit both land
+    // here, and two taps would create two identical subcategories before either request returns.
+    if (creating || onCreateSubcategory === undefined || newName.trim() === '') return;
+    // The sheet keeps its children mounted, so a request outlives a dismiss. This marks which
+    // attempt is still wanted; anything older resolves into a closed sheet and must not select.
+    const attempt = ++createAttempt.current;
+    setCreating(true);
+    setCreateError(undefined);
+    try {
+      const created = await onCreateSubcategory(rootId, newName.trim());
+      if (attempt !== createAttempt.current) return;
+      cancelCreate();
+      select(created);
+    } catch (error) {
+      if (attempt !== createAttempt.current) return;
+      setCreateError(messageForActionError(error));
+    } finally {
+      if (attempt === createAttempt.current) setCreating(false);
+    }
   }
 
   function select(category: Category): void {
@@ -170,7 +220,44 @@ export function CategoryPickerSheet({
                     }}
                     selected={selectedCategoryId === root.id}
                   />
+                  {onCreateSubcategory === undefined ? null : (
+                    <CategoryChip
+                      label="+ Nueva"
+                      onPress={() => {
+                        setCreatingUnderRoot(root.id);
+                        // Whatever they searched for is almost certainly the name they want.
+                        setNewName(search.trim());
+                        setCreateError(undefined);
+                      }}
+                      selected={false}
+                    />
+                  )}
                 </View>
+              ) : null}
+              {creatingUnderRoot === root.id ? (
+                <View style={styles.createRow}>
+                  <TextInput
+                    accessibilityLabel={`Nombre de la nueva subcategoría en ${root.name}`}
+                    autoFocus
+                    editable={!creating}
+                    onChangeText={setNewName}
+                    onSubmitEditing={() => void createAndSelect(root.id)}
+                    placeholder="Nombre"
+                    placeholderTextColor={themeTokens.colors.inkSecondary}
+                    returnKeyType="done"
+                    style={styles.createInput}
+                    value={newName}
+                  />
+                  <CategoryChip
+                    label={creating ? 'Creando…' : 'Crear'}
+                    onPress={() => void createAndSelect(root.id)}
+                    selected
+                  />
+                  <CategoryChip label="Cancelar" onPress={cancelCreate} selected={false} />
+                </View>
+              ) : null}
+              {creatingUnderRoot === root.id && createError !== undefined ? (
+                <Text style={styles.createError}>{createError}</Text>
               ) : null}
             </View>
           );
@@ -275,6 +362,32 @@ const styles = StyleSheet.create({
   },
   rootNameSelected: {
     color: themeTokens.colors.primary,
+  },
+  createRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  createInput: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 120,
+    minHeight: themeTokens.touchTarget.minimum,
+    borderWidth: 1,
+    borderColor: themeTokens.colors.borderStrong,
+    borderRadius: themeTokens.radii.chip,
+    paddingHorizontal: 14,
+    color: themeTokens.colors.ink,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.body,
+  },
+  createError: {
+    color: themeTokens.semanticColors.danger.foreground,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+    marginTop: 4,
   },
   chipRow: {
     flexDirection: 'row',
