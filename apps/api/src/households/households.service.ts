@@ -16,6 +16,7 @@ import type {
   HouseholdMemberRecord,
   HouseholdSummaryRecord,
 } from './household.js';
+import { HOUSEHOLD_MEMBER_LIMIT } from './household.js';
 import { HOUSEHOLDS_REPOSITORY, type HouseholdsRepository } from './households.repository.js';
 import { InvitationTokenService } from './invitation-token.service.js';
 
@@ -69,6 +70,17 @@ export class HouseholdsService {
     access: HouseholdAccess,
     email: string,
   ): Promise<CreateHouseholdInviteResponse> {
+    // A courtesy, not the boundary: the accept transaction is where the cap is actually decided,
+    // because an invite is a URL and this check cannot see who will click it. Failing here just
+    // tells the owner before they send a link rather than after their partner taps it.
+    const members = await this.householdsRepository.listMembers(access);
+    // Counts active members only, matching the real guard: a removed member must not keep
+    // occupying a slot once removal exists.
+    const activeMembers = members.filter((member) => member.status === 'ACTIVE');
+    if (activeMembers.length >= HOUSEHOLD_MEMBER_LIMIT) {
+      throw new ConflictException('Household already has the maximum number of members');
+    }
+
     const token = this.invitationTokens.generate();
     const tokenHash = this.invitationTokens.hash(token);
     const createdAt = this.clock.now();
@@ -106,6 +118,10 @@ export class HouseholdsService {
 
     if (result.status === 'invalid') {
       throw new NotFoundException('Invitation is unavailable');
+    }
+
+    if (result.status === 'household-full') {
+      throw new ConflictException('Household already has the maximum number of members');
     }
 
     if (result.status === 'duplicate-membership') {
