@@ -17,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { messageForActionError, useSession } from '@/auth/session-provider';
 import { AppBottomSheet } from '@/components/app-bottom-sheet';
 import { categoryTint } from '@/utils/category-appearance';
+import { CalendarBoard } from '@/components/date-picker';
 import { CategoryPickerSheet } from '@/components/category-picker-sheet';
 import {
   AmountField,
@@ -53,7 +54,6 @@ import {
   formatFxRateDisplay,
   fxRateToWireDecimal,
   fxRateWireToSanitized,
-  isValidLocalDateString,
   localDateToOccurredAt,
   mostRecentUsdRate,
   previewUsdToBasePyg,
@@ -727,6 +727,7 @@ export default function NuevoGastoScreen() {
         }}
         onSelect={selectLocalDate}
         todayLocal={todayLocal}
+        value={draft.localDate}
         visible={showDatePicker}
       />
 
@@ -886,15 +887,17 @@ function PaymentSourceRow({
 function DatePickerModal({
   visible,
   todayLocal,
+  value,
   onSelect,
   onClose,
 }: {
   readonly visible: boolean;
   readonly todayLocal: string;
+  /** The date currently on the draft, so the calendar opens with it selected. */
+  readonly value: string;
   readonly onSelect: (localDate: string) => void;
   readonly onClose: () => void;
 }) {
-  const [manualDate, setManualDate] = useState('');
   const insets = useSafeAreaInsets();
   const yesterdayLocal = shiftLocalDate(todayLocal, -1);
 
@@ -923,24 +926,7 @@ function DatePickerModal({
               variant="secondary"
             />
           </View>
-          <View style={formFieldStyles.field}>
-            <Text style={formFieldStyles.fieldLabel}>Otra fecha (aaaa-mm-dd)</Text>
-            <TextInput
-              accessibilityLabel="Otra fecha"
-              onChangeText={setManualDate}
-              placeholder="2026-07-15"
-              placeholderTextColor={themeTokens.colors.inkSecondary}
-              style={formFieldStyles.textField}
-              value={manualDate}
-            />
-          </View>
-          <ActionButton
-            disabled={!isValidLocalDateString(manualDate)}
-            label="Usar fecha"
-            onPress={() => {
-              onSelect(manualDate);
-            }}
-          />
+          {visible ? <CalendarBoard onChange={onSelect} value={value} /> : null}
           <ActionButton label="Cancelar" onPress={onClose} variant="secondary" />
         </View>
       </View>
