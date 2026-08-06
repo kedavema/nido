@@ -348,7 +348,6 @@ export default function InicioScreen() {
           )}
         </View>
         <View style={styles.headerRightGroup}>
-          <HeaderAvatars members={members} />
           <MonthStepper
             onNext={() => {
               setMonth((current) => shiftMonth(current, 1));
@@ -499,42 +498,6 @@ export default function InicioScreen() {
         </>
       ) : null}
     </AppScreen>
-  );
-}
-
-/**
- * INI-02's two header avatar circles, one per ACTIVE household member (a member with a pending,
- * not-yet-accepted invite doesn't show up in `getMembers` at all, so nothing extra to filter out
- * there). No per-member color convention exists elsewhere in the app yet, so this alternates
- * `primary`/`accent` by member order — which happens to match the reference's dark-green "A" /
- * orange "K" circles exactly.
- */
-function HeaderAvatars({ members }: { readonly members: readonly HouseholdMember[] }) {
-  const activeMembers = members.filter((member) => member.status === 'ACTIVE');
-  if (activeMembers.length === 0) {
-    return null;
-  }
-
-  return (
-    <View style={styles.headerAvatars}>
-      {activeMembers.map((member, index) => (
-        <View
-          accessibilityLabel={member.displayName}
-          key={member.userId}
-          style={[
-            styles.headerAvatar,
-            {
-              backgroundColor:
-                index % 2 === 0 ? themeTokens.colors.primary : themeTokens.colors.accent,
-            },
-          ]}
-        >
-          <Text style={styles.headerAvatarText}>
-            {member.displayName.trim().charAt(0).toUpperCase() || '·'}
-          </Text>
-        </View>
-      ))}
-    </View>
   );
 }
 
@@ -975,22 +938,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: themeTokens.spacing.cardGap,
-  },
-  headerAvatars: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerAvatarText: {
-    color: themeTokens.colors.surface,
-    fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
   },
   cardLabel: {
     color: themeTokens.colors.inkSecondary,

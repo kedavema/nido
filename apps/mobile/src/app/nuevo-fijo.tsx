@@ -42,8 +42,8 @@ import {
 } from '@/utils/category-selection';
 import { monthlyFirstDueDate } from '@/utils/date-picker';
 import { amountToWireDecimal, isValidLocalDateString } from '@/utils/expense-form';
-import { dayOfMonth, NOTIFICATION_OFFSET_OPTIONS } from '@/utils/fijos-format';
-import { todayLocalDate } from '@/utils/movement-format';
+import { dayOfMonth, firstDueDatePreview, NOTIFICATION_OFFSET_OPTIONS } from '@/utils/fijos-format';
+import { formatFullLocalDate, todayLocalDate } from '@/utils/movement-format';
 
 const FREQUENCY_OPTIONS: readonly (readonly [FrequencyKind, string])[] = [
   ['ONE_TIME', 'Una vez'],
@@ -194,6 +194,12 @@ export default function NuevoFijoScreen() {
   const dateValid = usesDayOfMonth || isValidLocalDateString(draft.firstDueDate);
   const canSave = nameValid && amountValid && draft.categoryId !== undefined && dateValid;
 
+  // What `save` will actually send, so the form can name it before it is sent rather than after.
+  const { date: resolvedFirstDueDate, startsAfterThisMonth } = firstDueDatePreview(
+    draft,
+    todayLocal,
+  );
+
   function update(patch: Partial<Draft>): void {
     setDraft((current) => (current === null ? current : { ...current, ...patch }));
   }
@@ -238,6 +244,30 @@ export default function NuevoFijoScreen() {
           : [...current.notificationOffsets, value],
       };
     });
+  }
+
+  /**
+   * The API deactivates the item rather than deleting it, so its past occurrences and the
+   * transactions settled against them stay where they are — an archived fijo stops generating
+   * future work without rewriting the months it already explains.
+   *
+   * No confirmation step, matching how `categories.tsx` archives a category: the action is
+   * reversible from the API's side and the button is already out of the primary path.
+   */
+  async function archive(): Promise<void> {
+    if (draft?.id === undefined || household === null) return;
+    setSaving(true);
+    setSubmitError(undefined);
+    try {
+      await catalog.deleteRecurringItem(household.id, draft.id);
+      successFeedback();
+      router.back();
+    } catch (error) {
+      errorFeedback();
+      setSubmitError(messageForActionError(error));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function save(): Promise<void> {
@@ -299,7 +329,19 @@ export default function NuevoFijoScreen() {
         footer={
           <>
             <ActionButton label="Guardar gasto fijo" loading={saving} onPress={() => void save()} />
-            <Text style={styles.footerHint}>Aparece en Fijos y en la proyección del mes</Text>
+            {mode === 'edit' ? (
+              <ActionButton
+                label="Archivar gasto fijo"
+                loading={saving}
+                onPress={() => void archive()}
+                variant="danger"
+              />
+            ) : null}
+            <Text style={styles.footerHint}>
+              {mode === 'edit'
+                ? 'Archivarlo corta los vencimientos futuros y deja los meses ya pagados como están'
+                : 'Aparece en Fijos y en la proyección del mes'}
+            </Text>
           </>
         }
         header={
@@ -439,6 +481,19 @@ export default function NuevoFijoScreen() {
               value={draft.firstDueDate}
             />
           )}
+          {/*
+            A day that has already gone by this month cannot be a first due date, so the schedule
+            starts next month instead. That is right, but the picker only shows a day number, so
+            nothing on screen says which month it landed in — a fijo saved on the 6th for day 1
+            first falls due in September and simply does not appear in August, which reads as a
+            save that failed. Naming the resolved date is the whole fix.
+          */}
+          {resolvedFirstDueDate === null ? null : (
+            <Text style={styles.dueDateHint}>
+              Primer vencimiento: {formatFullLocalDate(resolvedFirstDueDate)}
+              {startsAfterThisMonth ? ' · el día de este mes ya pasó' : ''}
+            </Text>
+          )}
         </FormField>
 
         <FormSection label="Responsable">
@@ -503,5 +558,10 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodyRegular,
     fontSize: themeTokens.typography.scale.secondary,
     textAlign: 'center',
+  },
+  dueDateHint: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
   },
 });

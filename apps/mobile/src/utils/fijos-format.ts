@@ -7,6 +7,8 @@ import type {
   TransactionCurrency,
 } from '@nido/contracts';
 
+import { monthlyFirstDueDate } from './date-picker';
+import { isValidLocalDateString } from './expense-form';
 import {
   formatDecimalEs,
   formatFullLocalDate,
@@ -153,6 +155,36 @@ export function frequencyLabel(
 /** Day-of-month (1–31) encoded in a `yyyy-MM-dd` first-due date. */
 export function dayOfMonth(localDate: string): number {
   return Number(localDate.split('-')[2] ?? '1');
+}
+
+/**
+ * The first due date the fijo form is about to save, and whether it skipped past the current
+ * month to get there.
+ *
+ * On a monthly recurrence the form collects a day number, and a day that has already gone by
+ * cannot be a first due date, so `monthlyFirstDueDate` moves the schedule to next month. Nothing
+ * on screen says so — the picker shows only the day — so a fijo saved on the 6th for day 1 first
+ * falls due in September and never appears in August, which reads as a save that failed. The form
+ * calls this to name the resolved date before saving rather than leaving it to be discovered.
+ *
+ * `date` is null while a free-form date is still half-typed: there is nothing to resolve yet.
+ */
+export function firstDueDatePreview(
+  draft: {
+    readonly frequency: FrequencyKind;
+    readonly dayOfMonth: number;
+    readonly firstDueDate: string;
+  },
+  todayLocal: string,
+): { readonly date: string | null; readonly startsAfterThisMonth: boolean } {
+  if (draft.frequency !== 'MONTHLY' && draft.frequency !== 'EVERY_N_MONTHS') {
+    return {
+      date: isValidLocalDateString(draft.firstDueDate) ? draft.firstDueDate : null,
+      startsAfterThisMonth: false,
+    };
+  }
+  const date = monthlyFirstDueDate(draft.dayOfMonth, todayLocal);
+  return { date, startsAfterThisMonth: date.slice(0, 7) !== todayLocal.slice(0, 7) };
 }
 
 /** "Mensual · el día 5" / "Cada 2 meses · el día 5" / "Anual · 5 jul" — FIJ-03 "Recurrencia" row. */
