@@ -16,12 +16,19 @@ import { themeTokens } from '@/theme/tokens';
  *
  * Global rather than per-component because the ring appears on every focusable element, including
  * pressables that become focusable divs — one rule here cannot be forgotten by the next component.
+ *
+ * The `@supports` guard is load-bearing. A browser that does not implement `:focus-visible` drops
+ * that rule as an unparseable selector but still applies `outline: none`, which would leave
+ * keyboard users with no focus indicator at all — strictly worse than the default ring this
+ * replaces. Guarded, such a browser simply keeps its own ring.
  */
 const FOCUS_RING_CSS = `
-:focus { outline: none; }
-:focus-visible {
-  outline: 2px solid ${themeTokens.colors.primary};
-  outline-offset: 2px;
+@supports selector(:focus-visible) {
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid ${themeTokens.colors.primary};
+    outline-offset: 2px;
+  }
 }
 `;
 
