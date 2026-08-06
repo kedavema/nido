@@ -64,24 +64,38 @@ export function BudgetProjection({
     projectedUsed,
     total,
   );
+  // With nothing pending, `projectedUsed` equals `spent` and `projectedAvailablePyg` equals
+  // `availablePyg` by construction — so every projection row repeats the row above it, and the
+  // reader hunts for a difference that cannot exist. A card with nothing to project stops calling
+  // itself a projection and shows what it actually knows.
+  const hasPending = pending > 0n;
+
   return (
     <>
       <Card>
-        <Text style={styles.sectionLabel}>PROYECCIÓN</Text>
+        <Text style={styles.sectionLabel}>{hasPending ? 'PROYECCIÓN' : 'GASTO DEL MES'}</Text>
         <ProgressMetric amount={budget.spentPyg} label="Gasto real" percentage={spentPercentage} />
-        <ProgressMetric
-          amount={projectedUsed.toString()}
-          label="Después de pagar lo pendiente"
-          percentage={projectedPercentage}
-        />
+        {hasPending ? (
+          <ProgressMetric
+            amount={projectedUsed.toString()}
+            label="Después de pagar lo pendiente"
+            percentage={projectedPercentage}
+          />
+        ) : null}
         <View style={styles.divider} />
-        <AmountRow label="Disponible hoy" value={budget.availablePyg} />
-        <AmountRow label="Compromisos pendientes" value={budget.pendingCommitmentsPyg} />
-        <AmountRow
-          emphasis
-          label="Proyectado después de pagar"
-          value={budget.projectedAvailablePyg}
-        />
+        {hasPending ? (
+          <>
+            <AmountRow label="Disponible hoy" value={budget.availablePyg} />
+            <AmountRow label="Compromisos pendientes" value={budget.pendingCommitmentsPyg} />
+            <AmountRow
+              emphasis
+              label="Proyectado después de pagar"
+              value={budget.projectedAvailablePyg}
+            />
+          </>
+        ) : (
+          <AmountRow emphasis label="Disponible" value={budget.availablePyg} />
+        )}
       </Card>
 
       <BudgetCommitmentsCard
