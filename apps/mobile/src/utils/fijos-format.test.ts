@@ -5,6 +5,7 @@ import {
   daysUntilDue,
   deriveOccurrenceDisplayStatus,
   dueInWords,
+  firstDueDatePreview,
   formatOccurrenceAmount,
   frequencyLabel,
   isPending,
@@ -176,5 +177,58 @@ describe('isPending', () => {
     expect(isPending('OVERDUE')).toBe(true);
     expect(isPending('SETTLED')).toBe(false);
     expect(isPending('SKIPPED')).toBe(false);
+  });
+});
+
+describe('firstDueDatePreview', () => {
+  const monthly = { frequency: 'MONTHLY', dayOfMonth: 1, firstDueDate: '2026-08-06' } as const;
+
+  // The case that reads as a failed save: the fijo is stored, but in a month the user is not
+  // looking at, and nothing said so.
+  it('flags a monthly day that has already gone by as starting next month', () => {
+    expect(firstDueDatePreview(monthly, '2026-08-06')).toEqual({
+      date: '2026-09-01',
+      startsAfterThisMonth: true,
+    });
+  });
+
+  it('keeps a monthly day still ahead in the current month', () => {
+    expect(firstDueDatePreview({ ...monthly, dayOfMonth: 20 }, '2026-08-06')).toEqual({
+      date: '2026-08-20',
+      startsAfterThisMonth: false,
+    });
+  });
+
+  it('treats today itself as still available', () => {
+    expect(firstDueDatePreview({ ...monthly, dayOfMonth: 6 }, '2026-08-06')).toEqual({
+      date: '2026-08-06',
+      startsAfterThisMonth: false,
+    });
+  });
+
+  // February has no 31st, so the schedule lands on the last day rather than overflowing.
+  it('clamps a day the target month does not have', () => {
+    expect(firstDueDatePreview({ ...monthly, dayOfMonth: 31 }, '2027-02-15')).toEqual({
+      date: '2027-02-28',
+      startsAfterThisMonth: false,
+    });
+  });
+
+  it('carries a yearly recurrence date through untouched', () => {
+    expect(
+      firstDueDatePreview(
+        { frequency: 'YEARLY', dayOfMonth: 1, firstDueDate: '2026-07-05' },
+        '2026-08-06',
+      ),
+    ).toEqual({ date: '2026-07-05', startsAfterThisMonth: false });
+  });
+
+  it('has nothing to resolve while a free date is half-typed', () => {
+    expect(
+      firstDueDatePreview(
+        { frequency: 'YEARLY', dayOfMonth: 1, firstDueDate: '2026-07' },
+        '2026-08-06',
+      ),
+    ).toEqual({ date: null, startsAfterThisMonth: false });
   });
 });
