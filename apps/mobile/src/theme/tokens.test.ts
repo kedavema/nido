@@ -26,18 +26,6 @@ describe('canonical Nido v0.3 theme tokens', () => {
     });
   });
 
-  it('contains the seven fixed category color pairs', () => {
-    expect(themeTokens.categoryColors).toEqual({
-      alimentacion: { foreground: '#3E6B34', background: '#E7EFE2' },
-      vivienda: { foreground: '#3E5C76', background: '#E4EAF1' },
-      transporte: { foreground: '#7A4B6E', background: '#F0E6EE' },
-      salud: { foreground: '#A04848', background: '#F7E5E5' },
-      servicios: { foreground: '#3E5C76', background: '#E4EAF1' },
-      ocio: { foreground: '#B4632F', background: '#F6E7DC' },
-      otros: { foreground: '#5C6862', background: '#EDEAE2' },
-    });
-  });
-
   // The mark is a single validated hue, not a per-category colour: every bar in the app
   // sits beside its own name and amount, so colour would re-encode what the row already
   // says. Measured at 7.73:1 against the track, above the 3:1 floor for chart marks —

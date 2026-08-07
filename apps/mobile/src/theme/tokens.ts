@@ -28,42 +28,12 @@ export const themeTokens = {
       background: '#E4F1E8',
     },
   },
-  categoryColors: {
-    alimentacion: {
-      foreground: '#3E6B34',
-      background: '#E7EFE2',
-    },
-    vivienda: {
-      foreground: '#3E5C76',
-      background: '#E4EAF1',
-    },
-    transporte: {
-      foreground: '#7A4B6E',
-      background: '#F0E6EE',
-    },
-    salud: {
-      foreground: '#A04848',
-      background: '#F7E5E5',
-    },
-    servicios: {
-      foreground: '#3E5C76',
-      background: '#E4EAF1',
-    },
-    ocio: {
-      foreground: '#B4632F',
-      background: '#F6E7DC',
-    },
-    otros: {
-      foreground: '#5C6862',
-      background: '#EDEAE2',
-    },
-  },
   // Chart marks. Every bar in the app sits in a row that already names its category
   // or payment source and prints its amount, so the bar encodes magnitude only —
   // identity is carried by the text beside it. One hue for every bar keeps that
-  // channel free and stops `categoryColors` (chosen for chips, where a label sits
-  // next to the tint) from being read as chart marks, where nothing disambiguates
-  // them. Measured at 7.73:1 against `track`, above the 3:1 floor for marks.
+  // channel free and stops a category's own colour (chosen for chips, where a label
+  // sits next to the tint) from being read as a chart mark, where nothing
+  // disambiguates them. Measured at 7.73:1 against `track`, above the 3:1 floor.
   chartColors: {
     mark: '#1C4F47',
     track: '#EDEAE2',
@@ -72,9 +42,10 @@ export const themeTokens = {
   // tint of that same colour, so the gate here is WCAG text contrast against that tint, not
   // separation between categories — each avatar sits beside its own name. Every entry clears
   // 4.5:1 (worst 4.52), derived by holding each hue and lowering lightness until it passed, then
-  // maximising separation so no two cells of the picker grid look alike. Six of the seed colours
-  // do not clear it and are deliberately absent; rows that already hold them keep them, and the
-  // picker shows a category's current colour alongside these rather than dropping it.
+  // maximising separation so no two cells of the picker grid look alike. The seed draws all twelve
+  // of its colours from this set. A household is still free to hold a colour that is not here —
+  // one it chose before the picker existed, or through the API — so the picker shows a category's
+  // current colour alongside these rather than silently rewriting it on the next edit.
   categorySwatches: [
     '#3E5C76',
     '#3E6B34',
