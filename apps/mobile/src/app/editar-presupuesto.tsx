@@ -223,7 +223,11 @@ export default function EditarPresupuestoScreen() {
                   <Text numberOfLines={1} style={styles.categoryName}>
                     {category.name}
                   </Text>
-                  {category.isActive ? null : <Text style={styles.archivedLabel}>Archivada</Text>}
+                  {category.isActive ? null : (
+                    <Text numberOfLines={1} style={styles.archivedLabel}>
+                      Archivada
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.categoryInputShell}>
                   <Text style={styles.categoryPrefix}>Gs.</Text>
@@ -328,7 +332,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  categoryCopy: { flex: 1 },
+  // `minWidth: 0` is what lets the label actually shrink. On react-native-web a flex item keeps
+  // CSS's `min-width: auto`, so it refuses to go below its text and pushes the field beyond the
+  // card instead — the same web-only divergence as the `flex: 0` collapse in the findings log.
+  // 48/52 against the field, preserving the proportion the old `width: '52%'` asked for, but as
+  // flex so the row's gap is divided rather than ignored. `minWidth: 0` is the part that matters
+  // on web: a flex child keeps CSS's `min-width: auto` and otherwise refuses to shrink below its
+  // text — the same divergence as the `flex: 0` collapse in the findings log.
+  categoryCopy: { flexGrow: 48, flexShrink: 1, flexBasis: 0, minWidth: 0 },
   categoryName: {
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodySemibold,
@@ -340,7 +351,12 @@ const styles = StyleSheet.create({
     fontSize: themeTokens.typography.scale.label,
   },
   categoryInputShell: {
-    width: '52%',
+    // No `maxWidth` on purpose: capping one side while the sibling grows freely hands every
+    // spare pixel to the label on a wide viewport and strands the field across an empty gap.
+    flexGrow: 52,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     minHeight: themeTokens.touchTarget.minimum,
     flexDirection: 'row',
     alignItems: 'center',
@@ -354,7 +370,11 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodyMedium,
   },
   categoryInput: {
+    // The shell is itself a row, so the field needs the same escape from `min-width: auto` its
+    // parent got. Without it a long formatted amount refuses to shrink and pushes out past the
+    // shell's right border — which is what the border stops being able to contain.
     flex: 1,
+    minWidth: 0,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
