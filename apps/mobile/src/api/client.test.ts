@@ -104,6 +104,26 @@ describe('Nido API client', () => {
       message: 'No tenés permiso para realizar esta acción.',
       status: 403,
     });
+
+    try {
+      await offlineClient.getMe();
+    } catch (error) {
+      expect((error as Error).message).not.toContain('socket details must not escape');
+    }
+  });
+
+  it('names the address it could not reach, since the browser will not say why', async () => {
+    const client = createNidoApiClient({
+      baseUrl: 'http://192.168.0.5:3000',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation: () => Promise.reject(new TypeError('Failed to fetch')),
+    });
+
+    await expect(client.getMe()).rejects.toMatchObject({
+      kind: 'network',
+      message:
+        'No pudimos conectarnos a http://192.168.0.5:3000. Revisá tu conexión e intentá de nuevo.',
+    });
   });
 
   it('aborts and normalizes a request that exceeds its deadline', async () => {
@@ -116,7 +136,10 @@ describe('Nido API client', () => {
       requestTimeoutMilliseconds: 25,
     });
 
-    const assertion = expect(client.getMe()).rejects.toMatchObject({ kind: 'network' });
+    const assertion = expect(client.getMe()).rejects.toMatchObject({
+      kind: 'network',
+      message: 'El servicio tardó demasiado en responder. Intentá de nuevo.',
+    });
     await vi.advanceTimersByTimeAsync(25);
     await assertion;
     const signal = fetchImplementation.mock.calls[0]?.[1].signal;
@@ -136,7 +159,10 @@ describe('Nido API client', () => {
       requestTimeoutMilliseconds: 25,
     });
 
-    const assertion = expect(client.getMe()).rejects.toMatchObject({ kind: 'network' });
+    const assertion = expect(client.getMe()).rejects.toMatchObject({
+      kind: 'network',
+      message: 'El servicio tardó demasiado en responder. Intentá de nuevo.',
+    });
     await vi.advanceTimersByTimeAsync(25);
     await assertion;
     expect(fetchImplementation).not.toHaveBeenCalled();
@@ -154,7 +180,10 @@ describe('Nido API client', () => {
       requestTimeoutMilliseconds: 25,
     });
 
-    const assertion = expect(client.getMe()).rejects.toMatchObject({ kind: 'network' });
+    const assertion = expect(client.getMe()).rejects.toMatchObject({
+      kind: 'network',
+      message: 'El servicio tardó demasiado en responder. Intentá de nuevo.',
+    });
     await vi.advanceTimersByTimeAsync(25);
     await assertion;
     expect(fetchImplementation.mock.calls[0]?.[1].signal?.aborted).toBe(true);

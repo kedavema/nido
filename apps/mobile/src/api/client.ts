@@ -125,6 +125,32 @@ function networkError(): ApiError {
   );
 }
 
+/**
+ * A DNS failure, a rejected CORS preflight and blocked mixed content all reach us as the same
+ * opaque `TypeError` — the browser withholds which on purpose — so the cause cannot be named.
+ * The address we tried is the one fact we do hold, and it is what tells those apart on sight:
+ * a stale host, or `http://` under an `https://` page.
+ *
+ * `baseUrl` is public configuration (`EXPO_PUBLIC_API_URL`, inlined into the bundle), and the
+ * underlying error is dropped rather than shown, since its message is not vetted.
+ */
+function unreachableError(baseUrl: string): ApiError {
+  return new ApiError(
+    `No pudimos conectarnos a ${baseUrl}. Revisá tu conexión e intentá de nuevo.`,
+    undefined,
+    'network',
+  );
+}
+
+/** A request that outlived its deadline is a known cause, not an unknown connection failure. */
+function timeoutError(): ApiError {
+  return new ApiError(
+    'El servicio tardó demasiado en responder. Intentá de nuevo.',
+    undefined,
+    'network',
+  );
+}
+
 async function withRequestDeadline<T>(
   timeoutMilliseconds: number,
   operation: (signal: AbortSignal) => Promise<T>,
@@ -142,7 +168,7 @@ async function withRequestDeadline<T>(
     return await Promise.race([operation(abortController.signal), deadline]);
   } catch (error) {
     if (error instanceof RequestDeadlineError) {
-      throw networkError();
+      throw timeoutError();
     }
     throw error;
   } finally {
@@ -345,7 +371,7 @@ export function createNidoApiClient({
           ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
         });
       } catch {
-        throw networkError();
+        throw unreachableError(baseUrl);
       }
 
       if (!response.ok) {

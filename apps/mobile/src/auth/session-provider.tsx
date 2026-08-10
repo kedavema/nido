@@ -13,12 +13,11 @@ import type {
   GetHouseholdMembersResponse,
   GetMeResponse,
 } from '@nido/contracts';
-import { ZodError } from 'zod';
-
 import { ApiError, createNidoApiClient, type NidoApiClient } from '@/api/client';
-import { getPublicEnvironment, PublicEnvironmentError } from '@/config/public-environment';
+import { getPublicEnvironment } from '@/config/public-environment';
 
 import { getFirebaseAuthClient } from './auth-client';
+import { messageForError } from './error-message';
 import type { AuthenticatedIdentity, FirebaseAuthClient } from './auth-client.types';
 import {
   canApplyProfileForIdentity,
@@ -89,18 +88,6 @@ function getMeOnce(api: NidoApiClient, uid: string): ReturnType<NidoApiClient['g
   return request;
 }
 
-function safeMessage(error: unknown): string {
-  if (error instanceof ApiError || error instanceof PublicEnvironmentError) {
-    return error.message;
-  }
-
-  if (error instanceof ZodError) {
-    return 'Revisá los datos e intentá de nuevo.';
-  }
-
-  return 'Ocurrió un error inesperado. Intentá de nuevo.';
-}
-
 function isCurrentIdentity(
   current: AuthenticatedIdentity | null,
   expected: AuthenticatedIdentity,
@@ -154,7 +141,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         requestVersion === requestVersionRef.current &&
         isCurrentIdentity(identityRef.current, identity)
       ) {
-        dispatch({ type: 'failed', message: safeMessage(error), canSignOut: true });
+        dispatch({ type: 'failed', message: messageForError(error), canSignOut: true });
       }
       throw error;
     }
@@ -238,14 +225,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
         },
         (error) => {
           if (active) {
-            dispatch({ type: 'failed', message: safeMessage(error), canSignOut: true });
+            dispatch({ type: 'failed', message: messageForError(error), canSignOut: true });
           }
         },
       );
     } catch (error) {
       queueMicrotask(() => {
         if (active) {
-          dispatch({ type: 'failed', message: safeMessage(error), canSignOut: false });
+          dispatch({ type: 'failed', message: messageForError(error), canSignOut: false });
         }
       });
     }
@@ -277,7 +264,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         dispatch({ type: 'signed-out' });
       }
     } catch (error) {
-      dispatch({ type: 'failed', message: safeMessage(error), canSignOut: false });
+      dispatch({ type: 'failed', message: messageForError(error), canSignOut: false });
     }
   }, []);
 
@@ -302,7 +289,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     try {
       await auth.signOut();
     } catch (error) {
-      dispatch({ type: 'failed', message: safeMessage(error), canSignOut: true });
+      dispatch({ type: 'failed', message: messageForError(error), canSignOut: true });
     }
   }, []);
 
@@ -495,5 +482,5 @@ export function useSession(): SessionContextValue {
 }
 
 export function messageForActionError(error: unknown): string {
-  return safeMessage(error);
+  return messageForError(error);
 }
