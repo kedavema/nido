@@ -4,8 +4,6 @@ import type {
   ListTransactionsQuery,
   PaymentSource,
   Transaction,
-  TransactionCurrency,
-  TransactionType,
 } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -31,16 +29,17 @@ import { MonthStepper } from '@/components/month-stepper';
 import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import type { QueuedMutation } from '@/sync/sync-store.types';
-import type {
-  MovementFilterGroup,
-  MovementFilterOption,
-} from '@/components/movement-filters-sheet';
 import {
   ActiveFilterChips,
-  activeFilterCount,
   FiltersButton,
   MovementFiltersSheet,
 } from '@/components/movement-filters-sheet';
+import {
+  activeFilterCount,
+  applyLocalMovementFilters,
+  movementFilterChips,
+  type MovementFilters,
+} from '@/utils/movement-filters';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
 import { previewUsdToBasePyg } from '@/utils/expense-form';
@@ -60,23 +59,6 @@ import {
 } from '@/utils/movement-format';
 
 const SEARCH_DEBOUNCE_MILLISECONDS = 400;
-
-interface Filters {
-  readonly type?: TransactionType | undefined;
-  readonly categoryId?: string | undefined;
-  readonly paymentSourceId?: string | undefined;
-  readonly currency?: TransactionCurrency | undefined;
-}
-
-const TYPE_OPTIONS: readonly MovementFilterOption<TransactionType>[] = [
-  { value: 'EXPENSE', label: 'Gastos' },
-  { value: 'INCOME', label: 'Ingresos' },
-];
-
-const CURRENCY_OPTIONS: readonly MovementFilterOption<TransactionCurrency>[] = [
-  { value: 'PYG', label: 'Guaraníes' },
-  { value: 'USD', label: 'Dólares' },
-];
 
 const EMPTY_CATEGORIES: readonly Category[] = [];
 const EMPTY_PAYMENT_SOURCES: readonly PaymentSource[] = [];
@@ -103,7 +85,7 @@ export default function MovimientosScreen() {
   const [month, setMonth] = useState<MonthValue>(() => monthFromLocalDate(todayLocalDate()));
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<MovementFilters>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [catalogState, setCatalogState] = useState<CatalogState>({ kind: 'loading' });
   const [transactionsState, setTransactionsState] = useState<TransactionsState>({
@@ -141,6 +123,11 @@ export default function MovimientosScreen() {
     queueMicrotask(() => void loadCatalog());
   }, [loadCatalog]);
 
+  // `filters.type`, not `filters`: the category is resolved locally, so depending on the whole
+  // object made picking one recreate this callback, re-fire the focus effect and refetch a query
+  // that had not changed — blanking the list to its loading state, and on a failed refetch
+  // replacing perfectly good local data with an error banner.
+  const filterType = filters.type;
   const loadTransactions = useCallback(
     async (isActive: () => boolean, silent = false) => {
       if (household === null) return;
@@ -149,12 +136,9 @@ export default function MovimientosScreen() {
       const query: ListTransactionsQuery = {
         from,
         to,
-        ...(filters.type === undefined ? {} : { type: filters.type }),
-        ...(filters.categoryId === undefined ? {} : { categoryId: filters.categoryId }),
-        ...(filters.paymentSourceId === undefined
-          ? {}
-          : { paymentSourceId: filters.paymentSourceId }),
-        ...(filters.currency === undefined ? {} : { currency: filters.currency }),
+        ...(filterType === undefined ? {} : { type: filterType }),
+        // No `categoryId`: selecting a root has to include its subcategories, and the API matches
+        // the id exactly. Applied over the response instead — see `applyLocalMovementFilters`.
         ...(debouncedSearch === '' ? {} : { search: debouncedSearch }),
       };
       try {
@@ -168,7 +152,7 @@ export default function MovimientosScreen() {
         }
       }
     },
-    [catalog, household, month, filters, debouncedSearch],
+    [catalog, household, month, filterType, debouncedSearch],
   );
 
   useFocusEffect(
@@ -195,42 +179,6 @@ export default function MovimientosScreen() {
   const paymentSources =
     catalogState.kind === 'loaded' ? catalogState.paymentSources : EMPTY_PAYMENT_SOURCES;
 
-  // A filter can outlive the record it points at: archive that category and it drops out of the
-  // active list, but the filter keeps narrowing the query. Keeping the selected one in the list —
-  // labelled as archived — is what lets its chip stay on screen and stay removable.
-  const categoryOptions = useMemo<readonly MovementFilterOption<string>[]>(() => {
-    const active = categories
-      .filter((category) => category.isActive)
-      .map((category) => ({
-        value: category.id,
-        label: categoryLabel(category.id, categories) ?? category.name,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
-    const selected = filters.categoryId;
-    if (selected === undefined || active.some((option) => option.value === selected)) return active;
-    const archived = categories.find((category) => category.id === selected);
-    if (archived === undefined) return active;
-    return [
-      {
-        value: selected,
-        label: `${categoryLabel(selected, categories) ?? archived.name} · Archivada`,
-      },
-      ...active,
-    ];
-  }, [categories, filters.categoryId]);
-
-  const paymentSourceOptions = useMemo<readonly MovementFilterOption<string>[]>(() => {
-    const active = paymentSources
-      .filter((source) => source.isActive)
-      .map((source) => ({ value: source.id, label: source.name }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
-    const selected = filters.paymentSourceId;
-    if (selected === undefined || active.some((option) => option.value === selected)) return active;
-    const archived = paymentSources.find((source) => source.id === selected);
-    if (archived === undefined) return active;
-    return [{ value: selected, label: `${archived.name} · Archivado` }, ...active];
-  }, [paymentSources, filters.paymentSourceId]);
-
   // Only mutations this screen knows how to render — a "Pendientes" section, not merged into
   // `dayGroups` (queued items have no server-assigned localDate/baseAmountPyg/id yet).
   const pendingExpenses = useMemo(
@@ -243,27 +191,27 @@ export default function MovimientosScreen() {
     [pending],
   );
 
-  const filterGroups = useMemo<readonly MovementFilterGroup[]>(
-    () => [
-      { key: 'type', label: 'Tipo', options: TYPE_OPTIONS, selected: filters.type },
-      {
-        key: 'categoryId',
-        label: 'Categoría',
-        options: categoryOptions,
-        selected: filters.categoryId,
-      },
-      {
-        key: 'paymentSourceId',
-        label: 'Medio de pago',
-        options: paymentSourceOptions,
-        selected: filters.paymentSourceId,
-      },
-      { key: 'currency', label: 'Moneda', options: CURRENCY_OPTIONS, selected: filters.currency },
-    ],
-    [filters, categoryOptions, paymentSourceOptions],
+  const filterChips = useMemo(
+    () => movementFilterChips(filters, categories),
+    [filters, categories],
   );
 
-  const filterCount = activeFilterCount(filterGroups);
+  // The category filter is resolved here rather than by the API, because picking a root has to
+  // include its subcategories and the endpoint matches the id exactly. Safe to do locally while a
+  // month arrives in one unpaginated response — the screen already holds every row it could match.
+  // Memoised because it is a full pass plus a sort over that month, and this screen re-renders on
+  // every keystroke of the search box, long before the debounce fires.
+  const dayGroups = useMemo(
+    () =>
+      transactionsState.kind === 'loaded'
+        ? groupTransactionsByDay(
+            applyLocalMovementFilters(transactionsState.transactions, filters, categories),
+          )
+        : [],
+    [transactionsState, filters, categories],
+  );
+
+  const filterCount = activeFilterCount(filters);
   const hasActiveFiltersOrSearch = filterCount > 0 || debouncedSearch !== '';
 
   function clearFilters(): void {
@@ -280,10 +228,6 @@ export default function MovimientosScreen() {
     );
   }
 
-  const dayGroups =
-    transactionsState.kind === 'loaded'
-      ? groupTransactionsByDay(transactionsState.transactions)
-      : [];
   const todayLocal = todayLocalDate();
   const hasDayGroups = dayGroups.length > 0;
 
@@ -333,7 +277,7 @@ export default function MovimientosScreen() {
       </View>
 
       <ActiveFilterChips
-        groups={filterGroups}
+        chips={filterChips}
         onRemove={(key) => {
           setFilters((current) => ({ ...current, [key]: undefined }));
         }}
@@ -446,14 +390,10 @@ export default function MovimientosScreen() {
   return (
     <>
       <MovementFiltersSheet
-        groups={filterGroups}
+        categories={categories}
+        filters={filters}
         onApply={(next) => {
-          setFilters({
-            type: next.type as TransactionType | undefined,
-            categoryId: next.categoryId,
-            paymentSourceId: next.paymentSourceId,
-            currency: next.currency as TransactionCurrency | undefined,
-          });
+          setFilters(next);
         }}
         onClose={() => {
           setFiltersOpen(false);
