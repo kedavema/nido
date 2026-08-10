@@ -18,6 +18,7 @@ import { messageForActionError, useSession } from '@/auth/session-provider';
 import { getSummaryCache } from '@/cache/summary-cache';
 import { BudgetCommitmentsCard } from '@/components/budget-projection';
 import { categoryTint } from '@/utils/category-appearance';
+import { MAX_CATEGORY_ROWS, categoryBreakdownRemainder } from '@/utils/category-breakdown';
 import { DashboardBudget } from '@/components/dashboard-budget';
 import { MonthStepper } from '@/components/month-stepper';
 import {
@@ -53,11 +54,6 @@ import {
   todayLocalDate,
   type MonthValue,
 } from '@/utils/movement-format';
-
-// INI-02 caps "Top categorías del mes" at 5 rows; the API already returns the full root-category
-// breakdown sorted descending by amount (see monthly-summary.service.ts), so this is purely a
-// display cap, not a query param.
-const MAX_CATEGORY_ROWS = 5;
 
 const EMPTY_CATEGORIES: readonly Category[] = [];
 const EMPTY_PAYMENT_SOURCES: readonly PaymentSource[] = [];
@@ -705,6 +701,7 @@ function BalanceCard({
 
 function CategoryBreakdownCard({ items }: { readonly items: readonly CategoryBreakdownItem[] }) {
   const topItems = items.slice(0, MAX_CATEGORY_ROWS);
+  const remainder = categoryBreakdownRemainder(items);
 
   return (
     <Card>
@@ -728,6 +725,23 @@ function CategoryBreakdownCard({ items }: { readonly items: readonly CategoryBre
           </View>
         );
       })}
+      {remainder === undefined ? null : (
+        <Pressable
+          accessibilityHint="Abre el informe de categorías del mes"
+          accessibilityLabel={`${remainder.label}. Gs. ${formatPygMagnitude(remainder.amount)}, ${formatPercentage(remainder.percentage)} por ciento, en ${remainder.categoryCount.toString()} categorías`}
+          accessibilityRole="button"
+          onPress={() => {
+            router.push('/informes');
+          }}
+          style={styles.categoryRemainderRow}
+        >
+          <Text style={styles.categoryRemainder}>
+            {remainder.label} · Gs. {formatPygMagnitude(remainder.amount)} ·{' '}
+            {formatPercentage(remainder.percentage)} % ·{' '}
+            <Text style={styles.cardLinkLabel}>detalle con subcategorías ›</Text>
+          </Text>
+        </Pressable>
+      )}
     </Card>
   );
 }
@@ -1060,6 +1074,19 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
     backgroundColor: themeTokens.chartColors.mark,
+  },
+  categoryRemainderRow: {
+    justifyContent: 'center',
+    minHeight: themeTokens.touchTarget.minimum,
+    borderTopWidth: 1,
+    borderTopColor: themeTokens.colors.border,
+    paddingTop: 8,
+  },
+  categoryRemainder: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+    lineHeight: 19,
   },
   checklistRow: {
     flexDirection: 'row',
