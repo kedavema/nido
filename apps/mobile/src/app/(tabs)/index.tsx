@@ -399,6 +399,7 @@ export default function InicioScreen() {
           />
           <RecentTransactionsCard
             categories={categories}
+            members={members}
             paymentSources={paymentSources}
             todayLocal={todayLocal}
             transactions={summaryState.summary.recentTransactions}
@@ -486,6 +487,7 @@ export default function InicioScreen() {
           {!isEmptyMonth(summaryState.summary) ? (
             <RecentTransactionsCard
               categories={categories}
+              members={members}
               paymentSources={paymentSources}
               todayLocal={todayLocal}
               transactions={summaryState.summary.recentTransactions}
@@ -751,6 +753,7 @@ function RecentMovementRow({
   category,
   categoryLabelText,
   paymentSourceName,
+  createdByName,
   todayLocal,
   isLast,
   onPress,
@@ -759,6 +762,7 @@ function RecentMovementRow({
   readonly category: Category | undefined;
   readonly categoryLabelText: string | undefined;
   readonly paymentSourceName: string | undefined;
+  readonly createdByName: string | undefined;
   readonly todayLocal: string;
   readonly isLast: boolean;
   readonly onPress: () => void;
@@ -771,6 +775,12 @@ function RecentMovementRow({
   const subtitleParts = [categoryLabelText ?? 'Sin categoría'];
   if (paymentSourceName !== undefined) {
     subtitleParts.push(paymentSourceName);
+  }
+  // An id that resolves to nobody appends nothing rather than a placeholder. A member who has left
+  // the household is the realistic way that happens, and "Alimentación · Efectivo" is a better row
+  // than "Alimentación · Efectivo · Desconocido".
+  if (createdByName !== undefined) {
+    subtitleParts.push(createdByName);
   }
 
   return (
@@ -814,13 +824,18 @@ function RecentTransactionsCard({
   transactions,
   categories,
   paymentSources,
+  members,
   todayLocal,
 }: {
   readonly transactions: readonly Transaction[];
   readonly categories: readonly Category[];
   readonly paymentSources: readonly PaymentSource[];
+  readonly members: readonly HouseholdMember[];
   readonly todayLocal: string;
 }) {
+  // Same lookup shape `budgetCommitmentRows` uses for a commitment's responsible member.
+  const memberNamesById = new Map(members.map((member) => [member.userId, member.displayName]));
+
   if (transactions.length === 0) {
     return null;
   }
@@ -844,6 +859,7 @@ function RecentTransactionsCard({
         <RecentMovementRow
           category={categories.find((c) => c.id === transaction.categoryId)}
           categoryLabelText={categoryLabel(transaction.categoryId, categories)}
+          createdByName={memberNamesById.get(transaction.createdBy)}
           isLast={index === transactions.length - 1}
           key={transaction.id}
           onPress={() => {
