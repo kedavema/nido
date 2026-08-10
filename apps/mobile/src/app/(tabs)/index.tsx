@@ -34,6 +34,10 @@ import {
 import { navigateToFijoDetail, navigateToSettleOccurrence } from '@/navigation/fijos-routes';
 import { navigateToIngresos } from '@/navigation/ingresos-routes';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
+import { PendingMovementRow } from '@/components/pending-movement-row';
+import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
+import { useSyncQueue } from '@/sync/sync-queue-provider';
+import type { QueuedMutation } from '@/sync/sync-store.types';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
 import {
@@ -165,6 +169,17 @@ export default function InicioScreen() {
   const [membersState, setMembersState] = useState<MembersState>({ kind: 'loading' });
   const [occurrencesState, setOccurrencesState] = useState<OccurrencesState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
+
+  const { pending, retry } = useSyncQueue();
+  const queuedExpenses = useMemo(
+    () =>
+      pending.filter(
+        (mutation) =>
+          mutation.type === CREATE_TRANSACTION_MUTATION_TYPE &&
+          isCreateTransactionPayload(mutation.payload),
+      ),
+    [pending],
+  );
 
   const loadCatalog = useCallback(
     async (silent = false) => {
@@ -306,6 +321,20 @@ export default function InicioScreen() {
   const monthSubtitle = futureMonthSubtitle(month, todayLocal);
   const daysRemaining = daysRemainingInCurrentMonth(month, todayLocal);
   const monthParam = formatMonthQueryParam(month);
+  /**
+   * Whether to render the month as having nothing in it.
+   *
+   * A queued expense makes the month non-empty even though the summary still reports zeros — it
+   * has not reached the API, so `isEmptyMonth` cannot see it. Without this the screen would print
+   * "Aún no hay movimientos en julio" directly above a row showing a movement, or hand a first-run
+   * checklist reading "Cargá tu primer gasto" to someone who just did, and the expense saved
+   * offline would stay invisible in exactly the case that matters most — a fresh month, right
+   * after saving.
+   */
+  const monthLooksEmpty =
+    summaryState.kind === 'loaded' &&
+    isEmptyMonth(summaryState.summary) &&
+    queuedExpenses.length === 0;
   const openBudget = () => {
     router.push(`/presupuesto?month=${encodeURIComponent(monthParam)}`);
   };
@@ -397,10 +426,14 @@ export default function InicioScreen() {
             monthLabel={formatMonthLabel(month).toLowerCase()}
             onOpenBudget={openBudget}
           />
+          {/* The queue is local, so it is unaffected by whatever made the summary fetch fail —
+              and an offline device is precisely when both of these are true at once. */}
           <RecentTransactionsCard
             categories={categories}
             members={members}
+            onRetryQueued={(mutationId) => void retry(mutationId)}
             paymentSources={paymentSources}
+            queuedExpenses={queuedExpenses}
             todayLocal={todayLocal}
             transactions={summaryState.summary.recentTransactions}
           />
@@ -413,7 +446,7 @@ export default function InicioScreen() {
 
       {summaryState.kind === 'loaded' ? (
         <>
-          {isEmptyMonth(summaryState.summary) ? (
+          {monthLooksEmpty ? (
             isTrueFirstRun(month, todayLocal, membersState) ? (
               <FirstRunBalanceCard month={month} />
             ) : (
@@ -475,20 +508,21 @@ export default function InicioScreen() {
             />
           ) : null}
 
-          {isEmptyMonth(summaryState.summary) && isTrueFirstRun(month, todayLocal, membersState) ? (
+          {monthLooksEmpty && isTrueFirstRun(month, todayLocal, membersState) ? (
             <FirstRunChecklistCard month={month} />
           ) : null}
 
-          {!isEmptyMonth(summaryState.summary) &&
-          summaryState.summary.categoryBreakdown.length > 0 ? (
+          {!monthLooksEmpty && summaryState.summary.categoryBreakdown.length > 0 ? (
             <CategoryBreakdownCard items={summaryState.summary.categoryBreakdown} />
           ) : null}
 
-          {!isEmptyMonth(summaryState.summary) ? (
+          {!monthLooksEmpty ? (
             <RecentTransactionsCard
               categories={categories}
               members={members}
+              onRetryQueued={(mutationId) => void retry(mutationId)}
               paymentSources={paymentSources}
+              queuedExpenses={queuedExpenses}
               todayLocal={todayLocal}
               transactions={summaryState.summary.recentTransactions}
             />
@@ -819,31 +853,45 @@ function RecentMovementRow({
  * The "RECIENTES · N" card, shared by the loaded-summary branch and GLO-02's cached-error
  * branch so neither has to duplicate this markup (both show the same recent transactions once
  * data — live or cached — is available).
+ *
+ * Expenses still sitting in the offline queue render above the server's rows. A queued mutation
+ * has not reached the API, so it is not in `recentTransactions` and can only come from
+ * `useSyncQueue` — and it is by definition more recent than anything the server returned, which is
+ * why it goes on top rather than being date-sorted into the list.
+ *
+ * The count in the header includes them: a card that says 4 and shows 5 rows is a worse bug than
+ * the one this fixes.
  */
 function RecentTransactionsCard({
   transactions,
+  queuedExpenses,
   categories,
   paymentSources,
   members,
   todayLocal,
+  onRetryQueued,
 }: {
   readonly transactions: readonly Transaction[];
+  readonly queuedExpenses: readonly QueuedMutation[];
   readonly categories: readonly Category[];
   readonly paymentSources: readonly PaymentSource[];
   readonly members: readonly HouseholdMember[];
   readonly todayLocal: string;
+  readonly onRetryQueued: (mutationId: string) => void;
 }) {
   // Same lookup shape `budgetCommitmentRows` uses for a commitment's responsible member.
   const memberNamesById = new Map(members.map((member) => [member.userId, member.displayName]));
 
-  if (transactions.length === 0) {
+  if (transactions.length === 0 && queuedExpenses.length === 0) {
     return null;
   }
+
+  const totalRows = queuedExpenses.length + transactions.length;
 
   return (
     <Card>
       <View style={styles.cardHeaderRow}>
-        <Text style={styles.cardLabel}>RECIENTES · {transactions.length.toString()}</Text>
+        <Text style={styles.cardLabel}>RECIENTES · {totalRows.toString()}</Text>
         <Pressable
           accessibilityLabel="Ver todos los movimientos"
           accessibilityRole="button"
@@ -855,6 +903,19 @@ function RecentTransactionsCard({
           <Text style={styles.cardLinkLabel}>Ver todos ›</Text>
         </Pressable>
       </View>
+      {queuedExpenses.map((mutation, index) => (
+        <PendingMovementRow
+          categories={categories}
+          // The divider carries through to the first server row, so a queued row is only "last"
+          // when nothing follows it at all.
+          isLast={index === queuedExpenses.length - 1 && transactions.length === 0}
+          key={mutation.id}
+          mutation={mutation}
+          onRetry={() => {
+            onRetryQueued(mutation.id);
+          }}
+        />
+      ))}
       {transactions.map((transaction, index) => (
         <RecentMovementRow
           category={categories.find((c) => c.id === transaction.categoryId)}

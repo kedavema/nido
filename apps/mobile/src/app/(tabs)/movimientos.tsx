@@ -1,10 +1,4 @@
-import type {
-  Category,
-  CreateTransactionRequest,
-  ListTransactionsQuery,
-  PaymentSource,
-  Transaction,
-} from '@nido/contracts';
+import type { Category, ListTransactionsQuery, PaymentSource, Transaction } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,13 +16,12 @@ import {
   LoadingContent,
   m1TextStyles,
   PressableScale,
-  SyncStatusPill,
 } from '@/components/m1-ui';
 import { navigateToNewExpense } from '@/navigation/new-expense-route';
 import { MonthStepper } from '@/components/month-stepper';
+import { PendingMovementRow } from '@/components/pending-movement-row';
 import { CREATE_TRANSACTION_MUTATION_TYPE, isCreateTransactionPayload } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
-import type { QueuedMutation } from '@/sync/sync-store.types';
 import {
   ActiveFilterChips,
   FiltersButton,
@@ -42,7 +35,6 @@ import {
 } from '@/utils/movement-filters';
 import { cardShadowStyle } from '@/theme/styles';
 import { themeTokens } from '@/theme/tokens';
-import { previewUsdToBasePyg } from '@/utils/expense-form';
 import {
   categoryLabel,
   formatDayHeading,
@@ -347,7 +339,7 @@ export default function MovimientosScreen() {
             </Pressable>
           </View>
           {pendingExpenses.map((mutation, index) => (
-            <PendingMutationRow
+            <PendingMovementRow
               categories={categories}
               isLast={index === pendingExpenses.length - 1}
               key={mutation.id}
@@ -529,81 +521,6 @@ function MovementRow({
   );
 }
 
-/**
- * PYG-equivalent amount for a still-queued expense, formatted like a day-group subtotal (reuses
- * `formatSignedPygAmount`). The queued request's own `amount` is already PYG-scale for PYG
- * expenses; for USD it's only a client-side estimate (`previewUsdToBasePyg`) since the
- * server-computed `baseAmountPyg` doesn't exist yet for an unsynced mutation.
- */
-function formatQueuedExpenseAmount(request: CreateTransactionRequest): {
-  readonly text: string;
-  readonly isPositive: boolean;
-} {
-  const baseAmountPyg =
-    request.currency === 'PYG'
-      ? request.amount
-      : previewUsdToBasePyg(request.amount, request.fxRateToBase ?? '0');
-  return formatSignedPygAmount(-BigInt(baseAmountPyg));
-}
-
-function PendingMutationRow({
-  mutation,
-  categories,
-  isLast,
-  onRetry,
-}: {
-  readonly mutation: QueuedMutation;
-  readonly categories: readonly Category[];
-  readonly isLast: boolean;
-  readonly onRetry: () => void;
-}) {
-  if (!isCreateTransactionPayload(mutation.payload)) {
-    return null;
-  }
-
-  const { request } = mutation.payload;
-  const amount = formatQueuedExpenseAmount(request);
-  const categoryLabelText = categoryLabel(request.categoryId, categories) ?? 'Sin categoría';
-  const statusIconName =
-    mutation.status === 'syncing'
-      ? 'sync'
-      : mutation.status === 'error'
-        ? 'alert-circle'
-        : 'time-outline';
-
-  const row = (
-    <View style={[styles.movementRow, !isLast && styles.movementRowDivider]}>
-      <View style={[styles.avatar, styles.pendingAvatar]}>
-        <Ionicons color={themeTokens.colors.inkSecondary} name={statusIconName} size={18} />
-      </View>
-      <View style={styles.movementCopy}>
-        <Text numberOfLines={1} style={m1TextStyles.body}>
-          {request.description}
-        </Text>
-        <Text numberOfLines={1} style={m1TextStyles.secondary}>
-          {categoryLabelText}
-        </Text>
-        {mutation.status === 'syncing' ? (
-          <Text style={m1TextStyles.secondary}>Sincronizando…</Text>
-        ) : (
-          <SyncStatusPill tone={mutation.status === 'error' ? 'error' : 'pending'} />
-        )}
-      </View>
-      <Text style={[styles.movementAmount, styles.negativeAmount]}>{amount.text}</Text>
-    </View>
-  );
-
-  if (mutation.status !== 'error') {
-    return row;
-  }
-
-  return (
-    <Pressable accessibilityRole="button" onPress={onRetry}>
-      {row}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   // #6: this used spacing.base — four pixels above the title, where every comparable surface
   // uses screen. The block keeps its own padding because it is pinned outside the scroll view,
@@ -704,9 +621,6 @@ const styles = StyleSheet.create({
   avatarText: {
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
-  },
-  pendingAvatar: {
-    backgroundColor: themeTokens.colors.surfaceMuted,
   },
   pendingHeaderRow: {
     flexDirection: 'row',
