@@ -9,7 +9,6 @@ import type { CategoryBreakdownItem } from '@nido/contracts';
  */
 export const MAX_CATEGORY_ROWS = 5;
 
-
 export interface CategoryBreakdownRemainder {
   /** "Salud y Otros", "Salud y Ocio", "Salud" — see `remainderLabel`. */
   readonly label: string;
