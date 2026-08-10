@@ -275,3 +275,29 @@ export function favoritePaymentSourceIds(
     .slice(0, QUICK_CHIP_LIMIT)
     .map(([id]) => id);
 }
+
+/**
+ * The description a newly created transaction is saved with.
+ *
+ * `TransactionDescriptionSchema` requires a non-empty string, and Movimientos prints this as the
+ * row title and derives the row avatar's initial from it, so it can never be blank. An expense
+ * asks for it directly (the Comercio field); an income has no such field — it is named after its
+ * category, and anything typed while the form was in expense mode is discarded, having been meant
+ * for a question that no longer applies.
+ *
+ * `fallback` covers the case where the selected category cannot be resolved by name, which the
+ * form's own submit guard already makes unreachable.
+ */
+export function descriptionForNewTransaction(
+  type: 'EXPENSE' | 'INCOME',
+  typedDescription: string,
+  categoryName: string | undefined,
+  fallback = 'Ingreso',
+): string {
+  if (type === 'INCOME') {
+    const name = categoryName?.trim() ?? '';
+    return name === '' ? fallback : name;
+  }
+
+  return typedDescription.trim();
+}

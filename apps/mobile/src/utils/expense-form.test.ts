@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   amountToWireDecimal,
+  descriptionForNewTransaction,
   favoritePaymentSourceIds,
   formatAmountDisplay,
   formatFxRateDisplay,
@@ -249,5 +250,24 @@ describe('favoritePaymentSourceIds', () => {
       { paymentSourceId: 'archived-source' },
     ];
     expect(favoritePaymentSourceIds(transactions, active)).toEqual(['cash', 'itau']);
+  });
+});
+
+describe('descriptionForNewTransaction', () => {
+  it('names an income after its category, since the form has no field to ask', () => {
+    expect(descriptionForNewTransaction('INCOME', '', 'Salario')).toBe('Salario');
+  });
+
+  it('discards text typed while the form was in expense mode', () => {
+    expect(descriptionForNewTransaction('INCOME', 'Biggie', 'Salario')).toBe('Salario');
+  });
+
+  it('keeps what the expense form asked for', () => {
+    expect(descriptionForNewTransaction('EXPENSE', '  Biggie  ', 'Alimentos')).toBe('Biggie');
+  });
+
+  it('never returns blank for an income, which the contract and the row title both forbid', () => {
+    expect(descriptionForNewTransaction('INCOME', '', undefined)).toBe('Ingreso');
+    expect(descriptionForNewTransaction('INCOME', '', '   ')).toBe('Ingreso');
   });
 });
