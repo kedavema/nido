@@ -1,5 +1,5 @@
 import type { ComponentType, PropsWithChildren, ReactElement, ReactNode } from 'react';
-import { useCallback, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -23,7 +23,15 @@ import {
   KeyboardStickyView,
   type KeyboardAwareScrollViewProps,
 } from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { useScreenBottomInset } from '@/hooks/use-screen-bottom-inset';
@@ -734,6 +742,54 @@ export function LoadingContent({ label = 'Conectando…' }: { readonly label?: s
   );
 }
 
+/**
+ * GLO-01's pulse: opacity 1 → .5 → 1 over 1.6s, so each leg is half of that.
+ *
+ * The reference states it as `@keyframes nidoPulse{0%,100%{opacity:1}50%{opacity:.5}}` with
+ * `1.6s ease-in-out infinite`; `withTiming`'s default easing is already an in-out curve, and
+ * `withRepeat(..., -1, true)` reverses each leg, which is what makes the round trip 1.6s.
+ */
+const SKELETON_PULSE_LEG_MS = 800;
+const SKELETON_PULSE_MIN_OPACITY = 0.5;
+
+/**
+ * Carries one pulse clock down to every block of a skeleton.
+ *
+ * GLO-01 has every placeholder in phase. Giving each block its own `withRepeat` would leave them
+ * free to drift apart into a shimmer the reference does not ask for, so the driving shared value
+ * is created once per skeleton and read by all of them. `null` means "do not pulse" — the
+ * reduced-motion path, and the default for any block rendered outside a skeleton.
+ */
+const SkeletonPulseContext = createContext<SharedValue<number> | null>(null);
+
+/**
+ * Drives the shared opacity value for one skeleton, or leaves it still when the user has asked
+ * for reduced motion. An animation that never stops is precisely what that setting exists to
+ * suppress, so the accessible path is the static block this component rendered before the pulse
+ * existed rather than a second, subtler animation.
+ */
+function useSkeletonPulse(): SharedValue<number> | null {
+  const reduceMotion = useReducedMotion();
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      return;
+    }
+    opacity.value = withRepeat(
+      withTiming(SKELETON_PULSE_MIN_OPACITY, { duration: SKELETON_PULSE_LEG_MS }),
+      -1,
+      true,
+    );
+    return () => {
+      cancelAnimation(opacity);
+      opacity.value = 1;
+    };
+  }, [opacity, reduceMotion]);
+
+  return reduceMotion ? null : opacity;
+}
+
 /** A single muted rounded-rect placeholder block, the base unit of `SummarySkeleton` (GLO-01). */
 function SkeletonBlock({
   width,
@@ -744,53 +800,68 @@ function SkeletonBlock({
   readonly height: number;
   readonly style?: StyleProp<ViewStyle>;
 }) {
-  return <View style={[skeletonStyles.block, { height, width: width ?? '100%' }, style]} />;
+  const pulse = useContext(SkeletonPulseContext);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse === null ? 1 : pulse.value }));
+
+  return (
+    <Animated.View
+      style={[skeletonStyles.block, { height, width: width ?? '100%' }, pulseStyle, style]}
+    />
+  );
 }
 
 /**
- * GLO-01's loading skeleton for the Inicio dashboard: static muted-gray placeholder blocks shaped
- * like the real balance card, category-breakdown card, and recent-transactions card, inside the
- * same white `Card` containers used once the summary actually loads. Deliberately static (no
- * shimmer) — the design only calls for solid placeholder blocks. Exported so a future
+ * GLO-01's loading skeleton for the Inicio dashboard: muted-gray placeholder blocks shaped like
+ * the real balance card, category-breakdown card, and recent-transactions card, inside the same
+ * white `Card` containers used once the summary actually loads. Every block pulses in phase, per
+ * the reference — see `useSkeletonPulse` for the reduced-motion carve-out. Exported so a future
  * Movimientos loading state (a separate issue) can reuse it; not wired there yet.
+ *
+ * The screen header is deliberately not part of this: household name, month label and the month
+ * stepper are all local state, available before any request is in flight, so skeletonising them
+ * would hide information the screen already has.
  */
 export function SummarySkeleton() {
+  const pulse = useSkeletonPulse();
+
   return (
-    <View
-      accessibilityLabel="Cargando resumen"
-      accessibilityLiveRegion="polite"
-      accessibilityRole="progressbar"
-      style={skeletonStyles.container}
-    >
-      <Card>
-        <SkeletonBlock height={10} width={120} />
-        <SkeletonBlock height={28} width={180} />
-        <View style={skeletonStyles.row}>
-          <SkeletonBlock height={48} style={skeletonStyles.flexBlock} />
-          <SkeletonBlock height={48} style={skeletonStyles.flexBlock} />
-        </View>
-      </Card>
-
-      <Card>
-        <SkeletonBlock height={10} width={140} />
-        <SkeletonBlock height={14} width="70%" />
-        <SkeletonBlock height={8} />
-      </Card>
-
-      <Card>
-        <SkeletonBlock height={10} width={100} />
-        {[0, 1, 2].map((row) => (
-          <View key={row} style={skeletonStyles.recentRow}>
-            <View style={skeletonStyles.avatar} />
-            <View style={skeletonStyles.recentCopy}>
-              <SkeletonBlock height={14} width="80%" />
-              <SkeletonBlock height={11} width="45%" />
-            </View>
-            <SkeletonBlock height={14} width={56} />
+    <SkeletonPulseContext.Provider value={pulse}>
+      <View
+        accessibilityLabel="Cargando resumen"
+        accessibilityLiveRegion="polite"
+        accessibilityRole="progressbar"
+        style={skeletonStyles.container}
+      >
+        <Card>
+          <SkeletonBlock height={10} width={120} />
+          <SkeletonBlock height={28} width={180} />
+          <View style={skeletonStyles.row}>
+            <SkeletonBlock height={48} style={skeletonStyles.flexBlock} />
+            <SkeletonBlock height={48} style={skeletonStyles.flexBlock} />
           </View>
-        ))}
-      </Card>
-    </View>
+        </Card>
+
+        <Card>
+          <SkeletonBlock height={10} width={140} />
+          <SkeletonBlock height={14} width="70%" />
+          <SkeletonBlock height={8} />
+        </Card>
+
+        <Card>
+          <SkeletonBlock height={10} width={100} />
+          {[0, 1, 2].map((row) => (
+            <View key={row} style={skeletonStyles.recentRow}>
+              <SkeletonBlock height={40} style={skeletonStyles.avatar} width={40} />
+              <View style={skeletonStyles.recentCopy}>
+                <SkeletonBlock height={14} width="80%" />
+                <SkeletonBlock height={11} width="45%" />
+              </View>
+              <SkeletonBlock height={14} width={56} />
+            </View>
+          ))}
+        </Card>
+      </View>
+    </SkeletonPulseContext.Provider>
   );
 }
 
@@ -1120,11 +1191,9 @@ const skeletonStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  // Width, height and the muted fill come from `SkeletonBlock`; this only rounds it into a circle.
   avatar: {
-    width: 40,
-    height: 40,
     borderRadius: 20,
-    backgroundColor: themeTokens.colors.surfaceMuted,
   },
   recentCopy: {
     flex: 1,
