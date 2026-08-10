@@ -267,6 +267,8 @@ export default function MovimientosScreen() {
         />
       </View>
 
+      {/* Button and chips in one wrapping row: the chips are what the button's count refers to,
+          and a row of their own both cost a band of the header and left them without its inset. */}
       <View style={styles.filterRow}>
         <FiltersButton
           count={filterCount}
@@ -274,14 +276,13 @@ export default function MovimientosScreen() {
             setFiltersOpen(true);
           }}
         />
+        <ActiveFilterChips
+          chips={filterChips}
+          onRemove={(key) => {
+            setFilters((current) => ({ ...current, [key]: undefined }));
+          }}
+        />
       </View>
-
-      <ActiveFilterChips
-        chips={filterChips}
-        onRemove={(key) => {
-          setFilters((current) => ({ ...current, [key]: undefined }));
-        }}
-      />
 
       {hasActiveFiltersOrSearch ? (
         <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clearFilters}>
@@ -634,6 +635,9 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    // Centred, not the flex default of stretch: the button stands at the minimum touch target and
+    // the chips at 32, and stretching would pull every chip up to the button's height.
+    alignItems: 'center',
     gap: 8,
     marginHorizontal: themeTokens.spacing.screen,
     marginTop: themeTokens.spacing.cardGap,

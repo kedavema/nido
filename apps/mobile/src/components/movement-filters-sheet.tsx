@@ -245,6 +245,11 @@ export function MovementFiltersSheet({
  * The one virtue of the chips this app's filters used to be: they were always visible. A filter
  * you cannot see is a filter you forget, and then the list looks like missing data rather than a
  * narrowed view — so the applied filters stay on screen, outside the sheet, each one removable.
+ *
+ * Returns the chips themselves rather than a container of its own, so the caller can lay them out
+ * beside the Filtros button in one wrapping row. Wrapping them here would make the whole set a
+ * single flex item, which is how they ended up starting at the screen edge while every sibling in
+ * that header carried the screen inset.
  */
 export function ActiveFilterChips({
   chips,
@@ -256,7 +261,7 @@ export function ActiveFilterChips({
   if (chips.length === 0) return null;
 
   return (
-    <View style={styles.chipWrap}>
+    <>
       {chips.map((chip) => (
         <Pressable
           accessibilityLabel={`Quitar filtro ${chip.label}`}
@@ -273,7 +278,7 @@ export function ActiveFilterChips({
           <Ionicons color={themeTokens.colors.surface} name="close" size={14} />
         </Pressable>
       ))}
-    </View>
+    </>
   );
 }
 
@@ -403,7 +408,6 @@ const styles = StyleSheet.create({
     fontFamily: themeTokens.typography.families.bodySemibold,
     fontSize: themeTokens.typography.scale.body,
   },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   activeChip: {
     maxWidth: '100%',
     flexDirection: 'row',
