@@ -8,7 +8,7 @@ import {
   type RecurringItem,
 } from '@nido/contracts';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
 import { messageForActionError, useSession } from '@/auth/session-provider';
@@ -54,15 +54,23 @@ type ScreenState =
 export default function PresupuestoScreen() {
   const params = useLocalSearchParams<{ month?: string }>();
   const requestedMonth = MonthSchema.safeParse(params.month);
-  const requestedMonthValue = requestedMonth.success
-    ? monthFromLocalDate(`${requestedMonth.data}-01`)
-    : undefined;
+  const requestedMonthParam = requestedMonth.success ? requestedMonth.data : null;
   const { catalog, getMembers, state } = useSession();
   const household = state.kind === 'authenticated' ? state.activeHousehold : null;
   const [selectedMonth, setSelectedMonth] = useState<MonthValue>(() =>
     monthFromLocalDate(todayLocalDate()),
   );
-  const month = requestedMonthValue ?? selectedMonth;
+  // `MonthValue` is an object, so deriving it during render gives `load` — and through it the
+  // focus effect — a fresh dependency identity every pass. That re-runs the effect, which sets
+  // state, which renders again: an unbreakable loop, six requests per turn. Keyed on the param
+  // string instead, the identity changes only when the month does. Keep the memo.
+  const month = useMemo(
+    () =>
+      requestedMonthParam === null
+        ? selectedMonth
+        : monthFromLocalDate(`${requestedMonthParam}-01`),
+    [requestedMonthParam, selectedMonth],
+  );
   const [screen, setScreen] = useState<ScreenState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
 
