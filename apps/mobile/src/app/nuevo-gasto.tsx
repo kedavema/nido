@@ -49,6 +49,7 @@ import {
 } from '@/utils/category-selection';
 import {
   amountToWireDecimal,
+  descriptionForNewTransaction,
   favoritePaymentSourceIds,
   formatAmountDisplay,
   formatFxRateDisplay,
@@ -376,7 +377,9 @@ export default function NuevoGastoScreen() {
 
   const canSubmit =
     draft.categoryId !== undefined &&
-    draft.description.trim() !== '' &&
+    // Income has no Comercio field to fill, so it cannot be gated on one. Its description is
+    // derived from the category at submit time — see `submit`.
+    (isIncome || draft.description.trim() !== '') &&
     draft.amount !== '' &&
     (draft.currency === 'PYG' || draft.fxRate !== '');
 
@@ -469,6 +472,21 @@ export default function NuevoGastoScreen() {
       const trimmedDescription = draft.description.trim();
       const original = screenState.original;
 
+      // An income being *edited* keeps its stored description, since one settled from an expected
+      // income carries a real name; only a newly created one is named after its category.
+      const categoryName = screenState.categories.find(
+        (category) => category.id === draft.categoryId,
+      )?.name;
+      const createDescription = descriptionForNewTransaction(
+        draft.type,
+        trimmedDescription,
+        categoryName,
+      );
+      // Income never carries a payment source now that the control is gone. On update the loaded
+      // value is passed through untouched rather than nulled, so hiding the control cannot erase
+      // something an older income already had.
+      const createPaymentSourceId = isIncome ? null : draft.paymentSourceId;
+
       if (original === null) {
         const request: CreateTransactionRequest = {
           type: draft.type,
@@ -477,8 +495,8 @@ export default function NuevoGastoScreen() {
           ...(fxRateWire === null ? {} : { fxRateToBase: fxRateWire }),
           occurredAt: draft.occurredAt,
           categoryId: draft.categoryId,
-          ...(draft.paymentSourceId === null ? {} : { paymentSourceId: draft.paymentSourceId }),
-          description: trimmedDescription,
+          ...(createPaymentSourceId === null ? {} : { paymentSourceId: createPaymentSourceId }),
+          description: createDescription,
           ...(trimmedNotes === '' ? {} : { notes: trimmedNotes }),
         };
         // Always attempts the direct request first (per docs/system-design.md §10) and only
@@ -490,9 +508,9 @@ export default function NuevoGastoScreen() {
         setSavedExpense({
           outcome: result.outcome,
           type: draft.type,
-          description: trimmedDescription,
+          description: createDescription,
           categoryId: draft.categoryId,
-          paymentSourceId: draft.paymentSourceId,
+          paymentSourceId: createPaymentSourceId,
           localDate: draft.localDate,
           amountDisplay: `${draft.currency === 'PYG' ? 'Gs.' : 'USD'} ${formatAmountDisplay(draft.amount, draft.currency)}`,
         });
@@ -639,26 +657,30 @@ export default function NuevoGastoScreen() {
           </FormSection>
         )}
 
-        <FormSection
-          label="Pagado con"
-          onSeeAll={() => {
-            setShowPaymentSourcePicker(true);
-          }}
-          sublabel={paymentSourceChips.length > 0 ? 'favoritos' : undefined}
-        >
-          <ChipRow>
-            {paymentSourceChips.map((source) => (
-              <Chip
-                key={source.id}
-                label={source.name}
-                onPress={() => {
-                  selectPaymentSource(source.id);
-                }}
-                selected={draft.paymentSourceId === source.id}
-              />
-            ))}
-          </ChipRow>
-        </FormSection>
+        {/* Income asks neither of the expense questions: money was not paid *with* an account, it
+            arrived *into* one, and it did not go to a merchant. Category and amount identify it. */}
+        {isIncome ? null : (
+          <FormSection
+            label="Pagado con"
+            onSeeAll={() => {
+              setShowPaymentSourcePicker(true);
+            }}
+            sublabel={paymentSourceChips.length > 0 ? 'favoritos' : undefined}
+          >
+            <ChipRow>
+              {paymentSourceChips.map((source) => (
+                <Chip
+                  key={source.id}
+                  label={source.name}
+                  onPress={() => {
+                    selectPaymentSource(source.id);
+                  }}
+                  selected={draft.paymentSourceId === source.id}
+                />
+              ))}
+            </ChipRow>
+          </FormSection>
+        )}
 
         <View style={formFieldStyles.field}>
           <Text style={formFieldStyles.fieldLabel}>Fecha</Text>
@@ -679,20 +701,22 @@ export default function NuevoGastoScreen() {
             <Ionicons color={themeTokens.colors.inkSecondary} name="chevron-down" size={16} />
           </Pressable>
         </View>
-        <View style={formFieldStyles.field}>
-          <Text style={formFieldStyles.fieldLabel}>Comercio</Text>
-          <TextInput
-            accessibilityLabel="Comercio"
-            maxLength={200}
-            onChangeText={(description) => {
-              updateDraft({ description });
-            }}
-            placeholder="¿Dónde fue?"
-            placeholderTextColor={themeTokens.colors.inkSecondary}
-            style={formFieldStyles.textField}
-            value={draft.description}
-          />
-        </View>
+        {isIncome ? null : (
+          <View style={formFieldStyles.field}>
+            <Text style={formFieldStyles.fieldLabel}>Comercio</Text>
+            <TextInput
+              accessibilityLabel="Comercio"
+              maxLength={200}
+              onChangeText={(description) => {
+                updateDraft({ description });
+              }}
+              placeholder="¿Dónde fue?"
+              placeholderTextColor={themeTokens.colors.inkSecondary}
+              style={formFieldStyles.textField}
+              value={draft.description}
+            />
+          </View>
+        )}
 
         {notesExpanded ? (
           <View style={formFieldStyles.field}>
