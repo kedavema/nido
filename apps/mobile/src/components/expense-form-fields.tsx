@@ -1,6 +1,7 @@
 import type { TransactionCurrency } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { themeTokens } from '@/theme/tokens';
@@ -13,6 +14,20 @@ import { m1TextStyles } from './m1-ui';
  * and Nuevo ingreso render the same labels, chips and amount treatment, so the
  * primitives live here instead of being reimplemented per screen.
  */
+
+/**
+ * Typography for the centred amount, shared by the input and the off-screen `Text` that measures
+ * it. One constant on purpose: if the two ever disagreed about font or size, the measurement would
+ * be quietly wrong by a few pixels rather than visibly broken, which is the kind of defect that
+ * survives a review.
+ */
+const AMOUNT_TYPOGRAPHY = {
+  fontFamily: themeTokens.typography.families.displayBold,
+  fontSize: 44,
+} as const;
+
+/** Room for the caret past the last glyph, so it is not clipped at the field's edge. */
+const CARET_ALLOWANCE = 3;
 
 /** Label + control + optional inline error. Use for a single control such as an input or picker. */
 export function FormField({
@@ -176,6 +191,12 @@ export function AmountField({
   readonly onChangeText: (value: string) => void;
 }) {
   const centered = variant === 'centered';
+  const displayValue = formatAmountDisplay(value, currency);
+  // What the field actually shows: an empty value renders the "0" placeholder, so that is what
+  // gets measured. Otherwise an untouched field would size itself to nothing.
+  const shownText = displayValue === '' ? '0' : displayValue;
+  const [measuredWidth, setMeasuredWidth] = useState<number>();
+
   return (
     <>
       {label === undefined ? null : (
@@ -185,6 +206,26 @@ export function AmountField({
         <Text style={[styles.amountPrefix, centered && styles.amountPrefixCentered]}>
           {currency === 'PYG' ? 'Gs.' : 'USD'}
         </Text>
+        {centered ? (
+          /*
+           * The measuring twin. It carries `AMOUNT_TYPOGRAPHY` — the same constant the input
+           * uses — so the two cannot drift into disagreeing about how wide the text is, which
+           * would be a silently wrong measurement rather than a visible break.
+           *
+           * Absolutely positioned so it takes part in no layout, and hidden from the screen
+           * reader: it duplicates text that is already announced by the input itself.
+           */
+          <Text
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            onLayout={(event) => {
+              setMeasuredWidth(event.nativeEvent.layout.width);
+            }}
+            style={styles.amountMeasure}
+          >
+            {shownText}
+          </Text>
+        ) : null}
         <TextInput
           accessibilityLabel={accessibilityLabel}
           autoFocus={autoFocus}
@@ -194,8 +235,16 @@ export function AmountField({
           }}
           placeholder="0"
           placeholderTextColor={themeTokens.colors.inkSecondary}
-          style={[styles.amountInput, centered && styles.amountInputCentered]}
-          value={formatAmountDisplay(value, currency)}
+          style={[
+            styles.amountInput,
+            centered && styles.amountInputCentered,
+            // Before the first measurement lands there is nothing to apply, so the field keeps
+            // today's behaviour for one frame rather than flashing at zero width.
+            centered && measuredWidth !== undefined
+              ? { width: measuredWidth + CARET_ALLOWANCE }
+              : null,
+          ]}
+          value={displayValue}
         />
       </View>
       {hint === undefined ? null : (
@@ -399,23 +448,38 @@ const styles = StyleSheet.create({
   amountPrefixCentered: {
     paddingBottom: 8,
   },
-  // The centered variant sizes to its content so the prefix and the number read
-  // as one centered pair, rather than the input eating the row like `hero` does.
+  // Sized from `measuredWidth`, not by flex.
   //
-  // These MUST stay longhands. `flex: 0` looks like the way to say "don't grow",
-  // but the one-value shorthand also sets flex-basis to 0% — and react-native-web
-  // forwards `flex` to CSS verbatim, so on the PWA the input's base size becomes 0.
-  // The `minWidth: 0` inherited from `amountInput` then removes the min-content
-  // floor that would otherwise save it, and the field collapses to nothing: the
-  // settle screens render the "Gs." prefix alone with no editable amount, while
-  // Confirmar stays enabled on the prefilled value. flexBasis 'auto' restores
-  // content sizing; flexShrink 1 still lets it fit a narrow viewport.
+  // `flexBasis: 'auto'` used to carry this, on the theory that the field would take its content's
+  // width. That holds on native but not in a browser: react-native-web renders a real <input>,
+  // whose intrinsic width is a UA default measured in characters (~470px at this font size, per
+  // the note on `amountInput`). It therefore never fit, `flexShrink` reduced it to exactly the
+  // space left after the prefix, the row filled edge to edge, and `justifyContent: 'center'` had
+  // nothing left to centre — stranding "Gs." on the left while the digits centred inside the
+  // input's own box.
+  //
+  // The longhands stay for the same reason they were written: `flex: 0` would also set
+  // flex-basis to 0%, and react-native-web forwards `flex` verbatim.
   amountInputCentered: {
+    ...AMOUNT_TYPOGRAPHY,
     flexGrow: 0,
     flexShrink: 1,
     flexBasis: 'auto',
-    fontSize: 44,
+    // A field measuring a lone "0" would otherwise be a couple of dozen pixels wide — legible,
+    // but below the floor for something meant to be tapped.
+    minWidth: themeTokens.touchTarget.minimum,
+    // Nothing an amount can grow to may push the row wider than the screen.
+    maxWidth: '100%',
     textAlign: 'center',
+  },
+  // Takes part in no layout; exists only to be measured. Left unconstrained rather than given
+  // `numberOfLines`, since a clamped line would report a clamped width.
+  amountMeasure: {
+    ...AMOUNT_TYPOGRAPHY,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    opacity: 0,
   },
   amountInput: {
     flex: 1,
