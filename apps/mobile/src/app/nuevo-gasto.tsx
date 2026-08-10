@@ -586,6 +586,7 @@ export default function NuevoGastoScreen() {
             updateDraft({ amount });
           }}
           value={draft.amount}
+          variant="centered"
         />
 
         {draft.currency === 'USD' ? (

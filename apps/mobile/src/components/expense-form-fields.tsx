@@ -146,10 +146,15 @@ export function SoftChip({
 /**
  * The oversized amount entry that anchors every amount form.
  *
- * `hero` is the left-aligned entry the capture forms use, where the amount is
- * one field among several. `centered` is the settle-screen treatment, where
- * confirming the amount is the whole screen, so it centers and carries its own
- * label and hint instead of sitting inside a `FormField`.
+ * `centered` puts the prefix and the number together on the screen's axis, for
+ * screens where the amount is the subject rather than one field among several:
+ * the settle screens, where confirming it is the whole job, and GAS-01, where it
+ * takes focus on open with the keypad under it and only chip rows below.
+ *
+ * `hero` is the left-aligned entry, still used by the income and fijo capture
+ * forms. Those have their own reference screens (ING-02, FIJ-02) which have not
+ * been read against this — the split is "not checked yet", not "decided
+ * differently", so do not treat it as a rule about capture forms.
  */
 export function AmountField({
   accessibilityLabel,
