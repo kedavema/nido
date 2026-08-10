@@ -1,5 +1,5 @@
 import type { BudgetSummary, HouseholdMember, Occurrence, RecurringItem } from '@nido/contracts';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type TextStyle } from 'react-native';
 
 import { Card, PressableScale, m1TextStyles } from '@/components/m1-ui';
 import { themeTokens } from '@/theme/tokens';
@@ -9,7 +9,7 @@ import {
   formatBudgetPyg,
   type BudgetCommitmentRow,
 } from '@/utils/budget-overview';
-import { occurrenceStatusChip } from '@/utils/fijos-format';
+import { occurrenceStatusChip, type FijoTone } from '@/utils/fijos-format';
 
 interface BudgetProjectionProps {
   readonly budget: BudgetSummary;
@@ -220,8 +220,18 @@ function CommitmentRow({
   readonly onSettle: () => void;
 }) {
   const status = occurrenceStatusChip(row.status, row.dueDate, todayLocal);
+  const overdue = status.tone === 'danger';
   return (
-    <View style={[styles.commitmentRow, !isFirst && styles.rowDivider]}>
+    <View
+      style={[
+        styles.commitmentRow,
+        // The tint already separates an overdue row from the one above it, and a hairline running
+        // into the top of a filled block reads as a seam rather than a divider.
+        !isFirst && !overdue && styles.rowDivider,
+        !isFirst && overdue && styles.overdueRowSpacing,
+        overdue && styles.overdueRow,
+      ]}
+    >
       <Pressable
         accessibilityLabel={`Ver ${row.title}`}
         accessibilityRole="button"
@@ -231,7 +241,7 @@ function CommitmentRow({
         <Text numberOfLines={1} style={styles.commitmentTitle}>
           {row.title}
         </Text>
-        <Text numberOfLines={2} style={m1TextStyles.secondary}>
+        <Text numberOfLines={2} style={[m1TextStyles.secondary, statusToneStyles[status.tone]]}>
           {status.label} · {row.responsibleName ?? 'Sin responsable'}
         </Text>
         <Text style={styles.commitmentAmount}>
@@ -250,6 +260,22 @@ function CommitmentRow({
     </View>
   );
 }
+
+/**
+ * Colours a commitment's status line by the tone `occurrenceStatusChip` already assigns it.
+ *
+ * Only the two tones that mean "this needs you" get a colour. `neutral` and `success` keep the
+ * muted secondary they have always had — and `warning` deliberately takes the foreground colour
+ * without the tint that `danger` gets, because a month with five upcoming fijos would otherwise
+ * become a wall of coloured bands and the overdue one would stop standing out, which is the whole
+ * reason for doing this.
+ */
+const statusToneStyles: Record<FijoTone, TextStyle | undefined> = {
+  danger: { color: themeTokens.semanticColors.danger.foreground },
+  warning: { color: themeTokens.semanticColors.warning.foreground },
+  neutral: undefined,
+  success: undefined,
+};
 
 const styles = StyleSheet.create({
   sectionLabel: {
@@ -290,6 +316,15 @@ const styles = StyleSheet.create({
   dangerText: { color: themeTokens.semanticColors.danger.foreground },
   commitmentRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowDivider: { borderTopWidth: 1, borderTopColor: themeTokens.colors.border, paddingTop: 14 },
+  overdueRow: {
+    backgroundColor: themeTokens.semanticColors.danger.background,
+    borderRadius: themeTokens.radii.button,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  // Replaces the hairline's `paddingTop` so a tinted row keeps the same distance from the row
+  // above it as a plain one, instead of collapsing onto it.
+  overdueRowSpacing: { marginTop: 2 },
   commitmentDetail: {
     flex: 1,
     minHeight: themeTokens.touchTarget.minimum,
