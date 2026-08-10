@@ -855,7 +855,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: themeTokens.spacing.cardGap,
     paddingHorizontal: themeTokens.spacing.screen,
-    paddingTop: themeTokens.spacing.base,
+    // `screen`, not `base`, because this header renders *outside* the ScrollView and so gets none
+    // of `screenContent`'s padding — unlike `ScreenHeader`, which sits inside it. `base` is 4, and
+    // on web the safe-area top inset is 0, which left the title flush against the viewport edge.
+    paddingTop: themeTokens.spacing.screen,
     paddingBottom: themeTokens.spacing.cardGap,
   },
   formHeaderButton: {
