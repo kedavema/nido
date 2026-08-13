@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { resolveApiUrl } from './api-url';
+
 const LOCAL_API_HOSTS = new Set(['localhost', '127.0.0.1', '10.0.2.2', '[::1]']);
 
 // Private LAN IPv4 ranges (RFC 1918). Allowed over http so a physical device can
@@ -59,7 +61,9 @@ let cachedEnvironment: PublicEnvironment | undefined;
 
 export function getPublicEnvironment(): PublicEnvironment {
   cachedEnvironment ??= parsePublicEnvironment({
-    apiUrl: process.env.EXPO_PUBLIC_API_URL,
+    // Platform-resolved: an explicit `EXPO_PUBLIC_API_URL` on either platform, or this page's own
+    // origin on web when it is absent. See `api-url.web.ts` for why web has a default at all.
+    apiUrl: resolveApiUrl(),
     firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
     firebaseAuthDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
     firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
