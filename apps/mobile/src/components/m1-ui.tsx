@@ -1,5 +1,12 @@
 import type { ComponentType, PropsWithChildren, ReactElement, ReactNode } from 'react';
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -34,6 +41,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
+import { isApiWaking, subscribeToApiWaking } from '@/api/wake-state';
 import { useScreenBottomInset } from '@/hooks/use-screen-bottom-inset';
 import { selectionFeedback } from '@/lib/haptics';
 import { cardShadowStyle } from '@/theme/styles';
@@ -733,11 +741,30 @@ export function SyncStatusPill({
   );
 }
 
+/**
+ * Copy shown while a request is waiting on a sleeping API to wake up.
+ *
+ * The zero-cost profile runs the API on a free tier that sleeps after inactivity, so the first
+ * call after a quiet spell takes about a minute. `client.ts` absorbs that with one long retry
+ * rather than failing, which would otherwise leave the screen on a silent spinner far past the
+ * point where it reads as broken.
+ */
+const WAKING_LABEL = 'Despertando el servidor…';
+
+/** Subscribes to whether any request is currently in a cold-start retry. */
+function useApiWaking(): boolean {
+  return useSyncExternalStore(subscribeToApiWaking, isApiWaking, isApiWaking);
+}
+
 export function LoadingContent({ label = 'Conectando…' }: { readonly label?: string }) {
+  const waking = useApiWaking();
+
   return (
     <View accessibilityLiveRegion="polite" accessibilityRole="progressbar" style={styles.loading}>
       <ActivityIndicator color={themeTokens.colors.primary} size="large" />
-      <Text style={styles.description}>{label}</Text>
+      {/* Overrides any caller-supplied label: while the service is waking, that is the more
+          useful thing to say, and it is true regardless of which screen is waiting. */}
+      <Text style={styles.description}>{waking ? WAKING_LABEL : label}</Text>
     </View>
   );
 }
@@ -823,15 +850,19 @@ function SkeletonBlock({
  */
 export function SummarySkeleton() {
   const pulse = useSkeletonPulse();
+  const waking = useApiWaking();
 
   return (
     <SkeletonPulseContext.Provider value={pulse}>
       <View
-        accessibilityLabel="Cargando resumen"
+        accessibilityLabel={waking ? WAKING_LABEL : 'Cargando resumen'}
         accessibilityLiveRegion="polite"
         accessibilityRole="progressbar"
         style={skeletonStyles.container}
       >
+        {/* A skeleton alone says "almost there". Past the normal deadline that stops being true,
+            and the wait needs a reason attached to it. */}
+        {waking ? <Text style={skeletonStyles.wakingNotice}>{WAKING_LABEL}</Text> : null}
         <Card>
           <SkeletonBlock height={10} width={120} />
           <SkeletonBlock height={28} width={180} />
@@ -1174,6 +1205,12 @@ const syncPillTextToneStyles = StyleSheet.create({
 const skeletonStyles = StyleSheet.create({
   container: {
     gap: themeTokens.spacing.cardGap,
+  },
+  wakingNotice: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+    textAlign: 'center',
   },
   block: {
     borderRadius: themeTokens.radii.button,

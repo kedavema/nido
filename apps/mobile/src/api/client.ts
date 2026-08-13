@@ -92,6 +92,8 @@ import {
 } from '@nido/contracts';
 import { z } from 'zod';
 
+import { beginApiWakeRetry } from './wake-state';
+
 export type GetIdToken = () => Promise<string | null>;
 export type FetchImplementation = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -100,17 +102,50 @@ interface ApiClientOptions {
   readonly getIdToken: GetIdToken;
   readonly fetchImplementation?: FetchImplementation;
   readonly requestTimeoutMilliseconds?: number;
+  readonly coldStartTimeoutMilliseconds?: number;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MILLISECONDS = 15_000;
 
+/**
+ * Deadline for the single retry that follows a timeout, sized to outlast a cold start.
+ *
+ * The zero-cost profile (docs/system-design.md §15) runs the API on a free tier that sleeps after
+ * inactivity and takes roughly a minute to wake. Raising the *normal* deadline to cover that was
+ * rejected: every genuine failure — wrong URL, no connection, dead service — would then take over
+ * a minute to surface instead of fifteen seconds. A known, specific condition gets a specific
+ * allowance rather than a blanket one.
+ */
+const DEFAULT_COLD_START_TIMEOUT_MILLISECONDS = 65_000;
+
+/**
+ * Methods that may be retried after a timeout.
+ *
+ * A mutation that outlived its deadline may still have been received and acted on — from here
+ * there is no way to tell "never arrived, the service was asleep" from "arrived and is still
+ * working" — so retrying one risks applying it twice. Expense creation already has the offline
+ * queue and its idempotency keys; other mutations surface an error the user retries deliberately.
+ */
+const RETRYABLE_METHODS = new Set(['GET']);
+
 class RequestDeadlineError extends Error {}
+
+/**
+ * Which network failure this was, when `kind` is `'network'`.
+ *
+ * `kind` stays a three-value union because `sync-queue.ts` keys its enqueue decision on
+ * `kind === 'network'` and must keep treating every network failure alike. This narrows the same
+ * failures for callers that need to tell a deadline from a dead host — today, the cold-start retry
+ * below.
+ */
+export type ApiErrorReason = 'timeout' | 'unreachable' | 'connection';
 
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number | undefined,
     readonly kind: 'authentication' | 'network' | 'response',
+    readonly reason?: ApiErrorReason,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -122,6 +157,7 @@ function networkError(): ApiError {
     'No pudimos conectarnos. Revisá tu conexión e intentá de nuevo.',
     undefined,
     'network',
+    'connection',
   );
 }
 
@@ -139,6 +175,7 @@ function unreachableError(baseUrl: string): ApiError {
     `No pudimos conectarnos a ${baseUrl}. Revisá tu conexión e intentá de nuevo.`,
     undefined,
     'network',
+    'unreachable',
   );
 }
 
@@ -148,6 +185,7 @@ function timeoutError(): ApiError {
     'El servicio tardó demasiado en responder. Intentá de nuevo.',
     undefined,
     'network',
+    'timeout',
   );
 }
 
@@ -329,6 +367,7 @@ export function createNidoApiClient({
   getIdToken,
   fetchImplementation = (input, init) => fetch(input, init),
   requestTimeoutMilliseconds = DEFAULT_REQUEST_TIMEOUT_MILLISECONDS,
+  coldStartTimeoutMilliseconds = DEFAULT_COLD_START_TIMEOUT_MILLISECONDS,
 }: ApiClientOptions): NidoApiClient {
   async function request<T>(
     path: string,
@@ -344,66 +383,85 @@ export function createNidoApiClient({
       readonly extraHeaders?: Readonly<Record<string, string>> | undefined;
     } = {},
   ): Promise<T> {
-    return withRequestDeadline(requestTimeoutMilliseconds, async (signal) => {
-      let token: string | null;
+    try {
+      return await attempt(requestTimeoutMilliseconds);
+    } catch (error) {
+      const timedOut = error instanceof ApiError && error.reason === 'timeout';
+      if (!timedOut || !RETRYABLE_METHODS.has(options.method ?? 'GET')) {
+        throw error;
+      }
+
+      // The screen is about to sit on a spinner far longer than usual, so say why.
+      const endWakeRetry = beginApiWakeRetry();
       try {
-        token = await getIdToken();
-      } catch {
-        throw networkError();
+        return await attempt(coldStartTimeoutMilliseconds);
+      } finally {
+        endWakeRetry();
       }
+    }
 
-      if (token === null) {
-        throw new ApiError('Necesitás iniciar sesión para continuar.', 401, 'authentication');
-      }
-
-      let response: Response;
-
-      try {
-        response = await fetchImplementation(`${baseUrl}${path}`, {
-          method: options.method ?? 'GET',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-            ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-            ...options.extraHeaders,
-          },
-          signal,
-          ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-        });
-      } catch {
-        throw unreachableError(baseUrl);
-      }
-
-      if (!response.ok) {
-        throw new ApiError(messageForStatus(response.status), response.status, 'response');
-      }
-
-      if (response.status === 204) {
-        return undefined as T;
-      }
-
-      let payload: unknown;
-      try {
-        payload = await readJson(response);
-      } catch (error) {
-        if (error instanceof ApiError) {
-          throw error;
+    function attempt(timeoutMilliseconds: number): Promise<T> {
+      return withRequestDeadline(timeoutMilliseconds, async (signal) => {
+        let token: string | null;
+        try {
+          token = await getIdToken();
+        } catch {
+          throw networkError();
         }
-        throw networkError();
-      }
 
-      const parsed = schema.safeParse(payload);
+        if (token === null) {
+          throw new ApiError('Necesitás iniciar sesión para continuar.', 401, 'authentication');
+        }
 
-      if (!parsed.success) {
-        throw new ApiError(
-          'La respuesta del servicio no tiene el formato esperado.',
-          response.status,
-          'response',
-        );
-      }
+        let response: Response;
 
-      return parsed.data;
-    });
+        try {
+          response = await fetchImplementation(`${baseUrl}${path}`, {
+            method: options.method ?? 'GET',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+              ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+              ...options.extraHeaders,
+            },
+            signal,
+            ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+          });
+        } catch {
+          throw unreachableError(baseUrl);
+        }
+
+        if (!response.ok) {
+          throw new ApiError(messageForStatus(response.status), response.status, 'response');
+        }
+
+        if (response.status === 204) {
+          return undefined as T;
+        }
+
+        let payload: unknown;
+        try {
+          payload = await readJson(response);
+        } catch (error) {
+          if (error instanceof ApiError) {
+            throw error;
+          }
+          throw networkError();
+        }
+
+        const parsed = schema.safeParse(payload);
+
+        if (!parsed.success) {
+          throw new ApiError(
+            'La respuesta del servicio no tiene el formato esperado.',
+            response.status,
+            'response',
+          );
+        }
+
+        return parsed.data;
+      });
+    }
   }
 
   return {

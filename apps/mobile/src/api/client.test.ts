@@ -134,13 +134,17 @@ describe('Nido API client', () => {
       getIdToken: () => Promise.resolve('firebase-id-token'),
       fetchImplementation,
       requestTimeoutMilliseconds: 25,
+      coldStartTimeoutMilliseconds: 50,
     });
 
     const assertion = expect(client.getMe()).rejects.toMatchObject({
       kind: 'network',
+      reason: 'timeout',
       message: 'El servicio tardó demasiado en responder. Intentá de nuevo.',
     });
+    // Two deadlines, because a GET that times out gets one cold-start retry before giving up.
     await vi.advanceTimersByTimeAsync(25);
+    await vi.advanceTimersByTimeAsync(50);
     await assertion;
     const signal = fetchImplementation.mock.calls[0]?.[1].signal;
     expect(signal).toBeInstanceOf(AbortSignal);
@@ -157,6 +161,7 @@ describe('Nido API client', () => {
       getIdToken: () => new Promise(() => undefined),
       fetchImplementation,
       requestTimeoutMilliseconds: 25,
+      coldStartTimeoutMilliseconds: 50,
     });
 
     const assertion = expect(client.getMe()).rejects.toMatchObject({
@@ -164,6 +169,7 @@ describe('Nido API client', () => {
       message: 'El servicio tardó demasiado en responder. Intentá de nuevo.',
     });
     await vi.advanceTimersByTimeAsync(25);
+    await vi.advanceTimersByTimeAsync(50);
     await assertion;
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
@@ -178,6 +184,7 @@ describe('Nido API client', () => {
       getIdToken: () => Promise.resolve('firebase-id-token'),
       fetchImplementation,
       requestTimeoutMilliseconds: 25,
+      coldStartTimeoutMilliseconds: 50,
     });
 
     const assertion = expect(client.getMe()).rejects.toMatchObject({
@@ -185,8 +192,70 @@ describe('Nido API client', () => {
       message: 'El servicio tardó demasiado en responder. Intentá de nuevo.',
     });
     await vi.advanceTimersByTimeAsync(25);
+    await vi.advanceTimersByTimeAsync(50);
     await assertion;
     expect(fetchImplementation.mock.calls[0]?.[1].signal?.aborted).toBe(true);
+  });
+
+  it('retries a timed-out GET once on the cold-start deadline and succeeds when the API wakes', async () => {
+    vi.useFakeTimers();
+    const fetchImplementation = vi
+      .fn<FetchImplementation>()
+      .mockImplementationOnce(() => new Promise(() => undefined))
+      .mockImplementationOnce(() => Promise.resolve(jsonResponse(meResponse)));
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+      requestTimeoutMilliseconds: 25,
+      coldStartTimeoutMilliseconds: 50,
+    });
+
+    const assertion = expect(client.getMe()).resolves.toMatchObject(meResponse);
+    await vi.advanceTimersByTimeAsync(25);
+    await assertion;
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * The safety rule. A mutation that outlived its deadline may still have been received and acted
+   * on, and from here "never arrived" and "arrived, still working" look identical — so a retry
+   * risks applying it twice. Expense creation has the offline queue and its idempotency keys.
+   */
+  it('does not retry a timed-out mutation', async () => {
+    vi.useFakeTimers();
+    const fetchImplementation = vi.fn<FetchImplementation>(() => new Promise(() => undefined));
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+      requestTimeoutMilliseconds: 25,
+      coldStartTimeoutMilliseconds: 50,
+    });
+
+    const assertion = expect(client.createHousehold('Casa')).rejects.toMatchObject({
+      kind: 'network',
+      reason: 'timeout',
+    });
+    await vi.advanceTimersByTimeAsync(25);
+    await assertion;
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+  });
+
+  /** Only a deadline earns the long retry — a dead host should fail fast, not after a minute. */
+  it('does not retry an unreachable host', async () => {
+    const fetchImplementation = vi.fn<FetchImplementation>(() => Promise.reject(new TypeError()));
+    const client = createNidoApiClient({
+      baseUrl: 'https://api.example.com',
+      getIdToken: () => Promise.resolve('firebase-id-token'),
+      fetchImplementation,
+    });
+
+    await expect(client.getMe()).rejects.toMatchObject({
+      kind: 'network',
+      reason: 'unreachable',
+    });
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
   });
 
   it('uses PATCH and accepts empty DELETE responses for catalog mutations', async () => {
