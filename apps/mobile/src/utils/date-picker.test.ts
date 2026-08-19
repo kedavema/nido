@@ -42,4 +42,20 @@ describe('date picker helpers', () => {
     expect(monthlyFirstDueDate(31, '2026-07-31')).toBe('2026-07-31');
     expect(monthlyFirstDueDate(15, '2026-07-20')).toBe('2026-08-15');
   });
+
+  it('keeps a past day in the current month when asked to start there', () => {
+    // Registering a rule that already existed: its payment for this month is already due, so the
+    // occurrence belongs to July and the sweep will mark it OVERDUE.
+    expect(monthlyFirstDueDate(15, '2026-07-20', true)).toBe('2026-07-15');
+  });
+
+  it('changes nothing when the day has not passed yet', () => {
+    // The flag only decides which month a *past* day lands in; a future day is already this month.
+    expect(monthlyFirstDueDate(25, '2026-07-20', true)).toBe('2026-07-25');
+    expect(monthlyFirstDueDate(25, '2026-07-20', false)).toBe('2026-07-25');
+  });
+
+  it('still clamps to the length of the month it starts in', () => {
+    expect(monthlyFirstDueDate(31, '2026-02-20', true)).toBe('2026-02-28');
+  });
 });

@@ -280,6 +280,15 @@ export function formatMonthLabel({ year, month }: MonthValue): string {
   return `${MONTH_NAMES[month - 1] ?? ''} ${year.toString()}`;
 }
 
+/**
+ * "agosto" — the month a local date falls in, lowercased for use inside a sentence. Used by the
+ * fijo and ingreso forms to name each first-due-date choice by its month instead of "este mes" and
+ * "el mes que viene", which are ambiguous once the picker only shows a day number.
+ */
+export function monthLabelOf(localDate: string): string {
+  return formatMonthLabel(monthFromLocalDate(localDate)).toLowerCase();
+}
+
 /** Whole months `to` is chronologically after `from` (negative when `to` is in the past). */
 function monthDifference(from: MonthValue, to: MonthValue): number {
   return to.year * 12 + (to.month - 1) - (from.year * 12 + (from.month - 1));

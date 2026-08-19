@@ -174,17 +174,34 @@ export function firstDueDatePreview(
     readonly frequency: FrequencyKind;
     readonly dayOfMonth: number;
     readonly firstDueDate: string;
+    readonly startThisMonth?: boolean;
   },
   todayLocal: string,
-): { readonly date: string | null; readonly startsAfterThisMonth: boolean } {
+): {
+  readonly date: string | null;
+  readonly startsAfterThisMonth: boolean;
+  /**
+   * True when the chosen day has gone by, so the form can offer the month as a choice. Distinct
+   * from `startsAfterThisMonth`, which says where the date landed: once the current month is
+   * chosen, the day is still past but the schedule no longer starts later.
+   */
+  readonly dayAlreadyPassed: boolean;
+} {
   if (draft.frequency !== 'MONTHLY' && draft.frequency !== 'EVERY_N_MONTHS') {
     return {
       date: isValidLocalDateString(draft.firstDueDate) ? draft.firstDueDate : null,
       startsAfterThisMonth: false,
+      dayAlreadyPassed: false,
     };
   }
-  const date = monthlyFirstDueDate(draft.dayOfMonth, todayLocal);
-  return { date, startsAfterThisMonth: date.slice(0, 7) !== todayLocal.slice(0, 7) };
+  const date = monthlyFirstDueDate(draft.dayOfMonth, todayLocal, draft.startThisMonth);
+  const dayAlreadyPassed =
+    monthlyFirstDueDate(draft.dayOfMonth, todayLocal).slice(0, 7) !== todayLocal.slice(0, 7);
+  return {
+    date,
+    startsAfterThisMonth: date.slice(0, 7) !== todayLocal.slice(0, 7),
+    dayAlreadyPassed,
+  };
 }
 
 /** "Mensual · el día 5" / "Cada 2 meses · el día 5" / "Anual · 5 jul" — FIJ-03 "Recurrencia" row. */

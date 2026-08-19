@@ -78,12 +78,29 @@ export function formatCalendarMonthLabel(calendarMonth: CalendarMonth): string {
   return `${monthName.charAt(0).toUpperCase()}${monthName.slice(1)} ${calendarMonth.year.toString()}`;
 }
 
-/** First valid due date for a day-of-month recurrence, starting this month when possible. */
-export function monthlyFirstDueDate(day: number, todayLocal: string): string {
+/**
+ * First due date for a day-of-month recurrence.
+ *
+ * Defaults to the next occurrence of that day: a day already gone by this month rolls to the next
+ * one, which is what someone adding a bill that starts next month means.
+ *
+ * `startThisMonth` overrides that for the other real case — registering a rule that already
+ * existed, whose payment for this month is already due or paid. The resulting occurrence is born
+ * in the past and the daily sweep marks it OVERDUE, which is the intended reading. Nothing in the
+ * domain forbids a past `first_due_date` (ADR 0009 generates forward from it), and back-dating
+ * cannot fire stale reminders: deliveries are only enqueued inside a `today - 1 .. today` window.
+ */
+export function monthlyFirstDueDate(
+  day: number,
+  todayLocal: string,
+  startThisMonth = false,
+): string {
   const { year, month, day: todayDay } = parseLocalDate(todayLocal);
   const requestedDay = Math.min(Math.max(Math.trunc(day), 1), 31);
   const targetMonth =
-    requestedDay < todayDay ? shiftCalendarMonth({ year, month }, 1) : { year, month };
+    requestedDay < todayDay && !startThisMonth
+      ? shiftCalendarMonth({ year, month }, 1)
+      : { year, month };
   const dueDay = Math.min(requestedDay, daysInMonth(targetMonth.year, targetMonth.month));
   return localDateFromParts(targetMonth.year, targetMonth.month, dueDay);
 }
