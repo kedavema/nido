@@ -1,5 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
+
+// The launcher icon itself, so the sign-in screen and the app icon cannot drift apart.
+import logo from '../../assets/icon.png';
 
 import { AppScreen, Card, PressableScale, m1TextStyles } from '@/components/m1-ui';
 import { useSession } from '@/auth/session-provider';
@@ -77,9 +80,13 @@ export default function SignInScreen() {
   return (
     <AppScreen centered>
       <View style={styles.brand}>
-        <View style={styles.logo}>
-          <Text style={styles.logoMark}>n</Text>
-        </View>
+        {/*
+          The launcher icon itself, rather than a letter drawn in code: this is the first screen
+          anyone sees after tapping that icon, and the two disagreeing is the kind of seam that
+          reads as a different app. Decorative, because the "Nido" heading right below already
+          announces the name.
+        */}
+        <Image accessibilityIgnoresInvertColors source={logo} style={styles.logo} />
         <Text accessibilityRole="header" style={styles.heading}>
           Nido
         </Text>
@@ -115,16 +122,8 @@ const styles = StyleSheet.create({
   logo: {
     width: 76,
     height: 76,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: themeTokens.radii.card,
-    backgroundColor: themeTokens.colors.primary,
-  },
-  logoMark: {
-    color: themeTokens.colors.surface,
-    fontFamily: themeTokens.typography.families.displayBold,
-    fontSize: 36,
-    lineHeight: 40,
+    // No borderRadius: the artwork carries its own rounded square, so adding one here would clip
+    // the corners twice and thin them unevenly.
   },
   heading: {
     marginTop: themeTokens.spacing.cardGap,
