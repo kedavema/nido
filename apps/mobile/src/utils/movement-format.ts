@@ -281,12 +281,16 @@ export function formatMonthLabel({ year, month }: MonthValue): string {
 }
 
 /**
- * "agosto" — the month a local date falls in, lowercased for use inside a sentence. Used by the
- * fijo and ingreso forms to name each first-due-date choice by its month instead of "este mes" and
- * "el mes que viene", which are ambiguous once the picker only shows a day number.
+ * "Agosto" — just the month a local date falls in, with no year.
+ *
+ * `formatMonthLabel` carries the year because a month selector has to disambiguate across them.
+ * A first-due-date choice never spans more than one month boundary, so the year is noise that only
+ * makes the chip wider. The fijo and ingreso forms use this to name each choice by its month
+ * instead of "este mes" and "el mes que viene", which are ambiguous once the picker shows only a
+ * day number.
  */
-export function monthLabelOf(localDate: string): string {
-  return formatMonthLabel(monthFromLocalDate(localDate)).toLowerCase();
+export function monthNameOf(localDate: string): string {
+  return MONTH_NAMES[monthFromLocalDate(localDate).month - 1] ?? '';
 }
 
 /** Whole months `to` is chronologically after `from` (negative when `to` is in the past). */
