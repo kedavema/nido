@@ -1,0 +1,94 @@
+name: Due notifications
+
+# The daily scheduler of ADR 0012. It drains `notification_deliveries` by calling the API's
+# internal job endpoint; enqueuing happens elsewhere, inside the per-household sweep.
+#
+# 11:00 UTC is 08:00 in America/Asuncion, which has been a fixed UTC-3 since Paraguay dropped DST.
+# GitHub delays cron runs under load and ADR 0012 already accepts that deliveries have no promised
+# hour, so a late run is a normal outcome rather than a failure.
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: due-notifications
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Dispatch due notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wake the API
+        # The free instance sleeps after inactivity and takes close to a minute to come back
+        # (ADR 0004). Waking it before signing matters: the signature carries a timestamp the API
+        # refuses beyond 300s of skew, so spending the wake time inside the signed request would
+        # eventually expire it. `--max-time` bounds each probe; a failure here is not fatal because
+        # the signed call below retries on its own.
+        continue-on-error: true
+        env:
+          API_ORIGIN: ${{ secrets.NIDO_API_ORIGIN }}
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if curl --silent --show-error --fail --max-time 30 "${API_ORIGIN}/health/live"; then
+              echo "API is awake."
+              exit 0
+            fi
+            echo "Wake attempt ${attempt} failed; retrying in 15s."
+            sleep 15
+          done
+          echo "API did not answer the wake probe; continuing to the signed call anyway."
+
+      - name: Call the internal job endpoint
+        env:
+          API_ORIGIN: ${{ secrets.NIDO_API_ORIGIN }}
+          JOB_SECRET: ${{ secrets.NIDO_NOTIFICATIONS_JOB_HMAC_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${API_ORIGIN}" ] || [ -z "${JOB_SECRET}" ]; then
+            echo "::error::NIDO_API_ORIGIN and NIDO_NOTIFICATIONS_JOB_HMAC_SECRET must be set."
+            exit 1
+          fi
+
+          for attempt in 1 2 3; do
+            # A fresh timestamp and nonce per attempt, never reused: the nonce is a primary key on
+            # the API side, so replaying the previous one is rejected as a replay rather than
+            # retried. Signing the empty body the request actually sends keeps the digest honest.
+            timestamp="$(date +%s)"
+            nonce="$(cat /proc/sys/kernel/random/uuid)"
+            body_digest="$(printf '' | openssl dgst -sha256 -hex | awk '{print $NF}')"
+            signature="v1=$(printf 'v1:%s:%s:%s' "${timestamp}" "${nonce}" "${body_digest}" \
+              | openssl dgst -sha256 -hmac "${JOB_SECRET}" -hex | awk '{print $NF}')"
+
+            status="$(curl --silent --show-error --max-time 120 \
+              --output response.json --write-out '%{http_code}' \
+              --request POST "${API_ORIGIN}/v1/internal/jobs/due-notifications" \
+              --header "x-nido-timestamp: ${timestamp}" \
+              --header "x-nido-nonce: ${nonce}" \
+              --header "x-nido-signature: ${signature}" \
+              --header 'content-length: 0' || echo 000)"
+
+            if [ "${status}" = "200" ]; then
+              # Aggregate counters only, safe to print into a public log (ADR 0012).
+              echo "Dispatch summary: $(cat response.json)"
+              exit 0
+            fi
+
+            echo "Attempt ${attempt} returned HTTP ${status}."
+            # 401 is a configuration fault — a wrong secret or a skewed clock — and retrying it
+            # just burns nonces against a door that will stay shut.
+            if [ "${status}" = "401" ]; then
+              echo "::error::The job signature was rejected. Check the shared secret and clock skew."
+              exit 1
+            fi
+            sleep 20
+          done
+
+          echo "::error::The internal job endpoint did not answer successfully."
+          exit 1

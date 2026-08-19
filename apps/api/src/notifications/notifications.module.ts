@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AuthModule } from '../auth/auth.module.js';
 import { CLOCK, SystemClock } from '../common/clock.js';
+import { HouseholdsModule } from '../households/households.module.js';
 import type { Environment } from '../config/environment.js';
 import { AesGcmCredentialCipher, CREDENTIAL_CIPHER } from './credential-cipher.js';
 import { createCredentialKeyring } from './credential-keyring.js';
@@ -10,23 +11,41 @@ import { DevicesController } from './devices.controller.js';
 import { DEVICES_REPOSITORY } from './devices.repository.js';
 import { DevicesService } from './devices.service.js';
 import { ExpoPushSender } from './expo-push.sender.js';
+import { InternalJobHmacGuard } from './internal-job-hmac.guard.js';
+import { INTERNAL_JOB_NONCES_REPOSITORY } from './internal-job-nonces.repository.js';
+import { InternalJobsController } from './internal-jobs.controller.js';
 import { NOTIFICATION_DELIVERIES_REPOSITORY } from './notification-deliveries.repository.js';
+import { NotificationDispatchService } from './notification-dispatch.service.js';
 import { NotificationDispatcherService } from './notification-dispatcher.service.js';
 import { PrismaDevicesRepository } from './prisma-devices.repository.js';
+import { PrismaInternalJobNoncesRepository } from './prisma-internal-job-nonces.repository.js';
 import { PrismaNotificationDeliveriesRepository } from './prisma-notification-deliveries.repository.js';
 import { NotificationsController } from './notifications.controller.js';
+import { NotificationsDispatchController } from './notifications-dispatch.controller.js';
 import { PUSH_SENDERS, type PushSender } from './push-sender.js';
 import { createVapidKeys, VAPID_KEYS } from './vapid-keys.js';
 import { WebPushSender } from './web-push.sender.js';
 
 @Module({
-  imports: [AuthModule],
-  controllers: [DevicesController, NotificationsController],
+  imports: [AuthModule, HouseholdsModule],
+  controllers: [
+    DevicesController,
+    NotificationsController,
+    NotificationsDispatchController,
+    InternalJobsController,
+  ],
   providers: [
     DevicesService,
     PrismaDevicesRepository,
     { provide: DEVICES_REPOSITORY, useExisting: PrismaDevicesRepository },
     NotificationDispatcherService,
+    NotificationDispatchService,
+    InternalJobHmacGuard,
+    PrismaInternalJobNoncesRepository,
+    {
+      provide: INTERNAL_JOB_NONCES_REPOSITORY,
+      useExisting: PrismaInternalJobNoncesRepository,
+    },
     PrismaNotificationDeliveriesRepository,
     {
       provide: NOTIFICATION_DELIVERIES_REPOSITORY,
