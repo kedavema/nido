@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { inputFontSize } from '@/theme/input-font-size';
 import { themeTokens } from '@/theme/tokens';
 import { formatAmountDisplay, sanitizeAmountInput } from '@/utils/expense-form';
 
@@ -327,7 +328,7 @@ export const formFieldStyles = StyleSheet.create({
     backgroundColor: themeTokens.colors.surface,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
+    fontSize: inputFontSize(themeTokens.typography.scale.body),
     paddingHorizontal: 12,
     paddingVertical: 10,
   },

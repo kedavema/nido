@@ -34,6 +34,7 @@ import {
   type MovementFilters,
 } from '@/utils/movement-filters';
 import { cardShadowStyle } from '@/theme/styles';
+import { inputFontSize } from '@/theme/input-font-size';
 import { themeTokens } from '@/theme/tokens';
 import {
   categoryLabel,
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
+    fontSize: inputFontSize(themeTokens.typography.scale.body),
     paddingVertical: 10,
   },
   filterRow: {

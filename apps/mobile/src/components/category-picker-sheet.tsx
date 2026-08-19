@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { messageForActionError } from '@/auth/session-provider';
 import { AppBottomSheet } from '@/components/app-bottom-sheet';
 import { m1TextStyles } from '@/components/m1-ui';
+import { inputFontSize } from '@/theme/input-font-size';
 import { themeTokens } from '@/theme/tokens';
 import { categoryIcon } from '@/components/category-appearance';
 import { categoryTint } from '@/utils/category-appearance';
@@ -344,7 +345,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
+    fontSize: inputFontSize(themeTokens.typography.scale.body),
     paddingVertical: 10,
   },
   rootGroup: {
@@ -398,7 +399,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
+    fontSize: inputFontSize(themeTokens.typography.scale.body),
   },
   createError: {
     color: themeTokens.semanticColors.danger.foreground,

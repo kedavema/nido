@@ -45,6 +45,7 @@ import { isApiWaking, subscribeToApiWaking } from '@/api/wake-state';
 import { useScreenBottomInset } from '@/hooks/use-screen-bottom-inset';
 import { selectionFeedback } from '@/lib/haptics';
 import { cardShadowStyle } from '@/theme/styles';
+import { inputFontSize } from '@/theme/input-font-size';
 import { themeTokens } from '@/theme/tokens';
 
 /**
@@ -1138,7 +1139,7 @@ const styles = StyleSheet.create({
     backgroundColor: themeTokens.colors.surface,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodyRegular,
-    fontSize: themeTokens.typography.scale.body,
+    fontSize: inputFontSize(themeTokens.typography.scale.body),
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
