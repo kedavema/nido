@@ -40,6 +40,7 @@ import type { CreateExpenseOutcome } from '@/sync/sync-queue';
 import { useSyncQueue } from '@/sync/sync-queue-provider';
 import { cardShadowStyle } from '@/theme/styles';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
+import { inputFontSize } from '@/theme/input-font-size';
 import { themeTokens } from '@/theme/tokens';
 import {
   nextRequiredCategoryId,
@@ -1199,7 +1200,7 @@ const styles = StyleSheet.create({
   fxRateInput: {
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
+    fontSize: inputFontSize(themeTokens.typography.scale.body),
     minWidth: 60,
     textAlign: 'right',
   },

@@ -30,31 +30,18 @@ const FOCUS_RING_CSS = `
     outline-offset: 2px;
   }
   /*
-   * Text controls keep the ring but lose the offset, so it lands on the border instead of floating
-   * two pixels off it. On a rounded field the offset version reads as a green halo rather than a
-   * focused input — most visible on iOS, where Safari matches :focus-visible on a plain tap.
-   * Per the spec a text control always matches it, keyboard or not, so this is the common case for
-   * these elements rather than the rare one.
+   * Text controls get the ring as a box-shadow rather than an outline, because a shadow follows
+   * border-radius and an outline does not: on a rounded field Safari draws the outline as a plain
+   * rectangle, which is the green box around the input rather than a focused input.
+   *
+   * The outline is cleared here too: the reset above only covers plain :focus, not :focus-visible.
    */
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {
-    outline-offset: 0;
+    outline: none;
+    box-shadow: 0 0 0 2px ${themeTokens.colors.primary};
   }
-}
-
-/*
- * iOS Safari zooms the page whenever a focused form control has a font smaller than 16px, and it
- * never zooms back out. The app's body scale is 15 (theme density), so every field triggered it.
- *
- * Overridden here rather than in the theme because the constraint is WebKit's, not the design's:
- * native keeps 15. The alternative, pinning maximum-scale in the viewport meta, stops the zoom by
- * banning pinch-to-zoom outright, which breaks the page for anyone who needs to magnify it.
- */
-input,
-textarea,
-select {
-  font-size: 16px;
 }
 `;
 

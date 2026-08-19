@@ -16,6 +16,7 @@ import {
   PressableScale,
 } from '@/components/m1-ui';
 import { errorFeedback, successFeedback } from '@/lib/haptics';
+import { inputFontSize } from '@/theme/input-font-size';
 import { themeTokens } from '@/theme/tokens';
 import {
   budgetAllocationDrafts,
@@ -377,7 +378,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     color: themeTokens.colors.ink,
     fontFamily: themeTokens.typography.families.bodySemibold,
-    fontSize: themeTokens.typography.scale.body,
+    fontSize: inputFontSize(themeTokens.typography.scale.body),
     textAlign: 'right',
     paddingVertical: 8,
   },
