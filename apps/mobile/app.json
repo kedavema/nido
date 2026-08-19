@@ -13,7 +13,7 @@
       "package": "com.nido.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F6F4EF"
+        "backgroundColor": "#1C4F47"
       },
       "predictiveBackGestureEnabled": true,
       "softwareKeyboardLayoutMode": "resize"
