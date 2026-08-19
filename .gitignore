@@ -6,6 +6,10 @@ node_modules/
 # Build and test output
 dist/
 dist-android/
+
+# Local EAS build artifacts. `eas build --local` writes the APK next to eas.json.
+*.apk
+*.aab
 coverage/
 *.tsbuildinfo
 apps/api/src/generated/prisma/
