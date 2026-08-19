@@ -15,6 +15,7 @@ import {
   CreateRecurringItemResponseSchema,
   CreateTransactionRequestSchema,
   CreateTransactionResponseSchema,
+  DispatchNotificationsResponseSchema,
   GetHouseholdMembersResponseSchema,
   GetBudgetMonthResponseSchema,
   GetMeResponseSchema,
@@ -71,6 +72,7 @@ import {
   type ListTransactionsQuery,
   type ListTransactionsResponse,
   type RegisterDeviceRequest,
+  type DispatchNotificationsResponse,
   type RegisterDeviceResponse,
   type VapidPublicKeyResponse,
   type MonthlySummaryQuery,
@@ -360,6 +362,11 @@ export interface NidoApiClient {
   getVapidPublicKey(): Promise<VapidPublicKeyResponse>;
   registerDevice(input: RegisterDeviceRequest): Promise<RegisterDeviceResponse>;
   deleteDevice(deviceId: string): Promise<void>;
+  /**
+   * Drains the household's due reminders. Household-scoped, unlike the device endpoints above,
+   * because a delivery carries financial data and lives behind the ADR 0002 boundary.
+   */
+  dispatchNotifications(householdId: string): Promise<DispatchNotificationsResponse>;
 }
 
 export function createNidoApiClient({
@@ -714,6 +721,13 @@ export function createNidoApiClient({
       return request(`/v1/devices/${encodeURIComponent(deviceId)}`, z.void(), {
         method: 'DELETE',
       });
+    },
+    dispatchNotifications(householdId) {
+      return request(
+        `/v1/households/${encodeURIComponent(householdId)}/notifications/dispatch`,
+        DispatchNotificationsResponseSchema,
+        { method: 'POST' },
+      );
     },
   };
 }

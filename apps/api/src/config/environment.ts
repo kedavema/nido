@@ -24,6 +24,13 @@ export const EnvironmentSchema = z
     FIREBASE_AUTH_EMULATOR_HOST: z.string().trim().min(1).optional(),
     GOOGLE_APPLICATION_CREDENTIALS: z.string().trim().min(1).optional(),
     CORS_ORIGINS: CorsOriginsSchema,
+    // How many reverse proxies sit in front of the API, counted from the app outwards. Express
+    // uses it to decide which entry of `X-Forwarded-For` is the real client, which is what the
+    // rate limiter keys on. Defaults to 0 — trusting nothing — because the failure modes are
+    // asymmetric: too low buckets every caller behind the proxy under one key, while too high
+    // lets any caller forge the header and pick their own bucket. Set it to the real hop count
+    // of the deployment (1 on Render) and never higher.
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
     // Push credential encryption at rest (ADR 0012). Optional as a set: leaving all three unset
     // disables device registration rather than blocking boot, which is what local development and
     // every test that does not touch notifications need. Setting some but not all is a deployment

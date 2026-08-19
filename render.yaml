@@ -1,0 +1,72 @@
+# Render blueprint for the Nido API (ADR 0004).
+#
+# Only the API lives here. The PWA is a static Cloudflare Pages deployment and PostgreSQL is a Neon
+# instance, both outside this file — Render's own managed Postgres is deliberately not used because
+# its free tier expires, and an expiring database is not a fixed cost of USD 0.
+#
+# Every secret is declared `sync: false`, which means Render asks for the value in the dashboard and
+# never reads it from this repository.
+services:
+  - type: web
+    name: nido-api
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    # The whole workspace: the API imports @nido/contracts and @nido/domain-types as workspace
+    # packages, so building from apps/api alone would not resolve them.
+    rootDir: .
+    # Turbo builds the two workspace packages first through the `^build` dependency already
+    # declared in turbo.json, so their order does not have to be repeated here. Migrations run in
+    # the build step because Render's pre-deploy hook is a paid feature; applying them here means
+    # the schema is in place before the new instance takes traffic.
+    buildCommand: |
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm turbo run build --filter=@nido/api
+      pnpm db:migrate:deploy
+    startCommand: node apps/api/dist/main.js
+    # `/health/ready` and not `/health/live`: ready checks the database connection and the required
+    # migration, so a deployment that boots against an unmigrated database is caught here instead
+    # of failing on the first real request.
+    healthCheckPath: /health/ready
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 24.16.0
+      # Render terminates TLS at its own router and forwards one hop to this service. Anything
+      # higher would let a caller forge `X-Forwarded-For` and choose their own rate-limit bucket.
+      - key: TRUSTED_PROXY_HOPS
+        value: 1
+      # Neon connection string, pooled endpoint, with sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      # The service-account JSON, mounted as a secret file rather than pasted into a variable.
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/firebase-service-account.json
+      # The Cloudflare Pages origin. Native clients do not send an Origin header and the PWA calls
+      # the API same-origin through the Pages Function, so this mostly guards the browser during
+      # local development against a deployed API.
+      - key: CORS_ORIGINS
+        sync: false
+      # ADR 0012 credential encryption. Unset as a group disables device registration instead of
+      # blocking boot; set as a partial group the API refuses to start, which is intended.
+      - key: NOTIFICATION_CREDENTIAL_KEYS
+        sync: false
+      - key: NOTIFICATION_CREDENTIAL_ACTIVE_KEY_ID
+        sync: false
+      - key: NOTIFICATION_CREDENTIAL_PEPPER
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # Shared with the GitHub Actions scheduler. Unset keeps the internal job endpoint closed.
+      - key: NOTIFICATIONS_JOB_HMAC_SECRET
+        sync: false

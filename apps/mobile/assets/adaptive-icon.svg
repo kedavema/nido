@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">Nido</title>
+  <desc id="description">Un nido verde con dos puntos terracota, sin fondo</desc>
+  <!--
+    Android's adaptive icon crops the foreground to a mask it chooses, so only the central 66% is
+    guaranteed visible. The mark is scaled to about 600px inside a 1024 canvas and centred on it,
+    which keeps it clear of every mask shape. No background rect: the launcher composites this over
+    `adaptiveIcon.backgroundColor`.
+    Transform: the mark's own bounding box is centred near (256, 272.5) in the original 512 artwork.
+  -->
+  <g transform="translate(512 512) scale(1.72) translate(-256 -272.5)">
+    <path d="M106 280c58-84 242-84 300 0" fill="none" stroke="#1C4F47" stroke-width="48" stroke-linecap="round"/>
+    <path d="M144 325c48-50 176-50 224 0" fill="none" stroke="#1C4F47" stroke-width="48" stroke-linecap="round"/>
+    <circle cx="210" cy="226" r="30" fill="#B4632F"/>
+    <circle cx="302" cy="226" r="30" fill="#B4632F"/>
+  </g>
+</svg>

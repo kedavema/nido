@@ -32,6 +32,29 @@ const FOCUS_RING_CSS = `
 }
 `;
 
+/**
+ * Registers the service worker on every page load.
+ *
+ * It has to happen here and not from application code, because the worker serves two purposes and
+ * only one of them starts with a user action. Web Push registers it too, from the button that asks
+ * for notification permission — but the offline shell has to be cached on an ordinary visit, long
+ * before anyone opens notification settings. Registering the same URL twice is a no-op, so the two
+ * paths do not conflict.
+ *
+ * Inline in the document rather than inside React so it runs even if the bundle fails to boot,
+ * which is the one moment a cached shell is worth the most. `load` keeps it off the critical path.
+ */
+const SERVICE_WORKER_REGISTRATION_JS = `
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {
+      // A failed registration is not worth surfacing: the app works online without a worker, and
+      // the browser already logs the reason.
+    });
+  });
+}
+`;
+
 export default function Root({ children }: PropsWithChildren) {
   return (
     <html lang="es-PY">
@@ -46,6 +69,7 @@ export default function Root({ children }: PropsWithChildren) {
         <link href="/icon.svg" rel="icon" type="image/svg+xml" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: FOCUS_RING_CSS }} />
+        <script dangerouslySetInnerHTML={{ __html: SERVICE_WORKER_REGISTRATION_JS }} />
       </head>
       <body style={{ backgroundColor: themeTokens.colors.background }}>{children}</body>
     </html>

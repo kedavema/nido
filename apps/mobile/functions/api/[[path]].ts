@@ -49,5 +49,21 @@ export function onRequest({ request, env, params }: ProxyContext): Response | Pr
 
   // Constructing from the original Request carries method, body, and headers — `Authorization`
   // among them, which is the whole point: every authenticated call arrives through here.
-  return fetch(new Request(target, request));
+  const proxied = new Request(target, request);
+
+  // Overwrite, never append. The API's rate limiter reads the client address out of this header
+  // when it is configured to trust this proxy, so whatever the browser sent under the same name
+  // is an attempt to choose its own bucket and must not survive the hop. `CF-Connecting-IP` is
+  // set by Cloudflare itself and cannot be forged by the caller.
+  const clientIp = request.headers.get('cf-connecting-ip');
+  if (clientIp === null) {
+    // No trustworthy address to pass on, so the header is removed rather than guessed. The API
+    // then falls back to the socket address, which buckets this request with the rest of the
+    // proxy's traffic — a worse limit, not a weaker one.
+    proxied.headers.delete('x-forwarded-for');
+  } else {
+    proxied.headers.set('x-forwarded-for', clientIp);
+  }
+
+  return fetch(proxied);
 }
