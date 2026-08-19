@@ -2,7 +2,7 @@ import type { TransactionCurrency } from '@nido/contracts';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { themeTokens } from '@/theme/tokens';
 import { formatAmountDisplay, sanitizeAmountInput } from '@/utils/expense-form';
@@ -191,6 +191,19 @@ export function AmountField({
   readonly onChangeText: (value: string) => void;
 }) {
   const centered = variant === 'centered';
+  /*
+   * Measuring is a web-only workaround, and applying it on native regressed Android.
+   *
+   * The problem it solves does not exist here: react-native-web renders a real `<input>`, whose
+   * intrinsic width is a UA default measured in characters, so the field never fits and flex has
+   * nothing left to centre. On native the field already takes its content's width from
+   * `flexBasis: 'auto'`, which is what this variant did before the measurement was introduced.
+   *
+   * On Android the measured width did not track the text as it grew, so a longer amount kept the
+   * width of a short one and `textAlign: 'center'` clipped it at both ends — digits vanished off
+   * either side of the field.
+   */
+  const measures = centered && Platform.OS === 'web';
   const displayValue = formatAmountDisplay(value, currency);
   // What the field actually shows: an empty value renders the "0" placeholder, so that is what
   // gets measured. Otherwise an untouched field would size itself to nothing.
@@ -206,7 +219,7 @@ export function AmountField({
         <Text style={[styles.amountPrefix, centered && styles.amountPrefixCentered]}>
           {currency === 'PYG' ? 'Gs.' : 'USD'}
         </Text>
-        {centered ? (
+        {measures ? (
           /*
            * The measuring twin. It carries `AMOUNT_TYPOGRAPHY` — the same constant the input
            * uses — so the two cannot drift into disagreeing about how wide the text is, which
@@ -240,7 +253,7 @@ export function AmountField({
             centered && styles.amountInputCentered,
             // Before the first measurement lands there is nothing to apply, so the field keeps
             // today's behaviour for one frame rather than flashing at zero width.
-            centered && measuredWidth !== undefined
+            measures && measuredWidth !== undefined
               ? { width: measuredWidth + CARET_ALLOWANCE }
               : null,
           ]}
