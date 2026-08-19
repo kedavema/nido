@@ -71,21 +71,31 @@ New → Blueprint → seleccionar el repo. Render lee `render.yaml` y crea el we
 
 Completar los valores marcados `sync: false`:
 
-| Variable                                 | Valor                                       |
-| ---------------------------------------- | ------------------------------------------- |
-| `DATABASE_URL`                           | cadena pooled de Neon                       |
-| `FIREBASE_PROJECT_ID`                    | id del proyecto Firebase                    |
-| `CORS_ORIGINS`                           | dominio de Pages (se conoce recién en el 5) |
-| `NOTIFICATION_CREDENTIAL_KEYS`           | `k1:<base64>`                               |
-| `NOTIFICATION_CREDENTIAL_ACTIVE_KEY_ID`  | `k1`                                        |
-| `NOTIFICATION_CREDENTIAL_PEPPER`         | hex del paso 3                              |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | par del paso 3                              |
-| `VAPID_SUBJECT`                          | `mailto:` propio                            |
-| `NOTIFICATIONS_JOB_HMAC_SECRET`          | hex del paso 3                              |
+| Variable                                 | Valor                         |
+| ---------------------------------------- | ----------------------------- |
+| `DATABASE_URL`                           | cadena pooled de Neon         |
+| `FIREBASE_PROJECT_ID`                    | id del proyecto Firebase      |
+| `CORS_ORIGINS`                           | placeholder válido, ver abajo |
+| `NOTIFICATION_CREDENTIAL_KEYS`           | `k1:<base64>`                 |
+| `NOTIFICATION_CREDENTIAL_ACTIVE_KEY_ID`  | `k1`                          |
+| `NOTIFICATION_CREDENTIAL_PEPPER`         | hex del paso 3                |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | par del paso 3                |
+| `VAPID_SUBJECT`                          | `mailto:` propio              |
+| `NOTIFICATIONS_JOB_HMAC_SECRET`          | hex del paso 3                |
+
+`CORS_ORIGINS` no se conoce hasta el paso 5, pero **no puede quedar en blanco**: el schema le da un
+default solo cuando la variable está ausente, y el dashboard la crea con string vacío, que se parte
+en `['']`, falla la validación de URL y deja la API sin arrancar. Cargar `http://localhost:8081` como
+placeholder y reemplazarlo en el paso 5.
 
 Además, en **Secret Files**, subir el JSON de la service account con el path
 `/etc/secrets/firebase-service-account.json`, que es lo que `render.yaml` ya declara en
-`GOOGLE_APPLICATION_CREDENTIALS`.
+`GOOGLE_APPLICATION_CREDENTIALS`. **El nombre del archivo tiene que ser exactamente ese**: Render lo
+monta en `/etc/secrets/<nombre>`, así que cualquier otro nombre deja a firebase-admin sin
+credenciales. El síntoma es engañoso — la API arranca, `/health/ready` da 200 y un token malformado
+sigue devolviendo 401, porque un JWT roto se rechaza localmente sin tocar la credencial. Recién falla
+con un token real: `verifyIdToken(token, true)` pide `checkRevoked` y eso exige una consulta
+autenticada, que termina en 503 y en el mensaje "Nido no pudo conectarse con el servicio".
 
 `TRUSTED_PROXY_HOPS=1` ya viene fijado en el blueprint: Render termina TLS en su router y reenvía un
 salto. Subirlo por encima del conteo real permitiría a un cliente falsificar `X-Forwarded-For` y
@@ -119,7 +129,13 @@ Variable de **runtime** (Settings → Functions): `API_ORIGIN` con el origen de 
 final. Si falta, la función responde 503 con un mensaje explícito en lugar de caer al sitio
 estático.
 
-Con el dominio ya asignado, volver a Render y completar `CORS_ORIGINS`.
+Con el dominio ya asignado quedan dos cosas por cerrar hacia atrás:
+
+- **Render**: completar `CORS_ORIGINS` con el dominio de Pages.
+- **Firebase → Authentication → Settings → Authorized domains**: agregar ese mismo dominio. Firebase
+  rechaza el sign-in desde un dominio que no esté en esa lista, así que sin este paso el login web
+  falla con `auth/unauthorized-domain` aunque todo lo demás esté bien. El dominio no se conoce hasta
+  crear el proyecto de Pages, por eso el paso vive acá y no en la sección 2.
 
 ## 6. GitHub Actions
 
