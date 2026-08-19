@@ -30,17 +30,23 @@ const FOCUS_RING_CSS = `
     outline-offset: 2px;
   }
   /*
-   * Text controls get the ring as a box-shadow rather than an outline, because a shadow follows
-   * border-radius and an outline does not: on a rounded field Safari draws the outline as a plain
-   * rectangle, which is the green box around the input rather than a focused input.
+   * Text entry keeps no ring: the caret is its focus indicator, and it is the one every browser
+   * and every user already reads as "typing happens here".
    *
-   * The outline is cleared here too: the reset above only covers plain :focus, not :focus-visible.
+   * The ring was drawn for controls that have no such affordance -- a pressable that becomes a
+   * focusable div shows nothing at all without it. On a text field it only ever added a green
+   * rectangle, most visibly around the amount, which is borderless display text: with no border to
+   * hug, both an outline and a box-shadow can only draw a box around the glyphs.
+   *
+   * Per spec a text control matches :focus-visible on a plain tap, so on iOS this appeared every
+   * time a field was touched, not just under keyboard navigation.
+   *
+   * \`select\` is deliberately not included: it has no caret, so it still needs the ring.
    */
   input:focus-visible,
-  textarea:focus-visible,
-  select:focus-visible {
+  textarea:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px ${themeTokens.colors.primary};
+    box-shadow: none;
   }
 }
 `;
