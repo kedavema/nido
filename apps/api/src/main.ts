@@ -16,6 +16,7 @@ const config = app.get<ConfigService<Environment, true>>(ConfigService);
 
 configureApplication(app, {
   corsOrigins: config.get('CORS_ORIGINS', { infer: true }),
+  trustedProxyHops: config.get('TRUSTED_PROXY_HOPS', { infer: true }),
 });
 
 await app.listen(config.get('PORT', { infer: true }));

@@ -12,9 +12,17 @@ export const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'O
 
 export function configureApplication(
   app: NestExpressApplication,
-  options: { readonly corsOrigins: readonly string[] },
+  options: { readonly corsOrigins: readonly string[]; readonly trustedProxyHops?: number },
 ): void {
   app.disable('x-powered-by');
+  if ((options.trustedProxyHops ?? 0) > 0) {
+    // Numeric rather than `true`: `true` trusts the whole `X-Forwarded-For` chain, so any caller
+    // could prepend an address and hand themselves a fresh rate-limit bucket. A hop count trusts
+    // only the proxies we actually put there and reads the client address from the entry just
+    // before them. Left unset when the API is reached directly, where the socket address is
+    // already the truth and any forwarded header is a forgery.
+    app.set('trust proxy', options.trustedProxyHops);
+  }
   app.enableShutdownHooks();
   app.enableCors({
     origin: [...options.corsOrigins],

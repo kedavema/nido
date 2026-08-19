@@ -28,6 +28,9 @@ describe('environment validation', () => {
       DATABASE_URL: 'postgresql://localhost:5432/nido',
       FIREBASE_PROJECT_ID: 'nido-test',
       CORS_ORIGINS: ['http://localhost:8081', 'http://localhost:19006'],
+      // Trusting nothing is the default on purpose: a hop count higher than the real one lets a
+      // caller forge X-Forwarded-For and choose their own rate-limit bucket.
+      TRUSTED_PROXY_HOPS: 0,
     });
   });
 
@@ -46,6 +49,7 @@ describe('environment validation', () => {
       DATABASE_URL: 'postgresql://localhost:5432/nido',
       FIREBASE_PROJECT_ID: 'nido-production',
       CORS_ORIGINS: ['https://nido.example', 'https://admin.nido.example'],
+      TRUSTED_PROXY_HOPS: 0,
     });
   });
 
