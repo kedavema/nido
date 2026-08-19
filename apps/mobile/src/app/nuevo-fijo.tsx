@@ -43,7 +43,7 @@ import {
 import { monthlyFirstDueDate } from '@/utils/date-picker';
 import { amountToWireDecimal, isValidLocalDateString } from '@/utils/expense-form';
 import { dayOfMonth, firstDueDatePreview, NOTIFICATION_OFFSET_OPTIONS } from '@/utils/fijos-format';
-import { formatFullLocalDate, monthLabelOf, todayLocalDate } from '@/utils/movement-format';
+import { formatFullLocalDate, monthNameOf, todayLocalDate } from '@/utils/movement-format';
 
 const FREQUENCY_OPTIONS: readonly (readonly [FrequencyKind, string])[] = [
   ['ONE_TIME', 'Una vez'],
@@ -501,6 +501,7 @@ export default function NuevoFijoScreen() {
             <Text style={styles.dueDateHint}>
               Primer vencimiento: {formatFullLocalDate(resolvedFirstDueDate)}
               {startsAfterThisMonth ? ' · el día de este mes ya pasó' : ''}
+              {dayAlreadyPassed && !startsAfterThisMonth ? ' · vencido' : ''}
             </Text>
           )}
           {/*
@@ -510,22 +511,25 @@ export default function NuevoFijoScreen() {
             second is a tap away instead of impossible.
           */}
           {dayAlreadyPassed ? (
-            <ChipRow>
-              <Chip
-                label={`Empezar en ${monthLabelOf(nextMonthFirstDueDate)}`}
-                onPress={() => {
-                  update({ startThisMonth: false });
-                }}
-                selected={!draft.startThisMonth}
-              />
-              <Chip
-                label={`Empezar en ${monthLabelOf(thisMonthFirstDueDate)} (vencido)`}
-                onPress={() => {
-                  update({ startThisMonth: true });
-                }}
-                selected={draft.startThisMonth}
-              />
-            </ChipRow>
+            <>
+              <Text style={styles.dueDateHint}>Empezar en</Text>
+              <ChipRow>
+                <Chip
+                  label={monthNameOf(nextMonthFirstDueDate)}
+                  onPress={() => {
+                    update({ startThisMonth: false });
+                  }}
+                  selected={!draft.startThisMonth}
+                />
+                <Chip
+                  label={monthNameOf(thisMonthFirstDueDate)}
+                  onPress={() => {
+                    update({ startThisMonth: true });
+                  }}
+                  selected={draft.startThisMonth}
+                />
+              </ChipRow>
+            </>
           ) : null}
         </FormField>
 

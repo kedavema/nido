@@ -35,7 +35,7 @@ import { themeTokens } from '@/theme/tokens';
 import { monthlyFirstDueDate } from '@/utils/date-picker';
 import { amountToWireDecimal, isValidLocalDateString } from '@/utils/expense-form';
 import { dayOfMonth, firstDueDatePreview } from '@/utils/fijos-format';
-import { formatFullLocalDate, monthLabelOf, todayLocalDate } from '@/utils/movement-format';
+import { formatFullLocalDate, monthNameOf, todayLocalDate } from '@/utils/movement-format';
 
 const FREQUENCY_OPTIONS: readonly (readonly [FrequencyKind, string])[] = [
   ['ONE_TIME', 'Una vez'],
@@ -379,25 +379,29 @@ export default function NuevoIngresoScreen() {
           <Text style={styles.dueDateHint}>
             Primera fecha: {formatFullLocalDate(resolvedFirstDueDate)}
             {startsAfterThisMonth ? ' · el día de este mes ya pasó' : ''}
+            {dayAlreadyPassed && !startsAfterThisMonth ? ' · pendiente' : ''}
           </Text>
         )}
         {dayAlreadyPassed ? (
-          <ChipRow>
-            <Chip
-              label={`Empezar en ${monthLabelOf(nextMonthFirstDueDate)}`}
-              onPress={() => {
-                update({ startThisMonth: false });
-              }}
-              selected={!draft.startThisMonth}
-            />
-            <Chip
-              label={`Empezar en ${monthLabelOf(thisMonthFirstDueDate)} (pendiente)`}
-              onPress={() => {
-                update({ startThisMonth: true });
-              }}
-              selected={draft.startThisMonth}
-            />
-          </ChipRow>
+          <>
+            <Text style={styles.dueDateHint}>Empezar en</Text>
+            <ChipRow>
+              <Chip
+                label={monthNameOf(nextMonthFirstDueDate)}
+                onPress={() => {
+                  update({ startThisMonth: false });
+                }}
+                selected={!draft.startThisMonth}
+              />
+              <Chip
+                label={monthNameOf(thisMonthFirstDueDate)}
+                onPress={() => {
+                  update({ startThisMonth: true });
+                }}
+                selected={draft.startThisMonth}
+              />
+            </ChipRow>
+          </>
         ) : null}
       </FormField>
 
