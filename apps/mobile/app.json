@@ -5,11 +5,16 @@
     "version": "0.0.0",
     "platforms": ["android", "web"],
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "nido",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F6F4EF",
     "android": {
       "package": "com.nido.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F6F4EF"
+      },
       "predictiveBackGestureEnabled": true,
       "softwareKeyboardLayoutMode": "resize"
     },
