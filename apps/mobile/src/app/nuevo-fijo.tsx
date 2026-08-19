@@ -43,7 +43,7 @@ import {
 import { monthlyFirstDueDate } from '@/utils/date-picker';
 import { amountToWireDecimal, isValidLocalDateString } from '@/utils/expense-form';
 import { dayOfMonth, firstDueDatePreview, NOTIFICATION_OFFSET_OPTIONS } from '@/utils/fijos-format';
-import { formatFullLocalDate, todayLocalDate } from '@/utils/movement-format';
+import { formatFullLocalDate, monthLabelOf, todayLocalDate } from '@/utils/movement-format';
 
 const FREQUENCY_OPTIONS: readonly (readonly [FrequencyKind, string])[] = [
   ['ONE_TIME', 'Una vez'],
@@ -62,6 +62,8 @@ interface Draft {
   readonly frequency: FrequencyKind;
   readonly intervalMonths: number;
   readonly dayOfMonth: number;
+  /** Only meaningful once the chosen day has gone by; see `firstDueDatePreview`. */
+  readonly startThisMonth: boolean;
   readonly firstDueDate: string;
   readonly responsibleUserId: string | null;
   readonly notificationOffsets: readonly number[];
@@ -85,6 +87,7 @@ function buildDraft(item: RecurringItem | null, todayLocal: string): Draft {
       frequency: 'MONTHLY',
       intervalMonths: 2,
       dayOfMonth: Math.min(today, 31),
+      startThisMonth: false,
       firstDueDate: todayLocal,
       responsibleUserId: null,
       notificationOffsets: DEFAULT_OFFSETS,
@@ -98,6 +101,8 @@ function buildDraft(item: RecurringItem | null, todayLocal: string): Draft {
     frequency: item.frequency,
     intervalMonths: item.intervalMonths ?? 2,
     dayOfMonth: dayOfMonth(item.firstDueDate),
+    // An existing rule already has a first due date; editing must not silently move it.
+    startThisMonth: item.firstDueDate.slice(0, 7) === todayLocal.slice(0, 7),
     firstDueDate: item.firstDueDate,
     responsibleUserId: item.responsibleUserId,
     notificationOffsets: item.notificationOffsets,
@@ -189,16 +194,20 @@ export default function NuevoFijoScreen() {
   const childChips = subcategoryChips(expenseCategories, selectedRootId, draft.categoryId, 3);
 
   const usesDayOfMonth = draft.frequency === 'MONTHLY' || draft.frequency === 'EVERY_N_MONTHS';
+  // Both candidates, so the two chips can name their month rather than say "este/el que viene".
+  const thisMonthFirstDueDate = monthlyFirstDueDate(draft.dayOfMonth, todayLocal, true);
+  const nextMonthFirstDueDate = monthlyFirstDueDate(draft.dayOfMonth, todayLocal, false);
   const nameValid = draft.name.trim() !== '';
   const amountValid = draft.amount !== '' && draft.amount !== '0';
   const dateValid = usesDayOfMonth || isValidLocalDateString(draft.firstDueDate);
   const canSave = nameValid && amountValid && draft.categoryId !== undefined && dateValid;
 
   // What `save` will actually send, so the form can name it before it is sent rather than after.
-  const { date: resolvedFirstDueDate, startsAfterThisMonth } = firstDueDatePreview(
-    draft,
-    todayLocal,
-  );
+  const {
+    date: resolvedFirstDueDate,
+    startsAfterThisMonth,
+    dayAlreadyPassed,
+  } = firstDueDatePreview(draft, todayLocal);
 
   function update(patch: Partial<Draft>): void {
     setDraft((current) => (current === null ? current : { ...current, ...patch }));
@@ -279,7 +288,7 @@ export default function NuevoFijoScreen() {
     setSaving(true);
     setSubmitError(undefined);
     const firstDueDate = usesDayOfMonth
-      ? monthlyFirstDueDate(draft.dayOfMonth, todayLocal)
+      ? monthlyFirstDueDate(draft.dayOfMonth, todayLocal, draft.startThisMonth)
       : draft.firstDueDate;
     const estimatedAmount = amountToWireDecimal(draft.amount, 'PYG');
     try {
@@ -494,6 +503,30 @@ export default function NuevoFijoScreen() {
               {startsAfterThisMonth ? ' · el día de este mes ya pasó' : ''}
             </Text>
           )}
+          {/*
+            Offered only when the day has gone by, because that is the only case with two honest
+            answers: a bill starting next month, or a rule that already existed and whose payment
+            for this month is already due. Defaulting to next month keeps the first reading; the
+            second is a tap away instead of impossible.
+          */}
+          {dayAlreadyPassed ? (
+            <ChipRow>
+              <Chip
+                label={`Empezar en ${monthLabelOf(nextMonthFirstDueDate)}`}
+                onPress={() => {
+                  update({ startThisMonth: false });
+                }}
+                selected={!draft.startThisMonth}
+              />
+              <Chip
+                label={`Empezar en ${monthLabelOf(thisMonthFirstDueDate)} (vencido)`}
+                onPress={() => {
+                  update({ startThisMonth: true });
+                }}
+                selected={draft.startThisMonth}
+              />
+            </ChipRow>
+          ) : null}
         </FormField>
 
         <FormSection label="Responsable">

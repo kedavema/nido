@@ -189,6 +189,7 @@ describe('firstDueDatePreview', () => {
     expect(firstDueDatePreview(monthly, '2026-08-06')).toEqual({
       date: '2026-09-01',
       startsAfterThisMonth: true,
+      dayAlreadyPassed: true,
     });
   });
 
@@ -196,6 +197,7 @@ describe('firstDueDatePreview', () => {
     expect(firstDueDatePreview({ ...monthly, dayOfMonth: 20 }, '2026-08-06')).toEqual({
       date: '2026-08-20',
       startsAfterThisMonth: false,
+      dayAlreadyPassed: false,
     });
   });
 
@@ -203,6 +205,7 @@ describe('firstDueDatePreview', () => {
     expect(firstDueDatePreview({ ...monthly, dayOfMonth: 6 }, '2026-08-06')).toEqual({
       date: '2026-08-06',
       startsAfterThisMonth: false,
+      dayAlreadyPassed: false,
     });
   });
 
@@ -211,6 +214,7 @@ describe('firstDueDatePreview', () => {
     expect(firstDueDatePreview({ ...monthly, dayOfMonth: 31 }, '2027-02-15')).toEqual({
       date: '2027-02-28',
       startsAfterThisMonth: false,
+      dayAlreadyPassed: false,
     });
   });
 
@@ -220,7 +224,7 @@ describe('firstDueDatePreview', () => {
         { frequency: 'YEARLY', dayOfMonth: 1, firstDueDate: '2026-07-05' },
         '2026-08-06',
       ),
-    ).toEqual({ date: '2026-07-05', startsAfterThisMonth: false });
+    ).toEqual({ date: '2026-07-05', startsAfterThisMonth: false, dayAlreadyPassed: false });
   });
 
   it('has nothing to resolve while a free date is half-typed', () => {
@@ -229,6 +233,36 @@ describe('firstDueDatePreview', () => {
         { frequency: 'YEARLY', dayOfMonth: 1, firstDueDate: '2026-07' },
         '2026-08-06',
       ),
-    ).toEqual({ date: null, startsAfterThisMonth: false });
+    ).toEqual({ date: null, startsAfterThisMonth: false, dayAlreadyPassed: false });
+  });
+});
+
+describe('firstDueDatePreview month choice', () => {
+  const monthly = { frequency: 'MONTHLY', dayOfMonth: 15, firstDueDate: '' } as const;
+
+  it('reports a passed day so the form can offer the choice', () => {
+    expect(firstDueDatePreview(monthly, '2026-07-20')).toEqual({
+      date: '2026-08-15',
+      startsAfterThisMonth: true,
+      dayAlreadyPassed: true,
+    });
+  });
+
+  it('keeps reporting the day as passed once the current month is chosen', () => {
+    // `dayAlreadyPassed` decides whether the choice is shown at all, so it must not flip when the
+    // choice is taken -- otherwise picking "this month" would make the control disappear.
+    expect(firstDueDatePreview({ ...monthly, startThisMonth: true }, '2026-07-20')).toEqual({
+      date: '2026-07-15',
+      startsAfterThisMonth: false,
+      dayAlreadyPassed: true,
+    });
+  });
+
+  it('offers nothing when the day is still ahead', () => {
+    expect(firstDueDatePreview({ ...monthly, dayOfMonth: 25 }, '2026-07-20')).toEqual({
+      date: '2026-07-25',
+      startsAfterThisMonth: false,
+      dayAlreadyPassed: false,
+    });
   });
 });

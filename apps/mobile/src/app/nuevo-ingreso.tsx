@@ -34,8 +34,8 @@ import { errorFeedback, successFeedback } from '@/lib/haptics';
 import { themeTokens } from '@/theme/tokens';
 import { monthlyFirstDueDate } from '@/utils/date-picker';
 import { amountToWireDecimal, isValidLocalDateString } from '@/utils/expense-form';
-import { dayOfMonth } from '@/utils/fijos-format';
-import { todayLocalDate } from '@/utils/movement-format';
+import { dayOfMonth, firstDueDatePreview } from '@/utils/fijos-format';
+import { formatFullLocalDate, monthLabelOf, todayLocalDate } from '@/utils/movement-format';
 
 const FREQUENCY_OPTIONS: readonly (readonly [FrequencyKind, string])[] = [
   ['ONE_TIME', 'Una vez'],
@@ -54,6 +54,8 @@ interface Draft {
   readonly frequency: FrequencyKind;
   readonly intervalMonths: number;
   readonly dayOfMonth: number;
+  /** Only meaningful once the chosen day has gone by; see `firstDueDatePreview`. */
+  readonly startThisMonth: boolean;
   readonly firstDueDate: string;
   readonly responsibleUserId: string | null;
 }
@@ -85,6 +87,7 @@ function buildDraft(item: RecurringItem | null, todayLocal: string): Draft {
       frequency: 'ONE_TIME',
       intervalMonths: 2,
       dayOfMonth: Math.min(today, 31),
+      startThisMonth: false,
       firstDueDate: todayLocal,
       responsibleUserId: null,
     };
@@ -97,6 +100,8 @@ function buildDraft(item: RecurringItem | null, todayLocal: string): Draft {
     frequency: item.frequency,
     intervalMonths: item.intervalMonths ?? 2,
     dayOfMonth: dayOfMonth(item.firstDueDate),
+    // An existing rule already has a date; editing must not silently move it.
+    startThisMonth: item.firstDueDate.slice(0, 7) === todayLocalDate().slice(0, 7),
     firstDueDate: item.firstDueDate,
     responsibleUserId: item.responsibleUserId,
   };
@@ -183,6 +188,13 @@ export default function NuevoIngresoScreen() {
   const nameValid = draft.name.trim() !== '';
   const amountValid = draft.amount !== '' && draft.amount !== '0';
   const dateValid = usesDayOfMonth || isValidLocalDateString(draft.firstDueDate);
+  const {
+    date: resolvedFirstDueDate,
+    startsAfterThisMonth,
+    dayAlreadyPassed,
+  } = firstDueDatePreview(draft, todayLocal);
+  const thisMonthFirstDueDate = monthlyFirstDueDate(draft.dayOfMonth, todayLocal, true);
+  const nextMonthFirstDueDate = monthlyFirstDueDate(draft.dayOfMonth, todayLocal, false);
   const canSave = nameValid && amountValid && dateValid;
 
   function update(patch: Partial<Draft>): void {
@@ -198,7 +210,7 @@ export default function NuevoIngresoScreen() {
     setSaving(true);
     setSubmitError(undefined);
     const firstDueDate = usesDayOfMonth
-      ? monthlyFirstDueDate(draft.dayOfMonth, todayLocal)
+      ? monthlyFirstDueDate(draft.dayOfMonth, todayLocal, draft.startThisMonth)
       : draft.firstDueDate;
     const estimatedAmount = amountToWireDecimal(draft.amount, 'PYG');
     try {
@@ -359,6 +371,34 @@ export default function NuevoIngresoScreen() {
             value={draft.firstDueDate}
           />
         )}
+        {/*
+          The fijo form has named the resolved date since #244; this one never did, so a day
+          already gone by moved the schedule to next month with nothing on screen saying so.
+        */}
+        {resolvedFirstDueDate === null ? null : (
+          <Text style={styles.dueDateHint}>
+            Primera fecha: {formatFullLocalDate(resolvedFirstDueDate)}
+            {startsAfterThisMonth ? ' · el día de este mes ya pasó' : ''}
+          </Text>
+        )}
+        {dayAlreadyPassed ? (
+          <ChipRow>
+            <Chip
+              label={`Empezar en ${monthLabelOf(nextMonthFirstDueDate)}`}
+              onPress={() => {
+                update({ startThisMonth: false });
+              }}
+              selected={!draft.startThisMonth}
+            />
+            <Chip
+              label={`Empezar en ${monthLabelOf(thisMonthFirstDueDate)} (pendiente)`}
+              onPress={() => {
+                update({ startThisMonth: true });
+              }}
+              selected={draft.startThisMonth}
+            />
+          </ChipRow>
+        ) : null}
       </FormField>
 
       <FormSection label="Lo recibe">
@@ -385,6 +425,12 @@ export default function NuevoIngresoScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Same treatment as the fijo form's, so the two forms read alike.
+  dueDateHint: {
+    color: themeTokens.colors.inkSecondary,
+    fontFamily: themeTokens.typography.families.bodyRegular,
+    fontSize: themeTokens.typography.scale.secondary,
+  },
   footerHint: {
     color: themeTokens.colors.inkSecondary,
     fontFamily: themeTokens.typography.families.bodyRegular,
