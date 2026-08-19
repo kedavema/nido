@@ -20,6 +20,7 @@
     "config": "expo config --type public --json",
     "dev": "expo start",
     "doctor": "expo-doctor .",
+    "eas-build-post-install": "cd ../.. && pnpm turbo run build --filter=@nido/mobile^...",
     "lint": "eslint . --max-warnings=0",
     "start": "expo start",
     "test": "vitest run",
