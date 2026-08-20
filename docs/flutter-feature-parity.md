@@ -9,8 +9,17 @@ La foundation Flutter existe en `apps/flutter` con scaffolds nativos completos (
 value types exactos de money/date (FLT-006/FLT-007), contratos Dart contrastados con fixtures Zod
 compartidos (`packages/contracts/fixtures/`) y el API client foundation (FLT-008). Los tres builds
 (Web, APK debug, iOS simulator sin firma) compilan desde el árbol actual y el startup test de
-integración corre headless vía chromedriver. Ninguna feature de producto migró todavía: las
-capacidades de plataforma siguen `IN_PROGRESS` hasta validación con features reales.
+integración corre headless vía chromedriver.
+
+M2 (Identity & household) portó a Flutter la máquina de sesión única (`initializing /
+unauthenticated / authenticated-without-household / authenticated-with-household /
+recoverable-error`), Firebase Auth con Google (popup en Web, credencial nativa
+Android/iOS vía `google_sign_in`), redirects puros de go_router sin requests duplicadas ni
+oscilación, contratos Dart de households con cinco fixtures compartidos nuevos, y la UI mínima
+del milestone (sign-in, onboarding, members, invitación one-use con token mostrado una sola vez,
+aceptación). El login real de Google con credenciales del proyecto —y la configuración
+Firebase/Google NUEVA de iOS— siguen pendientes como verificación manual: ninguna de las tres
+features toca `VERIFIED` sin eso más la comparación contra legacy.
 
 ## Estados
 
@@ -28,20 +37,20 @@ Para RN/PWA:
 
 ## Features de producto
 
-| Feature                         | RN          | PWA         | Flutter | Tests                                              | Estado      |
-| ------------------------------- | ----------- | ----------- | ------- | -------------------------------------------------- | ----------- |
-| Authentication & session        | IMPLEMENTED | IMPLEMENTED | —       | Legacy unit + backend; Firebase real manual        | NOT_STARTED |
-| Household onboarding            | IMPLEMENTED | IMPLEMENTED | —       | Backend integration; sin E2E cliente               | NOT_STARTED |
-| Members & invitations           | IMPLEMENTED | IMPLEMENTED | —       | Backend integration/concurrency; sin E2E cliente   | NOT_STARTED |
-| Dashboard                       | IMPLEMENTED | IMPLEMENTED | —       | Legacy utility/API tests; sin widget/E2E           | NOT_STARTED |
-| Transactions CRUD & filters     | IMPLEMENTED | IMPLEMENTED | —       | Money/API/utility tests; sin widget/E2E            | NOT_STARTED |
-| Offline transaction creation    | IMPLEMENTED | IMPLEMENTED | —       | Queue/store/idempotency tests; sin E2E reconnect   | NOT_STARTED |
-| Categories & subcategories      | IMPLEMENTED | IMPLEMENTED | —       | Backend contract/integration; sin widget/E2E       | NOT_STARTED |
-| Payment sources                 | IMPLEMENTED | IMPLEMENTED | —       | Backend contract/integration; sin widget/E2E       | NOT_STARTED |
-| Monthly budgets                 | IMPLEMENTED | IMPLEMENTED | —       | Backend + legacy calculation tests; sin widget/E2E | NOT_STARTED |
-| Recurring expenses & settlement | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                 | NOT_STARTED |
-| Expected income & receipt       | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                 | NOT_STARTED |
-| Reports                         | IMPLEMENTED | IMPLEMENTED | —       | Backend/legacy formatter tests; sin visual/E2E     | NOT_STARTED |
+| Feature                         | RN          | PWA         | Flutter | Tests                                                                                                                 | Estado      |
+| ------------------------------- | ----------- | ----------- | ------- | --------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Authentication & session        | IMPLEMENTED | IMPLEMENTED | PARTIAL | Session machine/controller/redirect unit+widget+E2E headless (auth fake); Firebase real manual PENDIENTE              | IN_PROGRESS |
+| Household onboarding            | IMPLEMENTED | IMPLEMENTED | PARTIAL | Controller (reconciliación incluida) + widget + fixtures Zod↔Dart; comparación legacy/backend real pendiente          | PARITY      |
+| Members & invitations           | IMPLEMENTED | IMPLEMENTED | PARTIAL | Widget (loading/error/retry, token one-use, redacción) + fixtures Zod↔Dart; comparación legacy/backend real pendiente | PARITY      |
+| Dashboard                       | IMPLEMENTED | IMPLEMENTED | —       | Legacy utility/API tests; sin widget/E2E                                                                              | NOT_STARTED |
+| Transactions CRUD & filters     | IMPLEMENTED | IMPLEMENTED | —       | Money/API/utility tests; sin widget/E2E                                                                               | NOT_STARTED |
+| Offline transaction creation    | IMPLEMENTED | IMPLEMENTED | —       | Queue/store/idempotency tests; sin E2E reconnect                                                                      | NOT_STARTED |
+| Categories & subcategories      | IMPLEMENTED | IMPLEMENTED | —       | Backend contract/integration; sin widget/E2E                                                                          | NOT_STARTED |
+| Payment sources                 | IMPLEMENTED | IMPLEMENTED | —       | Backend contract/integration; sin widget/E2E                                                                          | NOT_STARTED |
+| Monthly budgets                 | IMPLEMENTED | IMPLEMENTED | —       | Backend + legacy calculation tests; sin widget/E2E                                                                    | NOT_STARTED |
+| Recurring expenses & settlement | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                                                                                    | NOT_STARTED |
+| Expected income & receipt       | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                                                                                    | NOT_STARTED |
+| Reports                         | IMPLEMENTED | IMPLEMENTED | —       | Backend/legacy formatter tests; sin visual/E2E                                                                        | NOT_STARTED |
 
 ## Capacidades de plataforma
 

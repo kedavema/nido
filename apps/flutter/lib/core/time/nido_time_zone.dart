@@ -26,3 +26,29 @@ LocalDate todayInAsuncion(DateTime nowUtc) {
 YearMonth currentMonthInAsuncion(DateTime nowUtc) {
   return YearMonth.of(todayInAsuncion(nowUtc));
 }
+
+const List<String> _spanishMonthAbbreviations = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
+
+/// Renders a UTC instant as a short Spanish date-time in America/Asuncion
+/// (e.g. `16 jul 2026, 09:00`). Hand-rolled instead of `intl` locale data:
+/// one fixed locale and timezone don't justify the dependency yet.
+String formatAsuncionDateTime(DateTime instant) {
+  final local = instant.toUtc().add(_asuncionOffset);
+  final month = _spanishMonthAbbreviations[local.month - 1];
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '${local.day} $month ${local.year}, $hour:$minute';
+}

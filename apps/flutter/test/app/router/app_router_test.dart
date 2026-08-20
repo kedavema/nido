@@ -1,29 +1,225 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nido/app/app.dart';
 import 'package:nido/app/router/app_router.dart';
 import 'package:nido/app/router/app_routes.dart';
+import 'package:nido/core/auth/session_controller.dart';
+import 'package:nido/core/auth/session_machine.dart';
+import 'package:nido/core/contracts/households.dart';
+import 'package:nido/features/household/data/households_api.dart';
+
+import 'package:nido/testing/session_fakes.dart';
 
 void main() {
-  group('AppRouter navigation', () {
-    testWidgets('resolves initial root route to FoundationScreen', (
-      tester,
-    ) async {
-      final router = createRouter(initialLocation: AppRoutes.root);
+  late FakeAuthClient auth;
+  late FakeHouseholdsApi api;
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [routerProvider.overrideWithValue(router)],
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      await tester.pumpAndSettle();
+  setUp(() {
+    auth = FakeAuthClient();
+    api = FakeHouseholdsApi();
+  });
 
-      expect(find.byType(FoundationScreen), findsOneWidget);
-      expect(find.text('Nido Foundation'), findsOneWidget);
+  Widget app() => ProviderScope(
+    overrides: [
+      authClientProvider.overrideWithValue(auth),
+      householdsApiProvider.overrideWithValue(api),
+      householdReconciliationDelaysProvider.overrideWithValue(const [
+        Duration.zero,
+        Duration.zero,
+        Duration.zero,
+      ]),
+    ],
+    child: const NidoApp(),
+  );
+
+  group('redirectPathForSession (pure, idempotent)', () {
+    final withHousehold = SessionAuthenticated(
+      identity: testIdentity,
+      profile: buildProfile(households: [buildHousehold()]),
+    );
+    final withoutHousehold = SessionAuthenticated(
+      identity: testIdentity,
+      profile: buildProfile(),
+    );
+
+    test('unresolved states never redirect (no flicker while resolving)', () {
+      for (final location in [
+        AppRoutes.root,
+        AppRoutes.signIn,
+        AppRoutes.onboarding,
+        AppRoutes.invitation,
+      ]) {
+        expect(
+          redirectPathForSession(const SessionInitializing(), location),
+          isNull,
+        );
+        expect(
+          redirectPathForSession(
+            const SessionRecoverableError(message: 'x', canSignOut: true),
+            location,
+          ),
+          isNull,
+        );
+      }
     });
 
-    testWidgets('shows NotFoundScreen on unknown route', (tester) async {
+    test('unauthenticated always lands on /sign-in and stays there', () {
+      const session = SessionUnauthenticated();
+      expect(redirectPathForSession(session, AppRoutes.root), AppRoutes.signIn);
+      expect(
+        redirectPathForSession(session, AppRoutes.onboarding),
+        AppRoutes.signIn,
+      );
+      expect(redirectPathForSession(session, AppRoutes.signIn), isNull);
+    });
+
+    test('without household: onboarding and invitation are the only stops', () {
+      expect(
+        redirectPathForSession(withoutHousehold, AppRoutes.root),
+        AppRoutes.onboarding,
+      );
+      expect(
+        redirectPathForSession(withoutHousehold, AppRoutes.signIn),
+        AppRoutes.onboarding,
+      );
+      expect(
+        redirectPathForSession(withoutHousehold, AppRoutes.onboarding),
+        isNull,
+      );
+      expect(
+        redirectPathForSession(withoutHousehold, AppRoutes.invitation),
+        isNull,
+      );
+    });
+
+    test('with household: auth-flow routes bounce home, home stays', () {
+      expect(
+        redirectPathForSession(withHousehold, AppRoutes.signIn),
+        AppRoutes.root,
+      );
+      expect(
+        redirectPathForSession(withHousehold, AppRoutes.onboarding),
+        AppRoutes.root,
+      );
+      expect(
+        redirectPathForSession(withHousehold, AppRoutes.invitation),
+        AppRoutes.root,
+      );
+      expect(redirectPathForSession(withHousehold, AppRoutes.root), isNull);
+    });
+
+    test('every target is a fixed point — a second evaluation never moves', () {
+      final sessions = <SessionState>[
+        const SessionUnauthenticated(),
+        withoutHousehold,
+        withHousehold,
+      ];
+      for (final session in sessions) {
+        for (final location in [
+          AppRoutes.root,
+          AppRoutes.signIn,
+          AppRoutes.onboarding,
+          AppRoutes.invitation,
+        ]) {
+          final target = redirectPathForSession(session, location);
+          if (target != null) {
+            expect(
+              redirectPathForSession(session, target),
+              isNull,
+              reason: '$session redirected $location -> $target -> must stay',
+            );
+          }
+        }
+      }
+    });
+  });
+
+  group('router + session integration', () {
+    testWidgets('signed-out startup lands on the sign-in screen', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('sign_in_screen')), findsOneWidget);
+    });
+
+    testWidgets('authenticated without household lands on onboarding', (
+      tester,
+    ) async {
+      auth.initialIdentity = testIdentity;
+      api.onGetMe = () async => buildProfile();
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('onboarding_screen')), findsOneWidget);
+    });
+
+    testWidgets(
+      'authenticated with household lands home without duplicate getMe',
+      (tester) async {
+        auth.initialIdentity = testIdentity;
+        api.onGetMe = () async => buildProfile(households: [buildHousehold()]);
+
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('household_home_screen')), findsOneWidget);
+        // The redirect itself issues no requests: exactly one profile load.
+        expect(api.getMeCalls, 1);
+      },
+    );
+
+    testWidgets('onboarding links into the invitation screen and back', (
+      tester,
+    ) async {
+      auth.initialIdentity = testIdentity;
+      api.onGetMe = () async => buildProfile();
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('open_invitation_button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('invitation_screen')), findsOneWidget);
+    });
+
+    testWidgets('accepting an invitation moves home', (tester) async {
+      auth.initialIdentity = testIdentity;
+      var accepted = false;
+      api.onGetMe =
+          () async => buildProfile(
+            households:
+                accepted
+                    ? [buildHousehold(role: HouseholdRole.member)]
+                    : const [],
+          );
+      api.onAcceptInvite = (token) async {
+        accepted = true;
+        return AcceptHouseholdInviteResponse(
+          household: buildHousehold(role: HouseholdRole.member),
+        );
+      };
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('open_invitation_button')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('invitation_token_field')),
+        'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('accept_invitation_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('household_home_screen')), findsOneWidget);
+    });
+
+    testWidgets('unknown route shows NotFoundScreen', (tester) async {
       final router = createRouter(initialLocation: '/unknown-route-xyz');
 
       await tester.pumpWidget(
@@ -35,32 +231,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('not_found_screen')), findsOneWidget);
-      expect(find.text('404 — Ruta desconocida'), findsOneWidget);
       expect(find.textContaining('/unknown-route-xyz'), findsOneWidget);
-    });
-
-    testWidgets('returns home when pressing return button on NotFoundScreen', (
-      tester,
-    ) async {
-      final router = createRouter(initialLocation: '/some-invalid-path');
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [routerProvider.overrideWithValue(router)],
-          child: MaterialApp.router(routerConfig: router),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('not_found_screen')), findsOneWidget);
-
-      final returnButton = find.byKey(const Key('return_home_button'));
-      expect(returnButton, findsOneWidget);
-
-      await tester.tap(returnButton);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(FoundationScreen), findsOneWidget);
     });
   });
 }

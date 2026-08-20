@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/session_controller.dart';
 import 'api_client.dart';
 import 'api_config.dart';
 
@@ -10,14 +11,12 @@ final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 /// Where the API lives (see [resolveApiBaseUrl] for the per-platform rule).
 final apiBaseUrlProvider = Provider<String>((ref) => resolveApiBaseUrl());
 
-/// Supplies the Firebase ID Token per request. Real implementation arrives
-/// with M2 authentication; foundation fails loudly instead of shipping a
-/// fake session.
+/// Supplies the Firebase ID Token per request, straight from the Firebase
+/// SDK session (M2). Returning `null` means "no session"; refresh stays
+/// inside the SDK. Tests override [authClientProvider] (or this provider).
 final idTokenProvider = Provider<IdTokenProvider>((ref) {
-  return () =>
-      throw UnimplementedError(
-        'Firebase authentication is implemented in M2; override idTokenProvider',
-      );
+  final auth = ref.watch(authClientProvider);
+  return auth.getIdToken;
 });
 
 /// The application's single [ApiClient]. Tests override [idTokenProvider]

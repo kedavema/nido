@@ -27,10 +27,10 @@ apps/flutter/
     app/
       app.dart                     # MaterialApp.router with ProviderScope consumer
       bootstrap/
-        bootstrap.dart             # Root bootstrap initializing ProviderScope
+        bootstrap.dart             # ProviderScope root + conditional Firebase init
       router/
-        app_router.dart            # go_router configuration and route definitions
-        app_routes.dart            # Route path constants
+        app_router.dart            # go_router: session redirects + route definitions
+        app_routes.dart            # Route path constants (/sign-in, /onboarding, ...)
       theme/
         app_theme.dart             # ThemeData (Material 3) configuration
         app_colors.dart            # Color tokens (#1C4F47, #F6F4EF, etc.)
@@ -43,11 +43,20 @@ apps/flutter/
         api_client.dart            # Dio client: 15s timeout, single GET cold-start retry, typed errors
         api_config.dart            # API base URL resolution (dart-define / same-origin web)
         api_providers.dart         # Riverpod providers for clock, base URL, token, client
+      auth/
+        auth_client.dart           # Platform-agnostic Firebase Auth surface (test seam)
+        firebase_auth_client.dart  # Real impl: Google popup (web) / google_sign_in (native)
+        firebase_environment.dart  # Public Firebase config via --dart-define, validated
+        session_machine.dart       # Sealed session states + destination mapping (pure)
+        session_controller.dart    # Riverpod session machine (getMe dedup, reconciliation)
+        auth_error_messages.dart   # Safe Spanish copy for auth failures (codes only)
+        authenticated_identity.dart # Firebase-side identity value type
       contracts/
         json_reader.dart           # Strict JSON boundary reader (no loose Map<String, dynamic>)
         wire_codecs.dart           # Wire codecs for instants, local dates, months, emails
         health.dart                # Health contract DTO
         identity.dart              # AuthenticatedUser DTO
+        households.dart            # GetMe/households/members/invites DTOs (M2)
         transactions.dart          # Transaction DTOs + enums + fx cross-field rules
         monthly_summary.dart       # Monthly summary / budget DTOs
       errors/
@@ -103,10 +112,37 @@ step for USD→PYG conversion. `double` is never used for money or FX.
 
 ## Environment Strategy
 
-Public configuration values are passed at build/run time via Dart defines without embedding secrets:
+Public configuration values are passed at build/run time via Dart defines without embedding secrets
+(they mirror the legacy `EXPO_PUBLIC_*` values; Firebase web API keys are public identifiers):
 
 - `--dart-define=API_URL=http://localhost:3000`
-- `--dart-define=FIREBASE_PROJECT_ID=nido-ci`
+- `--dart-define=FIREBASE_API_KEY=...`
+- `--dart-define=FIREBASE_AUTH_DOMAIN=...` (Web only)
+- `--dart-define=FIREBASE_PROJECT_ID=...`
+- `--dart-define=FIREBASE_APP_ID=...`
+- `--dart-define=FIREBASE_MESSAGING_SENDER_ID=...`
+- `--dart-define=GOOGLE_WEB_CLIENT_ID=...` (the audience the API verifies)
+- `--dart-define=GOOGLE_IOS_CLIENT_ID=...` (iOS only — iOS requires its own NEW
+  Firebase/Google OAuth configuration; Android/web values do not carry over)
+
+A build without a complete Firebase configuration still boots and resolves the
+session to a recoverable error naming the missing keys. Session material
+persists via each platform SDK's own storage (Keychain on iOS, app-private
+storage on Android, Firebase browser persistence on Web) — never shared
+preferences, never a JavaScript "secure storage" simulation. iOS deployment
+target is 13.0 (required by `firebase_auth`).
+
+## Authentication & Session (M2)
+
+`sessionControllerProvider` exposes the single session machine
+(`initializing / unauthenticated / authenticated-without-household /
+authenticated-with-household / recoverable-error`, ported from
+`apps/mobile/src/auth/session-machine.ts`). go_router redirects read only the
+resolved state (pure, idempotent — no request duplication, no route
+oscillation); unresolved states render in place through `SessionGate`.
+Invite tokens are never logged: `/v1/invites/:token/accept` is observed only
+as its route template, and the one-use token is shown exactly once for manual
+delivery.
 
 ## Validation Commands
 

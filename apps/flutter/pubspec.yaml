@@ -23,6 +23,16 @@ dependencies:
   # HTTP client with interceptors, timeouts and cancellation (FLT-008)
   dio: ^5.8.0
 
+  # Firebase Auth with Google, preserving backend identity semantics (FLT-001).
+  # Session material persists via each platform SDK's own storage (Keychain on
+  # iOS, app-private storage on Android, Firebase browser persistence on Web) —
+  # never shared preferences, never a JS "secure storage" simulation.
+  firebase_core: ^3.12.1
+  firebase_auth: ^5.5.1
+
+  # Native Google credential flow for Android/iOS; Web uses Firebase popup.
+  google_sign_in: ^6.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
