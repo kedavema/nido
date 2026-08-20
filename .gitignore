@@ -20,6 +20,24 @@ apps/mobile/.expo/
 apps/mobile/android/
 apps/mobile/ios/
 
+# Flutter local/generated state
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+apps/flutter/build/
+apps/flutter/.dart_tool/
+apps/flutter/ios/Flutter/Generated.xcconfig
+apps/flutter/ios/Flutter/app.framework
+apps/flutter/ios/Flutter/Flutter.framework
+apps/flutter/ios/Flutter/Flutter.podspec
+apps/flutter/ios/Flutter/flutter_export_environment.sh
+apps/flutter/ios/Pods/
+apps/flutter/ios/.symlinks/
+apps/flutter/ios/Runner/GeneratedPluginRegistrant.*
+apps/flutter/android/local.properties
+apps/flutter/android/.gradle/
+apps/flutter/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
 # Local environment files (examples remain versioned)
 .env
 .env.*

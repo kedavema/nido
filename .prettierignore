@@ -1,5 +1,13 @@
 .agents/
 .expo/
+# Xcode-owned asset catalogs and Flutter template docs keep their generated style
+apps/flutter/ios/Runner/Assets.xcassets/
+apps/flutter/ios/Runner.xcodeproj/
+apps/flutter/ios/Runner.xcworkspace/
+# Native build artifacts (already git-ignored)
+apps/flutter/build/
+apps/flutter/android/app/.cxx/
+apps/flutter/android/.gradle/
 .turbo/
 coverage/
 design/nido-v0.3/*.html
