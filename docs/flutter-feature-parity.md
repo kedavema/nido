@@ -5,7 +5,12 @@ Baseline legacy: `3c61b48`
 Progreso de producto: **0 / 12 features VERIFIED (0%)**
 
 Esta matriz y la database **Flutter Features** de Notion representan el mismo estado conceptual.
-Flutter todavía no existe en el árbol, por lo que todas las features están `NOT_STARTED`.
+La foundation Flutter existe en `apps/flutter` con scaffolds nativos completos (Android, iOS, Web),
+value types exactos de money/date (FLT-006/FLT-007), contratos Dart contrastados con fixtures Zod
+compartidos (`packages/contracts/fixtures/`) y el API client foundation (FLT-008). Los tres builds
+(Web, APK debug, iOS simulator sin firma) compilan desde el árbol actual y el startup test de
+integración corre headless vía chromedriver. Ninguna feature de producto migró todavía: las
+capacidades de plataforma siguen `IN_PROGRESS` hasta validación con features reales.
 
 ## Estados
 
@@ -42,15 +47,15 @@ Para RN/PWA:
 
 Estas filas no cuentan como features de producto para el porcentaje, pero bloquean milestones.
 
-| Capability                       | RN            | PWA           | Flutter | Tests                              | Estado      |
-| -------------------------------- | ------------- | ------------- | ------- | ---------------------------------- | ----------- |
-| Android runtime                  | IMPLEMENTED   | N/A           | —       | Build/manual legacy; CI incompleta | NOT_STARTED |
-| Web/PWA install & offline shell  | N/A           | IMPLEMENTED   | —       | Sin browser/service-worker E2E     | NOT_STARTED |
-| Responsive desktop composition   | NOT_AVAILABLE | NOT_AVAILABLE | —       | Ninguno                            | NOT_STARTED |
-| iOS runtime                      | NOT_AVAILABLE | N/A           | —       | Ninguno; greenfield                | NOT_STARTED |
-| Deep links/direct Web refresh    | PARTIAL       | PARTIAL       | —       | Sin hosting E2E                    | NOT_STARTED |
-| Clean local store init (FLT-015) | N/A           | N/A           | —       | Unit/store initialization tests    | NOT_STARTED |
-| Push registration & delivery     | PARTIAL       | PARTIAL       | —       | Backend/helpers; sin flujo E2E     | NOT_STARTED |
+| Capability                       | RN            | PWA           | Flutter | Tests                                        | Estado      |
+| -------------------------------- | ------------- | ------------- | ------- | -------------------------------------------- | ----------- |
+| Android runtime                  | IMPLEMENTED   | N/A           | PARTIAL | Unit/widget; `flutter build apk --debug` OK  | IN_PROGRESS |
+| Web/PWA install & offline shell  | N/A           | IMPLEMENTED   | PARTIAL | Build Web + startup E2E; offline sin validar | IN_PROGRESS |
+| Responsive desktop composition   | NOT_AVAILABLE | NOT_AVAILABLE | PARTIAL | Breakpoint/widget tests de foundation        | IN_PROGRESS |
+| iOS runtime                      | NOT_AVAILABLE | N/A           | PARTIAL | Unit/widget; build simulator sin firma OK    | IN_PROGRESS |
+| Deep links/direct Web refresh    | PARTIAL       | PARTIAL       | PARTIAL | Root/404; rutas legacy y hosting pendientes  | IN_PROGRESS |
+| Clean local store init (FLT-015) | N/A           | N/A           | —       | Unit/store initialization tests              | NOT_STARTED |
+| Push registration & delivery     | PARTIAL       | PARTIAL       | —       | Backend/helpers; sin flujo E2E               | NOT_STARTED |
 
 Push se registra como capacidad parcial/net-new y se excluye del denominador: existen backend y
 helpers Web, pero no una experiencia cliente usable que pueda considerarse feature legacy. Solo

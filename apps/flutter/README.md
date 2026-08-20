@@ -2,6 +2,12 @@
 
 Universal Flutter application for Android, iOS, and Web/PWA, targeting household finances for two.
 
+## Toolchain
+
+- Flutter `3.29.0` with Dart `3.7.0`.
+- CI pins this exact version because Dart formatter output can change between SDK releases.
+- `pubspec.lock` is committed and CI enforces it; update it deliberately with the pinned SDK.
+
 ## Architecture & Decisions
 
 - **Side-by-side coexistence** ([`FLT-002`](../../docs/flutter-migration-decisions.md)): Coexists with `apps/mobile` until parity verification is complete.
@@ -33,9 +39,34 @@ apps/flutter/
         app_radii.dart             # Radii tokens (card, modal, button, chip)
         app_theme_extension.dart   # NidoThemeExtension (category swatches, chart colors)
     core/
+      api/
+        api_client.dart            # Dio client: 15s timeout, single GET cold-start retry, typed errors
+        api_config.dart            # API base URL resolution (dart-define / same-origin web)
+        api_providers.dart         # Riverpod providers for clock, base URL, token, client
+      contracts/
+        json_reader.dart           # Strict JSON boundary reader (no loose Map<String, dynamic>)
+        wire_codecs.dart           # Wire codecs for instants, local dates, months, emails
+        health.dart                # Health contract DTO
+        identity.dart              # AuthenticatedUser DTO
+        transactions.dart          # Transaction DTOs + enums + fx cross-field rules
+        monthly_summary.dart       # Monthly summary / budget DTOs
+      errors/
+        app_error.dart             # Sealed AppError hierarchy with Spanish UI copy
+      money/
+        currency.dart              # PYG (scale 0) / USD (scale 2)
+        money.dart                 # Money value type (BigInt minor units, FLT-006)
+        fx_rate.dart               # Exact FX rate to PYG (unscaled BigInt + scale)
+        base_amount_pyg.dart       # BaseAmountPyg + ADR 0001 half-up compute + MonthlyBalancePyg
+        decimal_wire.dart          # Canonical wire decimal parsing + half-up division
+        money_errors.dart          # Domain errors mirrored from apps/api money.ts
       responsive/
         responsive_breakpoints.dart # Semantic breakpoint definitions (compact/medium/expanded)
         responsive_layout.dart      # LayoutBuilder wrapper for responsive composition
+      time/
+        local_date.dart            # LocalDate (yyyy-MM-dd, real-calendar validation)
+        year_month.dart            # YearMonth (yyyy-MM, ranges, last-day clamp)
+        wire_instant.dart          # UTC instant codec + legacy 15:00Z occurredAt rule
+        nido_time_zone.dart        # America/Asuncion (fixed UTC-3 since DST abolition)
   test/
     app/
       app_test.dart                # App bootstrap test
@@ -48,10 +79,27 @@ apps/flutter/
         responsive_layout_test.dart # Breakpoint switching tests
   integration_test/
     app_startup_test.dart          # E2E foundation startup test
+  test_driver/
+    integration_test.dart          # Host-side driver (flutter drive -d web-server)
   android/                         # Android native project (package: com.nido.mobile)
   ios/                             # iOS native project (bundle ID: com.nido.mobile)
-  web/                             # Web target (index.html, manifest.json)
+  web/                             # Web target (index.html, manifest.json, Nido icons)
 ```
+
+## Contracts & Fixtures
+
+Dart DTOs mirror the Zod schemas in `packages/contracts`. Both sides parse the
+same versioned fixtures:
+
+- `packages/contracts/fixtures/*.json` — validated by
+  `packages/contracts/test/fixtures.spec.ts` (Zod) and parsed by
+  `test/core/contracts/contracts_test.dart` (Dart).
+- A contract change that edits a fixture forces both clients to move in the
+  same change.
+
+Money semantics follow ADR 0001 / FLT-006: decimal strings on the wire, `BigInt`
+minor units in memory, PYG scale 0, USD scale 2, and a single half-up rounding
+step for USD→PYG conversion. `double` is never used for money or FX.
 
 ## Environment Strategy
 
@@ -64,9 +112,22 @@ Public configuration values are passed at build/run time via Dart defines withou
 
 ```bash
 cd apps/flutter
-flutter pub get
+flutter pub get --enforce-lockfile
 dart format --output=none --set-exit-if-changed .
 flutter analyze
 flutter test
 flutter build web
+flutter build apk --debug
+flutter build ios --simulator --no-codesign   # macOS + Xcode only
+```
+
+`integration_test/` does not run under `flutter test`; CI runs it headless
+against chromedriver:
+
+```bash
+chromedriver --port=4444 &
+flutter drive \
+  --driver=test_driver/integration_test.dart \
+  --target=integration_test/app_startup_test.dart \
+  -d web-server --headless
 ```
