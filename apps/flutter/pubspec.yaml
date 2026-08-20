@@ -11,11 +11,17 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Official iOS-style icon font used by Flutter's adaptive Cupertino widgets.
+  cupertino_icons: ^1.0.8
+
   # State management and dependency injection (FLT-004)
   flutter_riverpod: ^2.6.1
 
   # Declarative routing, deep links, web URL preservation (FLT-005)
   go_router: ^14.8.1
+
+  # HTTP client with interceptors, timeouts and cancellation (FLT-008)
+  dio: ^5.8.0
 
 dev_dependencies:
   flutter_test:

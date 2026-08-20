@@ -1,0 +1,46 @@
+{
+  "balance": "-125000",
+  "incomeTotal": "3000000",
+  "expenseTotal": "3125000",
+  "categoryBreakdown": [
+    {
+      "categoryId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "categoryName": "Supermercado",
+      "amount": "1302083",
+      "percentage": 41.67
+    }
+  ],
+  "recentTransactions": [
+    {
+      "id": "5f1b2f0a-9c3d-4e5f-8a6b-1c2d3e4f5a6b",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "type": "EXPENSE",
+      "amount": "150000",
+      "currency": "PYG",
+      "fxRateToBase": null,
+      "baseAmountPyg": "150000",
+      "occurredAt": "2026-08-15T18:30:00.000Z",
+      "localDate": "2026-08-15",
+      "categoryId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "paymentSourceId": null,
+      "description": "Supermercado semanal",
+      "notes": null,
+      "origin": "MANUAL",
+      "createdBy": "9b2fca8e-4a1d-4d2b-9f3e-5a6b7c8d9e0f",
+      "updatedBy": "9b2fca8e-4a1d-4d2b-9f3e-5a6b7c8d9e0f",
+      "createdAt": "2026-08-15T18:30:05.000Z",
+      "updatedAt": "2026-08-15T18:30:05.000Z"
+    }
+  ],
+  "budget": {
+    "totalLimitPyg": "2500000",
+    "allocatedPyg": "2000000",
+    "unallocatedPyg": "500000",
+    "spentPyg": "1800000",
+    "availablePyg": "200000",
+    "pendingCommitmentsPyg": "300000",
+    "projectedAvailablePyg": "-100000",
+    "spentPercentage": 72,
+    "projectedPercentage": 84
+  }
+}
