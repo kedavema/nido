@@ -106,3 +106,20 @@ class UnexpectedError extends AppError {
   const UnexpectedError({super.statusCode})
     : super(userMessage: 'No pudimos completar la acción.');
 }
+
+/// Public build configuration is missing or malformed (the Flutter port of
+/// the legacy `PublicEnvironmentError`): the app cannot start a session and
+/// only a rebuilt binary fixes it, so the message names the offending keys —
+/// they are public configuration names, never secret values.
+class ConfigurationError extends AppError {
+  ConfigurationError(this.invalidKeys)
+    : super(
+        userMessage:
+            'Faltan valores de configuración pública: '
+            '${invalidKeys.join(', ')}. Reconstruí la app con los '
+            '--dart-define requeridos.',
+      );
+
+  /// The `--dart-define` keys that were missing or invalid.
+  final List<String> invalidKeys;
+}

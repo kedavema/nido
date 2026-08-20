@@ -1,0 +1,9 @@
+{
+  "invite": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "householdId": "00000000-0000-4000-8000-000000000002",
+    "email": "kevin@example.com",
+    "expiresAt": "2026-07-19T12:05:00.000Z"
+  },
+  "token": "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
+}

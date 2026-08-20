@@ -60,6 +60,7 @@ class ApiClient {
     required T Function(Object? json) parse,
     Map<String, String>? query,
     CancelToken? cancelToken,
+    String? logPath,
   }) async {
     try {
       return await _attempt(
@@ -69,6 +70,7 @@ class ApiClient {
         query: query,
         cancelToken: cancelToken,
         timeout: _requestTimeout,
+        logPath: logPath,
       );
     } on TimeoutError {
       // The screen is about to sit on a spinner far longer than usual; the
@@ -80,12 +82,17 @@ class ApiClient {
         query: query,
         cancelToken: cancelToken,
         timeout: _coldStartTimeout,
+        logPath: logPath,
       );
     }
   }
 
   /// Mutations: never retried (see class doc). [idempotencyKey] must equal
   /// the body's `clientMutationId` when the endpoint uses ADR 0003.
+  ///
+  /// [logPath] is the route template observability sees instead of [path].
+  /// REQUIRED whenever the path embeds secret material (an invite token):
+  /// the real path is only ever given to the transport.
   Future<T> mutate<T>(
     String path, {
     required String method,
@@ -93,6 +100,7 @@ class ApiClient {
     Object? body,
     String? idempotencyKey,
     CancelToken? cancelToken,
+    String? logPath,
   }) {
     return _attempt(
       method: method,
@@ -102,6 +110,7 @@ class ApiClient {
       idempotencyKey: idempotencyKey,
       cancelToken: cancelToken,
       timeout: _requestTimeout,
+      logPath: logPath,
     );
   }
 
@@ -114,7 +123,9 @@ class ApiClient {
     Object? body,
     String? idempotencyKey,
     CancelToken? cancelToken,
+    String? logPath,
   }) async {
+    final observedPath = logPath ?? path;
     final String? token;
     try {
       token = await _getIdToken();
@@ -150,15 +161,30 @@ class ApiClient {
           )
           .timeout(timeout);
     } on DioException catch (error) {
-      _logRequest(method, path, status: null, elapsed: stopwatch.elapsed);
+      _logRequest(
+        method,
+        observedPath,
+        status: null,
+        elapsed: stopwatch.elapsed,
+      );
       throw _mapTransportError(error);
     } catch (_) {
-      _logRequest(method, path, status: null, elapsed: stopwatch.elapsed);
+      _logRequest(
+        method,
+        observedPath,
+        status: null,
+        elapsed: stopwatch.elapsed,
+      );
       throw const TimeoutError();
     }
 
     final status = response.statusCode ?? 0;
-    _logRequest(method, path, status: status, elapsed: stopwatch.elapsed);
+    _logRequest(
+      method,
+      observedPath,
+      status: status,
+      elapsed: stopwatch.elapsed,
+    );
 
     if (status < 200 || status >= 300) {
       throw _errorForStatus(status);

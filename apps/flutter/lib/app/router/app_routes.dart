@@ -2,9 +2,15 @@
 class AppRoutes {
   const AppRoutes._();
 
-  /// Root foundation route.
+  /// Authenticated-with-household home.
   static const String root = '/';
 
-  /// Explicit unknown / not found route.
-  static const String notFound = '/404';
+  /// Google sign-in for the unauthenticated state.
+  static const String signIn = '/sign-in';
+
+  /// Household creation for an authenticated user without a household.
+  static const String onboarding = '/onboarding';
+
+  /// One-use invitation token acceptance.
+  static const String invitation = '/invitation';
 }

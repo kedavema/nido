@@ -6,8 +6,13 @@ import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
 import {
+  AcceptHouseholdInviteResponseSchema,
   AuthenticatedUserSchema,
+  CreateHouseholdInviteResponseSchema,
+  CreateHouseholdResponseSchema,
   CreateTransactionRequestSchema,
+  GetHouseholdMembersResponseSchema,
+  GetMeResponseSchema,
   MonthlySummaryResponseSchema,
   TransactionSchema,
 } from '../src/index.js';
@@ -29,6 +34,17 @@ const cases: readonly { readonly file: string; readonly schema: z.ZodType }[] = 
   { file: 'create-transaction-request.usd.json', schema: CreateTransactionRequestSchema },
   { file: 'monthly-summary.json', schema: MonthlySummaryResponseSchema },
   { file: 'authenticated-user.json', schema: AuthenticatedUserSchema },
+  { file: 'get-me.json', schema: GetMeResponseSchema },
+  { file: 'create-household-response.json', schema: CreateHouseholdResponseSchema },
+  { file: 'household-members.json', schema: GetHouseholdMembersResponseSchema },
+  {
+    file: 'create-household-invite-response.json',
+    schema: CreateHouseholdInviteResponseSchema,
+  },
+  {
+    file: 'accept-household-invite-response.json',
+    schema: AcceptHouseholdInviteResponseSchema,
+  },
 ];
 
 describe('shared contract fixtures', () => {

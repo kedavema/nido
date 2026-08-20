@@ -1,0 +1,21 @@
+{
+  "user": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "email": "ale@example.com",
+    "displayName": "Ale",
+    "avatarUrl": null,
+    "timezone": "America/Asuncion",
+    "createdAt": "2026-07-16T12:00:00.000Z",
+    "updatedAt": "2026-07-16T12:00:00.000Z"
+  },
+  "households": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "name": "Casa Ale & Kevin",
+      "baseCurrency": "PYG",
+      "timezone": "America/Asuncion",
+      "role": "OWNER",
+      "joinedAt": "2026-07-16T12:05:00.000Z"
+    }
+  ]
+}
