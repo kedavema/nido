@@ -6,10 +6,5 @@ import '../app.dart';
 Future<void> bootstrap({List<Override> overrides = const []}) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  runApp(
-    ProviderScope(
-      overrides: overrides,
-      child: const NidoApp(),
-    ),
-  );
+  runApp(ProviderScope(overrides: overrides, child: const NidoApp()));
 }

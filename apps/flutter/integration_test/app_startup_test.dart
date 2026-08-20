@@ -11,11 +11,7 @@ void main() {
     testWidgets(
       'boots up Nido, displays foundation screen, and verifies core cards',
       (tester) async {
-        await tester.pumpWidget(
-          const ProviderScope(
-            child: NidoApp(),
-          ),
-        );
+        await tester.pumpWidget(const ProviderScope(child: NidoApp()));
         await tester.pumpAndSettle();
 
         expect(find.byType(FoundationScreen), findsOneWidget);

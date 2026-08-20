@@ -13,12 +13,8 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            routerProvider.overrideWithValue(router),
-          ],
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
+          overrides: [routerProvider.overrideWithValue(router)],
+          child: MaterialApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -32,12 +28,8 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            routerProvider.overrideWithValue(router),
-          ],
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
+          overrides: [routerProvider.overrideWithValue(router)],
+          child: MaterialApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();
@@ -54,12 +46,8 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            routerProvider.overrideWithValue(router),
-          ],
-          child: MaterialApp.router(
-            routerConfig: router,
-          ),
+          overrides: [routerProvider.overrideWithValue(router)],
+          child: MaterialApp.router(routerConfig: router),
         ),
       );
       await tester.pumpAndSettle();

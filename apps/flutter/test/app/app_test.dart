@@ -7,11 +7,7 @@ import 'package:nido/app/router/app_router.dart';
 void main() {
   group('NidoApp bootstrap', () {
     testWidgets('boots up and renders foundation screen', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: NidoApp(),
-        ),
-      );
+      await tester.pumpWidget(const ProviderScope(child: NidoApp()));
       await tester.pumpAndSettle();
 
       expect(find.byType(MaterialApp), findsOneWidget);

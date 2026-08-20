@@ -15,15 +15,15 @@ void main() {
       expect(theme.useMaterial3, isTrue);
       expect(theme.brightness, Brightness.light);
       expect(theme.colorScheme.primary, AppColors.primary);
-      expect(theme.colorScheme.primary.value, 0xFF1C4F47);
+      expect(theme.colorScheme.primary.toARGB32(), 0xFF1C4F47);
       expect(theme.colorScheme.secondary, AppColors.accent);
-      expect(theme.colorScheme.secondary.value, 0xFFB4632F);
+      expect(theme.colorScheme.secondary.toARGB32(), 0xFFB4632F);
       expect(theme.colorScheme.surface, AppColors.surface);
-      expect(theme.colorScheme.surface.value, 0xFFFFFFFF);
+      expect(theme.colorScheme.surface.toARGB32(), 0xFFFFFFFF);
       expect(theme.colorScheme.error, AppColors.danger);
-      expect(theme.colorScheme.error.value, 0xFFB3372E);
+      expect(theme.colorScheme.error.toARGB32(), 0xFFB3372E);
       expect(theme.scaffoldBackgroundColor, AppColors.background);
-      expect(theme.scaffoldBackgroundColor.value, 0xFFF6F4EF);
+      expect(theme.scaffoldBackgroundColor.toARGB32(), 0xFFF6F4EF);
     });
 
     test('configures typography scale and font families correctly', () {
@@ -49,7 +49,7 @@ void main() {
         expect(ext.chartMark, AppColors.chartMark);
         expect(ext.chartTrack, AppColors.chartTrack);
         expect(ext.categorySwatches.length, 9);
-        expect(ext.categorySwatches.first.value, 0xFF3E5C76);
+        expect(ext.categorySwatches.first.toARGB32(), 0xFF3E5C76);
       },
     );
 

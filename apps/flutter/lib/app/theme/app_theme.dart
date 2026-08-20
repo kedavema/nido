@@ -38,9 +38,7 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.background,
       textTheme: textTheme,
-      extensions: <ThemeExtension<dynamic>>[
-        NidoThemeExtension.canonical(),
-      ],
+      extensions: <ThemeExtension<dynamic>>[NidoThemeExtension.canonical()],
       // App Bar
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,

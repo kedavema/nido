@@ -18,9 +18,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 GoRouter createRouter({String initialLocation = AppRoutes.root}) {
   return GoRouter(
     initialLocation: initialLocation,
-    errorBuilder: (context, state) => NotFoundScreen(
-      path: state.uri.toString(),
-    ),
+    errorBuilder:
+        (context, state) => NotFoundScreen(path: state.uri.toString()),
     routes: <RouteBase>[
       GoRoute(
         path: AppRoutes.root,
@@ -51,12 +50,15 @@ class FoundationScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: ResponsiveLayout(
-          compact: (context, breakpoint) =>
-              _CompactFoundationView(breakpoint: breakpoint),
-          medium: (context, breakpoint) =>
-              _MediumFoundationView(breakpoint: breakpoint),
-          expanded: (context, breakpoint) =>
-              _ExpandedFoundationView(breakpoint: breakpoint),
+          compact:
+              (context, breakpoint) =>
+                  _CompactFoundationView(breakpoint: breakpoint),
+          medium:
+              (context, breakpoint) =>
+                  _MediumFoundationView(breakpoint: breakpoint),
+          expanded:
+              (context, breakpoint) =>
+                  _ExpandedFoundationView(breakpoint: breakpoint),
         ),
       ),
     );
@@ -233,10 +235,7 @@ class _BrandOverviewCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Nido App Shell',
-              style: theme.textTheme.titleMedium,
-            ),
+            Text('Nido App Shell', style: theme.textTheme.titleMedium),
             const SizedBox(height: AppSpacing.base),
             Text(
               'Finanzas del hogar para dos. Foundation bootstrap con Flutter, '
@@ -274,19 +273,13 @@ class _ThemePaletteCard extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                _ColorBadge(
-                  name: 'Primary',
-                  color: AppColors.primary,
-                ),
+                _ColorBadge(name: 'Primary', color: AppColors.primary),
                 _ColorBadge(
                   name: 'PrimaryTint',
                   color: AppColors.primaryTint,
                   textColor: AppColors.ink,
                 ),
-                _ColorBadge(
-                  name: 'Accent',
-                  color: AppColors.accent,
-                ),
+                _ColorBadge(name: 'Accent', color: AppColors.accent),
                 _ColorBadge(
                   name: 'Background',
                   color: AppColors.background,
@@ -297,18 +290,9 @@ class _ThemePaletteCard extends StatelessWidget {
                   color: AppColors.surface,
                   textColor: AppColors.ink,
                 ),
-                _ColorBadge(
-                  name: 'Danger',
-                  color: AppColors.danger,
-                ),
-                _ColorBadge(
-                  name: 'Warning',
-                  color: AppColors.warning,
-                ),
-                _ColorBadge(
-                  name: 'Success',
-                  color: AppColors.success,
-                ),
+                _ColorBadge(name: 'Danger', color: AppColors.danger),
+                _ColorBadge(name: 'Warning', color: AppColors.warning),
+                _ColorBadge(name: 'Success', color: AppColors.success),
               ],
             ),
             if (nidoExt != null) ...[
@@ -426,10 +410,7 @@ class _InteractiveControlsCard extends StatelessWidget {
 
 /// Explicit 404 / Unknown Route Screen.
 class NotFoundScreen extends StatelessWidget {
-  const NotFoundScreen({
-    super.key,
-    required this.path,
-  });
+  const NotFoundScreen({super.key, required this.path});
 
   final String path;
 
@@ -439,9 +420,7 @@ class NotFoundScreen extends StatelessWidget {
 
     return Scaffold(
       key: const Key('not_found_screen'),
-      appBar: AppBar(
-        title: const Text('Página no encontrada'),
-      ),
+      appBar: AppBar(title: const Text('Página no encontrada')),
       body: Center(
         child: Padding(
           padding: AppSpacing.screenPadding,
