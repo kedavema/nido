@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.nido.mobile"
-    compileSdk = 34
+    compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -16,15 +16,16 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
         applicationId = "com.nido.mobile"
+        // Matches the legacy Expo Android app floor; the Flutter default is lower.
         minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     buildTypes {

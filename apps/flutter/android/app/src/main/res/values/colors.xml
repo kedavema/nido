@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Canonical Nido background token (#F6F4EF), shown while the Flutter UI initializes. -->
+    <color name="nido_launch_background">#F6F4EF</color>
+</resources>
