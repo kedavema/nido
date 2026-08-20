@@ -116,7 +116,12 @@ jobs:
 
       - name: Check formatting
         working-directory: apps/flutter
-        run: dart format --output=none --set-exit-if-changed .
+        run: |
+          dart format --output=none --set-exit-if-changed . || {
+            echo "Formatting issues detected. Showing formatted output:"
+            dart format --output=show .
+            exit 1
+          }
 
       - name: Analyze code
         working-directory: apps/flutter
