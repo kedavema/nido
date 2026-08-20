@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:nido/app/router/app_router.dart';
 import 'package:nido/app/router/app_routes.dart';
 
 void main() {
   group('AppRouter navigation', () {
-    testWidgets('resolves initial root route to FoundationScreen', (tester) async {
+    testWidgets('resolves initial root route to FoundationScreen', (
+      tester,
+    ) async {
       final router = createRouter(initialLocation: AppRoutes.root);
 
       await tester.pumpWidget(
@@ -46,7 +47,9 @@ void main() {
       expect(find.textContaining('/unknown-route-xyz'), findsOneWidget);
     });
 
-    testWidgets('returns home when pressing return button on NotFoundScreen', (tester) async {
+    testWidgets('returns home when pressing return button on NotFoundScreen', (
+      tester,
+    ) async {
       final router = createRouter(initialLocation: '/some-invalid-path');
 
       await tester.pumpWidget(

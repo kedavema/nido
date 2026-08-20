@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
-/// Theme extension for Nido design tokens that fall outside standard Material 3 ColorScheme.
+/// Theme extension for Nido design tokens that fall outside standard
+/// Material 3 ColorScheme.
 @immutable
 class NidoThemeExtension extends ThemeExtension<NidoThemeExtension> {
   const NidoThemeExtension({
@@ -73,11 +74,19 @@ class NidoThemeExtension extends ThemeExtension<NidoThemeExtension> {
     }
     return NidoThemeExtension(
       primaryTint: Color.lerp(primaryTint, other.primaryTint, t) ?? primaryTint,
-      surfaceMuted: Color.lerp(surfaceMuted, other.surfaceMuted, t) ?? surfaceMuted,
-      borderStrong: Color.lerp(borderStrong, other.borderStrong, t) ?? borderStrong,
-      dangerBackground: Color.lerp(dangerBackground, other.dangerBackground, t) ?? dangerBackground,
-      warningBackground: Color.lerp(warningBackground, other.warningBackground, t) ?? warningBackground,
-      successBackground: Color.lerp(successBackground, other.successBackground, t) ?? successBackground,
+      surfaceMuted:
+          Color.lerp(surfaceMuted, other.surfaceMuted, t) ?? surfaceMuted,
+      borderStrong:
+          Color.lerp(borderStrong, other.borderStrong, t) ?? borderStrong,
+      dangerBackground:
+          Color.lerp(dangerBackground, other.dangerBackground, t) ??
+          dangerBackground,
+      warningBackground:
+          Color.lerp(warningBackground, other.warningBackground, t) ??
+          warningBackground,
+      successBackground:
+          Color.lerp(successBackground, other.successBackground, t) ??
+          successBackground,
       chartMark: Color.lerp(chartMark, other.chartMark, t) ?? chartMark,
       chartTrack: Color.lerp(chartTrack, other.chartTrack, t) ?? chartTrack,
       categorySwatches: other.categorySwatches,

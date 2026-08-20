@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-/// Canonical border radius tokens for Nido matching apps/mobile/src/theme/tokens.ts.
+/// Canonical border radius tokens for Nido matching
+/// apps/mobile/src/theme/tokens.ts.
 class AppRadii {
   const AppRadii._();
 
@@ -10,8 +11,16 @@ class AppRadii {
   static const double chip = 999.0;
 
   // BorderRadius helpers
-  static const BorderRadius cardRadius = BorderRadius.all(Radius.circular(card));
-  static const BorderRadius modalRadius = BorderRadius.all(Radius.circular(modal));
-  static const BorderRadius buttonRadius = BorderRadius.all(Radius.circular(button));
-  static const BorderRadius chipRadius = BorderRadius.all(Radius.circular(chip));
+  static const BorderRadius cardRadius = BorderRadius.all(
+    Radius.circular(card),
+  );
+  static const BorderRadius modalRadius = BorderRadius.all(
+    Radius.circular(modal),
+  );
+  static const BorderRadius buttonRadius = BorderRadius.all(
+    Radius.circular(button),
+  );
+  static const BorderRadius chipRadius = BorderRadius.all(
+    Radius.circular(chip),
+  );
 }

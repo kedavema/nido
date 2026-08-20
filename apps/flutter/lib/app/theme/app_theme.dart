@@ -5,7 +5,8 @@ import 'app_spacing.dart';
 import 'app_theme_extension.dart';
 import 'app_typography.dart';
 
-/// Central theme configuration for Nido adhering to Material 3 and canonical tokens.
+/// Central theme configuration for Nido adhering to Material 3 and canonical
+/// tokens.
 class AppTheme {
   const AppTheme._();
 
@@ -70,8 +71,13 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.surface,
           minimumSize: const Size(44, 48),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.buttonRadius),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppRadii.buttonRadius,
+          ),
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -81,8 +87,13 @@ class AppTheme {
           foregroundColor: AppColors.primary,
           side: const BorderSide(color: AppColors.borderStrong),
           minimumSize: const Size(44, 48),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.buttonRadius),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppRadii.buttonRadius,
+          ),
           textStyle: textTheme.labelLarge?.copyWith(color: AppColors.primary),
         ),
       ),
@@ -91,8 +102,13 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
           minimumSize: const Size(44, 44),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.base),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.buttonRadius),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.base,
+          ),
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppRadii.buttonRadius,
+          ),
           textStyle: textTheme.bodyLarge?.copyWith(color: AppColors.primary),
         ),
       ),
@@ -100,7 +116,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.screen, vertical: AppSpacing.cardGap),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screen,
+          vertical: AppSpacing.cardGap,
+        ),
         border: const OutlineInputBorder(
           borderRadius: AppRadii.buttonRadius,
           borderSide: BorderSide(color: AppColors.border),
@@ -131,7 +150,10 @@ class AppTheme {
         shape: const RoundedRectangleBorder(borderRadius: AppRadii.chipRadius),
         side: BorderSide.none,
         labelStyle: textTheme.bodySmall,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.base),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.base,
+        ),
       ),
       // Dividers
       dividerTheme: const DividerThemeData(

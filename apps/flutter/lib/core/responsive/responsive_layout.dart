@@ -2,16 +2,14 @@ import 'package:flutter/widgets.dart';
 import 'responsive_breakpoints.dart';
 
 /// A constraint-driven builder callback for responsive layout compositions.
-typedef ResponsiveWidgetBuilder = Widget Function(
-  BuildContext context,
-  BreakpointSize breakpoint,
-);
+typedef ResponsiveWidgetBuilder =
+    Widget Function(BuildContext context, BreakpointSize breakpoint);
 
 /// A widget that selects and renders different compositions based on available
 /// width constraints instead of platform checks.
 ///
-/// Uses [LayoutBuilder] to respond dynamically to parent constraints (e.g. split
-/// screens, resizable browser windows, tablets).
+/// Uses [LayoutBuilder] to respond dynamically to parent constraints
+/// (e.g. split screens, resizable browser windows, tablets).
 class ResponsiveLayout extends StatelessWidget {
   const ResponsiveLayout({
     super.key,

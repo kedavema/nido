@@ -16,7 +16,9 @@ void main() {
   });
 
   group('ResponsiveLayout', () {
-    testWidgets('renders compact builder on compact space (<600dp)', (tester) async {
+    testWidgets('renders compact builder on compact space (<600dp)', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(400, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -38,7 +40,9 @@ void main() {
       expect(find.text('EXPANDED_VIEW'), findsNothing);
     });
 
-    testWidgets('renders medium builder on medium space (600..839dp)', (tester) async {
+    testWidgets('renders medium builder on medium space (600..839dp)', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(720, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -60,7 +64,9 @@ void main() {
       expect(find.text('EXPANDED_VIEW'), findsNothing);
     });
 
-    testWidgets('renders expanded builder on expanded space (>=840dp)', (tester) async {
+    testWidgets('renders expanded builder on expanded space (>=840dp)', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -82,7 +88,9 @@ void main() {
       expect(find.text('MEDIUM_VIEW'), findsNothing);
     });
 
-    testWidgets('falls back to compact builder when medium/expanded omitted', (tester) async {
+    testWidgets('falls back to compact builder when medium/expanded omitted', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);

@@ -51,9 +51,12 @@ class FoundationScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: ResponsiveLayout(
-          compact: (context, breakpoint) => _CompactFoundationView(breakpoint: breakpoint),
-          medium: (context, breakpoint) => _MediumFoundationView(breakpoint: breakpoint),
-          expanded: (context, breakpoint) => _ExpandedFoundationView(breakpoint: breakpoint),
+          compact: (context, breakpoint) =>
+              _CompactFoundationView(breakpoint: breakpoint),
+          medium: (context, breakpoint) =>
+              _MediumFoundationView(breakpoint: breakpoint),
+          expanded: (context, breakpoint) =>
+              _ExpandedFoundationView(breakpoint: breakpoint),
         ),
       ),
     );
@@ -119,7 +122,8 @@ class _MediumFoundationView extends StatelessWidget {
   }
 }
 
-/// Expanded composition (>= 840dp). Wide desktop layout with side rail and multi-pane cards.
+/// Expanded composition (>= 840dp). Wide desktop layout with side rail
+/// and multi-pane cards.
 class _ExpandedFoundationView extends StatelessWidget {
   const _ExpandedFoundationView({required this.breakpoint});
 
@@ -181,7 +185,7 @@ class _BreakpointBadgeCard extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primaryTint,
                 borderRadius: AppRadii.buttonRadius,
               ),
@@ -201,7 +205,8 @@ class _BreakpointBadgeCard extends StatelessWidget {
                     style: theme.textTheme.titleMedium,
                   ),
                   Text(
-                    'Ancho actual: ${width.toStringAsFixed(1)} dp (constraint-driven)',
+                    'Ancho: ${width.toStringAsFixed(1)} dp '
+                    '(constraint-driven)',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -234,7 +239,8 @@ class _BrandOverviewCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.base),
             Text(
-              'Finanzas del hogar para dos. Foundation bootstrap con Flutter, Riverpod, GoRouter y tokens de diseño Material 3.',
+              'Finanzas del hogar para dos. Foundation bootstrap con Flutter, '
+              'Riverpod, GoRouter y tokens de diseño Material 3.',
               style: theme.textTheme.bodyMedium,
             ),
           ],
@@ -268,14 +274,41 @@ class _ThemePaletteCard extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                _ColorBadge(name: 'Primary', color: AppColors.primary),
-                _ColorBadge(name: 'PrimaryTint', color: AppColors.primaryTint, textColor: AppColors.ink),
-                _ColorBadge(name: 'Accent', color: AppColors.accent),
-                _ColorBadge(name: 'Background', color: AppColors.background, textColor: AppColors.ink),
-                _ColorBadge(name: 'Surface', color: AppColors.surface, textColor: AppColors.ink),
-                _ColorBadge(name: 'Danger', color: AppColors.danger),
-                _ColorBadge(name: 'Warning', color: AppColors.warning),
-                _ColorBadge(name: 'Success', color: AppColors.success),
+                _ColorBadge(
+                  name: 'Primary',
+                  color: AppColors.primary,
+                ),
+                _ColorBadge(
+                  name: 'PrimaryTint',
+                  color: AppColors.primaryTint,
+                  textColor: AppColors.ink,
+                ),
+                _ColorBadge(
+                  name: 'Accent',
+                  color: AppColors.accent,
+                ),
+                _ColorBadge(
+                  name: 'Background',
+                  color: AppColors.background,
+                  textColor: AppColors.ink,
+                ),
+                _ColorBadge(
+                  name: 'Surface',
+                  color: AppColors.surface,
+                  textColor: AppColors.ink,
+                ),
+                _ColorBadge(
+                  name: 'Danger',
+                  color: AppColors.danger,
+                ),
+                _ColorBadge(
+                  name: 'Warning',
+                  color: AppColors.warning,
+                ),
+                _ColorBadge(
+                  name: 'Success',
+                  color: AppColors.success,
+                ),
               ],
             ),
             if (nidoExt != null) ...[
@@ -324,7 +357,10 @@ class _ColorBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.base),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.base,
+      ),
       decoration: BoxDecoration(
         color: color,
         borderRadius: AppRadii.buttonRadius,

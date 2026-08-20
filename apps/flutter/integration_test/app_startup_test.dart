@@ -8,17 +8,20 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('Foundation E2E startup test', () {
-    testWidgets('boots up Nido, displays foundation screen, and verifies core cards', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: NidoApp(),
-        ),
-      );
-      await tester.pumpAndSettle();
+    testWidgets(
+      'boots up Nido, displays foundation screen, and verifies core cards',
+      (tester) async {
+        await tester.pumpWidget(
+          const ProviderScope(
+            child: NidoApp(),
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.byType(FoundationScreen), findsOneWidget);
-      expect(find.text('Nido Foundation'), findsOneWidget);
-      expect(find.text('Paleta de Tokens Visuales'), findsOneWidget);
-    });
+        expect(find.byType(FoundationScreen), findsOneWidget);
+        expect(find.text('Nido Foundation'), findsOneWidget);
+        expect(find.text('Paleta de Tokens Visuales'), findsOneWidget);
+      },
+    );
   });
 }

@@ -4,8 +4,10 @@ import 'package:flutter/widgets.dart';
 ///
 /// Follows Material 3 window size classes:
 /// - [compact]: Phone in portrait, narrow split-screen (< 600 dp).
-/// - [medium]: Tablet in portrait, foldable, large phone in landscape (600 dp .. 839 dp).
-/// - [expanded]: Tablet in landscape, desktop browser, large monitor (>= 840 dp).
+/// - [medium]: Tablet in portrait, foldable, large phone in landscape
+///   (600 dp .. 839 dp).
+/// - [expanded]: Tablet in landscape, desktop browser, large monitor
+///   (>= 840 dp).
 enum BreakpointSize {
   compact,
   medium,

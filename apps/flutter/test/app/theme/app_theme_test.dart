@@ -40,15 +40,18 @@ void main() {
       expect(theme.textTheme.bodyMedium?.fontFamily, 'IBM Plex Sans');
     });
 
-    test('provides NidoThemeExtension with category swatches and chart marks', () {
-      final ext = theme.extension<NidoThemeExtension>();
-      expect(ext, isNotNull);
-      expect(ext!.primaryTint, AppColors.primaryTint);
-      expect(ext.chartMark, AppColors.chartMark);
-      expect(ext.chartTrack, AppColors.chartTrack);
-      expect(ext.categorySwatches.length, 9);
-      expect(ext.categorySwatches.first.value, 0xFF3E5C76);
-    });
+    test(
+      'provides NidoThemeExtension with category swatches and chart marks',
+      () {
+        final ext = theme.extension<NidoThemeExtension>();
+        expect(ext, isNotNull);
+        expect(ext!.primaryTint, AppColors.primaryTint);
+        expect(ext.chartMark, AppColors.chartMark);
+        expect(ext.chartTrack, AppColors.chartTrack);
+        expect(ext.categorySwatches.length, 9);
+        expect(ext.categorySwatches.first.value, 0xFF3E5C76);
+      },
+    );
 
     test('verifies canonical spacing and radii constants', () {
       expect(AppSpacing.base, 4.0);
