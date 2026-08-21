@@ -35,8 +35,16 @@ guaraníes usa el mismo half-up único del servidor (ADR 0001). El alta envía `
 su `Idempotency-Key` desde ya (ADR 0003) aunque M3 sea online-only. Cambiar mes, tipo o búsqueda
 cancela la request anterior con su `CancelToken`, con test que lo comprueba sobre una request
 todavía en vuelo. La ausencia de paginación se dice en pantalla en lugar de disimularse.
-**Falta la comparación con datos reales contra la API local y el legacy lado a lado**: las tres
-features quedan en `PARITY`, no en `VERIFIED`.
+
+El **comportamiento** se verificó manualmente el 2026-08-21 en Web (Chrome, `localhost:8081` contra
+la API local en `localhost:3001` con login real): catálogos, alta PYG y USD con tipo de cambio,
+ingreso, edición, borrado, filtros y búsqueda funcionan. Lo que **no** está hecho es la comparación
+**visual** contra el legacy: M3 compone con widgets Material 3 estándar sobre los tokens de M1 y no
+portó el component set que `docs/flutter-architecture.md` §Design system enumera (app/page/form
+shells, action button, transaction tile, category chip, money text/amount field, sync status,
+confirm sheet). Las pantallas hacen lo correcto pero no se parecen todavía a GAS-01/MOV-01/MAS-03.
+Por eso las tres features quedan en `PARITY` y no en `VERIFIED`: falta paridad visual, validación
+en Android/iOS y la comparación formal lado a lado.
 
 Diferencias intencionales respecto del legacy en M3, decididas por FLT-014 y registradas como
 decisiones propias: se agrega el selector de moneda que hacía inalcanzable el alta USD (FLT-016),
@@ -60,20 +68,20 @@ Para RN/PWA:
 
 ## Features de producto
 
-| Feature                         | RN          | PWA         | Flutter | Tests                                                                                                                              | Estado      |
-| ------------------------------- | ----------- | ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Authentication & session        | IMPLEMENTED | IMPLEMENTED | PARTIAL | Unit+widget+E2E headless; login real verificado en Web y Android emulador (2026-08-20); iOS pendiente                              | PARITY      |
-| Household onboarding            | IMPLEMENTED | IMPLEMENTED | PARTIAL | Controller (reconciliación incluida) + widget + fixtures Zod↔Dart; flujo real ejercitado; comparación legacy formal pendiente      | PARITY      |
-| Members & invitations           | IMPLEMENTED | IMPLEMENTED | PARTIAL | Widget + fixtures Zod↔Dart; invitación/aceptación reales ejercitadas end-to-end; comparación legacy formal pendiente               | PARITY      |
-| Dashboard                       | IMPLEMENTED | IMPLEMENTED | —       | Legacy utility/API tests; sin widget/E2E                                                                                           | NOT_STARTED |
-| Transactions CRUD & filters     | IMPLEMENTED | IMPLEMENTED | PARTIAL | Contratos con fixtures Zod↔Dart, money/formulario, filtros, cancelación, widget y E2E headless; falta comparación con datos reales | PARITY      |
-| Offline transaction creation    | IMPLEMENTED | IMPLEMENTED | —       | Queue/store/idempotency tests; sin E2E reconnect. M3 ya envía `clientMutationId` (ADR 0003); la cola es M4 (FLT-019)               | NOT_STARTED |
-| Categories & subcategories      | IMPLEMENTED | IMPLEMENTED | PARTIAL | Contratos con fixtures Zod↔Dart, árbol/selección, widget y E2E headless; falta comparación con datos reales                        | PARITY      |
-| Payment sources                 | IMPLEMENTED | IMPLEMENTED | PARTIAL | Contratos con fixtures Zod↔Dart, widget (CRUD + archivado); falta comparación con datos reales                                     | PARITY      |
-| Monthly budgets                 | IMPLEMENTED | IMPLEMENTED | —       | Backend + legacy calculation tests; sin widget/E2E                                                                                 | NOT_STARTED |
-| Recurring expenses & settlement | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                                                                                                 | NOT_STARTED |
-| Expected income & receipt       | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                                                                                                 | NOT_STARTED |
-| Reports                         | IMPLEMENTED | IMPLEMENTED | —       | Backend/legacy formatter tests; sin visual/E2E                                                                                     | NOT_STARTED |
+| Feature                         | RN          | PWA         | Flutter | Tests                                                                                                                                                                                    | Estado      |
+| ------------------------------- | ----------- | ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Authentication & session        | IMPLEMENTED | IMPLEMENTED | PARTIAL | Unit+widget+E2E headless; login real verificado en Web y Android emulador (2026-08-20); iOS pendiente                                                                                    | PARITY      |
+| Household onboarding            | IMPLEMENTED | IMPLEMENTED | PARTIAL | Controller (reconciliación incluida) + widget + fixtures Zod↔Dart; flujo real ejercitado; comparación legacy formal pendiente                                                            | PARITY      |
+| Members & invitations           | IMPLEMENTED | IMPLEMENTED | PARTIAL | Widget + fixtures Zod↔Dart; invitación/aceptación reales ejercitadas end-to-end; comparación legacy formal pendiente                                                                     | PARITY      |
+| Dashboard                       | IMPLEMENTED | IMPLEMENTED | —       | Legacy utility/API tests; sin widget/E2E                                                                                                                                                 | NOT_STARTED |
+| Transactions CRUD & filters     | IMPLEMENTED | IMPLEMENTED | PARTIAL | Contratos con fixtures Zod↔Dart, money/formulario, filtros, cancelación, widget y E2E headless; comportamiento verificado a mano en Web (2026-08-21); falta paridad visual y Android/iOS | PARITY      |
+| Offline transaction creation    | IMPLEMENTED | IMPLEMENTED | —       | Queue/store/idempotency tests; sin E2E reconnect. M3 ya envía `clientMutationId` (ADR 0003); la cola es M4 (FLT-019)                                                                     | NOT_STARTED |
+| Categories & subcategories      | IMPLEMENTED | IMPLEMENTED | PARTIAL | Contratos con fixtures Zod↔Dart, árbol/selección, widget y E2E headless; comportamiento verificado a mano en Web (2026-08-21); falta paridad visual y Android/iOS                        | PARITY      |
+| Payment sources                 | IMPLEMENTED | IMPLEMENTED | PARTIAL | Contratos con fixtures Zod↔Dart, widget (CRUD + archivado); comportamiento verificado a mano en Web (2026-08-21); falta paridad visual y Android/iOS                                     | PARITY      |
+| Monthly budgets                 | IMPLEMENTED | IMPLEMENTED | —       | Backend + legacy calculation tests; sin widget/E2E                                                                                                                                       | NOT_STARTED |
+| Recurring expenses & settlement | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                                                                                                                                                       | NOT_STARTED |
+| Expected income & receipt       | IMPLEMENTED | IMPLEMENTED | —       | Backend/date tests; sin widget/E2E                                                                                                                                                       | NOT_STARTED |
+| Reports                         | IMPLEMENTED | IMPLEMENTED | —       | Backend/legacy formatter tests; sin visual/E2E                                                                                                                                           | NOT_STARTED |
 
 ## Capacidades de plataforma
 
