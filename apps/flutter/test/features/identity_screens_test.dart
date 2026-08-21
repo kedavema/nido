@@ -135,7 +135,12 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const Key('retry_members_button')));
+      // The home screen scrolls past the test surface now that M3 added the
+      // financial sections above the members card.
+      final retry = find.byKey(const Key('retry_members_button'));
+      await tester.ensureVisible(retry);
+      await tester.pumpAndSettle();
+      await tester.tap(retry);
       await tester.pumpAndSettle();
       expect(find.text('Ale'), findsOneWidget);
       expect(find.text('Activo'), findsOneWidget);

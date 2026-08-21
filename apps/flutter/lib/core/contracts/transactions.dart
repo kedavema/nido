@@ -4,6 +4,7 @@ import '../money/fx_rate.dart';
 import '../money/money.dart';
 import '../time/local_date.dart';
 import 'json_reader.dart';
+import 'patch.dart';
 import 'wire_codecs.dart';
 
 /// `TRANSACTION_TYPES` in `packages/domain-types`.
@@ -174,6 +175,11 @@ class CreateTransactionRequest {
     if (notes != null) {
       parseTrimmedText(notes!, min: 1, max: 2000);
     }
+    if (clientMutationId != null) {
+      // The API requires `Idempotency-Key` to equal this value exactly, so a
+      // malformed one must fail here rather than as an opaque 400.
+      parseUuid(clientMutationId!);
+    }
   }
 
   final TransactionType type;
@@ -203,6 +209,169 @@ class CreateTransactionRequest {
       if (clientMutationId != null) 'clientMutationId': clientMutationId,
     };
   }
+}
+
+/// `UpdateTransactionRequestSchema`.
+///
+/// Every field is optional and three of them are additionally nullable, so
+/// each one is a [Patch]: omitting `notes` leaves the stored note alone,
+/// while `Patch.of(null)` erases it. `amount` and `currency` are a single
+/// [Money] here because the wire pair is meaningless apart — sending one
+/// without the other is exactly the drift the contract's `superRefine`
+/// exists to catch.
+class UpdateTransactionRequest {
+  UpdateTransactionRequest({
+    this.type,
+    this.amount = const Patch<Money>.absent(),
+    this.fxRateToPyg = const Patch<FxRateToPyg>.absent(),
+    this.occurredAt,
+    this.categoryId,
+    this.paymentSourceId = const Patch<String>.absent(),
+    String? description,
+    this.notes = const Patch<String>.absent(),
+  }) : description =
+           description == null
+               ? null
+               : parseTrimmedText(description, min: 1, max: 200) {
+    // Mirrors the schema's own guard: the cross-field rule is only checkable
+    // when the payload carries the currency, which here means it carries an
+    // amount. A patch without one leaves the rule to the server, which knows
+    // the persisted currency.
+    final money = amount.value;
+    if (amount.isPresent && money != null) {
+      _checkFxPresence(
+        currency: money.currency,
+        fxRateToPyg: fxRateToPyg.value,
+      );
+    }
+    final note = notes.value;
+    if (note != null) {
+      parseTrimmedText(note, min: 1, max: 2000);
+    }
+  }
+
+  final TransactionType? type;
+  final Patch<Money> amount;
+  final Patch<FxRateToPyg> fxRateToPyg;
+  final String? occurredAt;
+  final String? categoryId;
+  final Patch<String> paymentSourceId;
+  final String? description;
+  final Patch<String> notes;
+
+  /// Whether this patch would change nothing — a request worth refusing
+  /// before it leaves the device rather than round-tripping a no-op.
+  bool get isEmpty => toJson().isEmpty;
+
+  Map<String, Object?> toJson() {
+    final money = amount.value;
+    return {
+      if (type != null) 'type': type!.wireName,
+      if (amount.isPresent && money != null) ...{
+        'amount': money.toWire(),
+        'currency': money.currency.wireName,
+      },
+      if (fxRateToPyg.isPresent) 'fxRateToBase': fxRateToPyg.value?.toWire(),
+      if (occurredAt != null) 'occurredAt': occurredAt,
+      if (categoryId != null) 'categoryId': categoryId,
+      if (paymentSourceId.isPresent) 'paymentSourceId': paymentSourceId.value,
+      if (description != null) 'description': description,
+      if (notes.isPresent) 'notes': notes.value,
+    };
+  }
+}
+
+/// `ListTransactionsQuerySchema` — the filters the API resolves server-side
+/// (docs/system-design.md §12).
+///
+/// Note what is NOT here: this endpoint has no page/limit parameter, so a
+/// query returns every matching row in one response. Callers must not hide
+/// that (`docs/flutter-architecture.md` §Performance).
+class ListTransactionsQuery {
+  ListTransactionsQuery({
+    this.from,
+    this.to,
+    this.type,
+    this.categoryId,
+    this.paymentSourceId,
+    this.createdBy,
+    this.currency,
+    String? search,
+  }) : search =
+           search == null ? null : parseTrimmedText(search, min: 1, max: 200);
+
+  final LocalDate? from;
+  final LocalDate? to;
+  final TransactionType? type;
+  final String? categoryId;
+  final String? paymentSourceId;
+  final String? createdBy;
+  final Currency? currency;
+  final String? search;
+
+  static const ListTransactionsQuery none = ListTransactionsQuery._none();
+
+  const ListTransactionsQuery._none()
+    : from = null,
+      to = null,
+      type = null,
+      categoryId = null,
+      paymentSourceId = null,
+      createdBy = null,
+      currency = null,
+      search = null;
+
+  /// Only the parameters actually set are sent: an empty string would be a
+  /// filter value, not the absence of one.
+  Map<String, String> toQueryParameters() => {
+    if (from != null) 'from': from!.toWire(),
+    if (to != null) 'to': to!.toWire(),
+    if (type != null) 'type': type!.wireName,
+    if (categoryId != null) 'categoryId': categoryId!,
+    if (paymentSourceId != null) 'paymentSourceId': paymentSourceId!,
+    if (createdBy != null) 'createdBy': createdBy!,
+    if (currency != null) 'currency': currency!.wireName,
+    if (search != null) 'search': search!,
+  };
+
+  static ListTransactionsQuery fromJson(Object? json) {
+    final reader = JsonReader.object(json);
+    return ListTransactionsQuery(
+      from: reader.optionalParse('from', parseWireLocalDate),
+      to: reader.optionalParse('to', parseWireLocalDate),
+      type: reader.optionalParse('type', TransactionType.parseWire),
+      categoryId: reader.optionalParse('categoryId', parseUuid),
+      paymentSourceId: reader.optionalParse('paymentSourceId', parseUuid),
+      createdBy: reader.optionalParse('createdBy', parseUuid),
+      currency: reader.optionalParse('currency', Currency.parseWire),
+      search: reader.optionalString('search'),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ListTransactionsQuery &&
+        other.from == from &&
+        other.to == to &&
+        other.type == type &&
+        other.categoryId == categoryId &&
+        other.paymentSourceId == paymentSourceId &&
+        other.createdBy == createdBy &&
+        other.currency == currency &&
+        other.search == search;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    from,
+    to,
+    type,
+    categoryId,
+    paymentSourceId,
+    createdBy,
+    currency,
+    search,
+  );
 }
 
 /// `CreateTransactionResponseSchema` / `UpdateTransactionResponseSchema`.

@@ -14,11 +14,17 @@ const String nidoTimeZoneName = 'America/Asuncion';
 /// server derives `localDate`).
 const Duration _asuncionOffset = Duration(hours: -3);
 
+/// The wall-clock fields an instant has in America/Asuncion, carried as a
+/// UTC [DateTime] so nothing downstream re-applies the device offset. Only
+/// its date and time components are meaningful — it is not an instant.
+DateTime asuncionWallClock(DateTime instant) =>
+    instant.toUtc().add(_asuncionOffset);
+
 /// The current calendar date in America/Asuncion for a given UTC instant.
 /// Pass the clock in (`clockProvider` in bootstrap) — never call
 /// `DateTime.now()` at usage sites, so tests stay deterministic.
 LocalDate todayInAsuncion(DateTime nowUtc) {
-  final shifted = nowUtc.toUtc().add(_asuncionOffset);
+  final shifted = asuncionWallClock(nowUtc);
   return LocalDate(shifted.year, shifted.month, shifted.day);
 }
 

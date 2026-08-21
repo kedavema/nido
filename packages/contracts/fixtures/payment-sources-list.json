@@ -1,0 +1,34 @@
+{
+  "paymentSources": [
+    {
+      "id": "3d4e5f6a-7b8c-4d9e-8f0a-1b2c3d4e5f6a",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "name": "Efectivo",
+      "type": "CASH",
+      "ownerUserId": null,
+      "isActive": true,
+      "createdAt": "2026-07-16T12:05:00.000Z",
+      "updatedAt": "2026-07-16T12:05:00.000Z"
+    },
+    {
+      "id": "4e5f6a7b-8c9d-4e0f-9a1b-2c3d4e5f6a7b",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "name": "Itaú Ale",
+      "type": "BANK_ACCOUNT",
+      "ownerUserId": "9b2fca8e-4a1d-4d2b-9f3e-5a6b7c8d9e0f",
+      "isActive": true,
+      "createdAt": "2026-07-16T12:05:00.000Z",
+      "updatedAt": "2026-07-16T12:05:00.000Z"
+    },
+    {
+      "id": "5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b8c",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "name": "Billetera vieja",
+      "type": "DIGITAL_WALLET",
+      "ownerUserId": null,
+      "isActive": false,
+      "createdAt": "2026-07-16T12:05:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    }
+  ]
+}

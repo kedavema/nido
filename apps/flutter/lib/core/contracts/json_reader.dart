@@ -68,6 +68,21 @@ class JsonReader {
     return value.toDouble();
   }
 
+  /// A whole number the contract declares with `z.int()` (e.g. a category's
+  /// `sortOrder`). JSON has one numeric type, so a fractional value is a
+  /// contract violation rather than something to round.
+  int integer(String field, {int? min}) {
+    final value = _require(field);
+    if (value is! num || value != value.roundToDouble()) {
+      throw ContractViolationException(field, 'expected an integer');
+    }
+    final asInt = value.toInt();
+    if (min != null && asInt < min) {
+      throw ContractViolationException(field, 'must be at least $min');
+    }
+    return asInt;
+  }
+
   bool boolean(String field) {
     final value = _require(field);
     if (value is! bool) {
@@ -102,6 +117,20 @@ class JsonReader {
   /// [ContractViolationException] that names the field.
   T parse<T>(String field, T Function(String wire) parse) {
     final wire = string(field);
+    try {
+      return parse(wire);
+    } on FormatException catch (error) {
+      throw ContractViolationException(field, error.message);
+    }
+  }
+
+  /// Like [parse], but for a field the contract marks `.optional()`: absent
+  /// (or null) yields `null` instead of failing.
+  T? optionalParse<T>(String field, T Function(String wire) parse) {
+    final wire = optionalString(field);
+    if (wire == null) {
+      return null;
+    }
     try {
       return parse(wire);
     } on FormatException catch (error) {

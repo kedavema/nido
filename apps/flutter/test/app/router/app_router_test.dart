@@ -11,6 +11,8 @@ import 'package:nido/features/household/data/households_api.dart';
 
 import 'package:nido/testing/session_fakes.dart';
 
+import '../../features/pump_app.dart';
+
 void main() {
   late FakeAuthClient auth;
   late FakeHouseholdsApi api;
@@ -109,6 +111,30 @@ void main() {
       expect(redirectPathForSession(withHousehold, AppRoutes.root), isNull);
     });
 
+    test(
+      'the financial routes are open with a household and closed without',
+      () {
+        for (final location in [
+          AppRoutes.transactions,
+          AppRoutes.transactionNew,
+          AppRoutes.transactionDetail('5f1b2f0a-9c3d-4e5f-8a6b-1c2d3e4f5a6b'),
+          AppRoutes.categories,
+          AppRoutes.paymentSources,
+        ]) {
+          expect(redirectPathForSession(withHousehold, location), isNull);
+          // Nothing financial exists before a household does.
+          expect(
+            redirectPathForSession(withoutHousehold, location),
+            AppRoutes.onboarding,
+          );
+          expect(
+            redirectPathForSession(const SessionUnauthenticated(), location),
+            AppRoutes.signIn,
+          );
+        }
+      },
+    );
+
     test('every target is a fixed point — a second evaluation never moves', () {
       final sessions = <SessionState>[
         const SessionUnauthenticated(),
@@ -121,6 +147,10 @@ void main() {
           AppRoutes.signIn,
           AppRoutes.onboarding,
           AppRoutes.invitation,
+          AppRoutes.transactions,
+          AppRoutes.transactionNew,
+          AppRoutes.categories,
+          AppRoutes.paymentSources,
         ]) {
           final target = redirectPathForSession(session, location);
           if (target != null) {
@@ -232,6 +262,51 @@ void main() {
 
       expect(find.byKey(const Key('not_found_screen')), findsOneWidget);
       expect(find.textContaining('/unknown-route-xyz'), findsOneWidget);
+    });
+  });
+
+  group('legacy Expo URLs redirect to their canonical route', () {
+    /// Opening the app *at* a URL is exactly what a direct Web refresh or an
+    /// external link does, so this covers both.
+    Future<String> openAt(WidgetTester tester, String location) async {
+      final harness = FinanceHarness();
+      await harness.pumpWithRealRedirects(tester, location);
+      return harness.currentLocation;
+    }
+
+    testWidgets('/movimientos becomes /transactions', (tester) async {
+      expect(await openAt(tester, '/movimientos'), '/transactions');
+      expect(find.byKey(const Key('transactions_screen')), findsOneWidget);
+    });
+
+    testWidgets('a legacy link keeps its query string', (tester) async {
+      // A shared link that encoded a filter has to keep it, or the redirect
+      // silently widens what the recipient sees.
+      expect(
+        await openAt(tester, '/nuevo-gasto?type=INCOME'),
+        '/transactions/new?type=INCOME',
+      );
+      expect(find.byKey(const Key('transaction_form_screen')), findsOneWidget);
+      expect(find.text('Nuevo ingreso'), findsWidgets);
+    });
+
+    testWidgets('/movimiento/:id carries the id across', (tester) async {
+      const id = '5f1b2f0a-9c3d-4e5f-8a6b-1c2d3e4f5a6b';
+      expect(await openAt(tester, '/movimiento/$id'), '/transactions/$id');
+      expect(
+        find.byKey(const Key('transaction_detail_screen')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('/transactions/new is not read as a movement id', (
+      tester,
+    ) async {
+      final harness = FinanceHarness();
+      await harness.pumpWithRealRedirects(tester, AppRoutes.transactionNew);
+
+      expect(find.byKey(const Key('transaction_form_screen')), findsOneWidget);
+      expect(find.byKey(const Key('transaction_detail_screen')), findsNothing);
     });
   });
 }

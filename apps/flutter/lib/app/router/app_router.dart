@@ -4,11 +4,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/session_controller.dart';
 import '../../core/auth/session_machine.dart';
+import '../../core/contracts/transactions.dart';
 import '../../features/authentication/presentation/session_screens.dart';
 import '../../features/authentication/presentation/sign_in_screen.dart';
+import '../../features/categories/presentation/categories_screen.dart';
 import '../../features/household/presentation/household_home_screen.dart';
 import '../../features/household/presentation/onboarding_screen.dart';
 import '../../features/invitations/presentation/invitation_screen.dart';
+import '../../features/payment_sources/presentation/payment_sources_screen.dart';
+import '../../features/transactions/presentation/transaction_detail_screen.dart';
+import '../../features/transactions/presentation/transaction_form_screen.dart';
+import '../../features/transactions/presentation/transactions_list_screen.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import 'app_routes.dart';
@@ -106,8 +112,90 @@ GoRouter createRouter({
         builder:
             (context, state) => const SessionGate(child: InvitationScreen()),
       ),
+      GoRoute(
+        path: AppRoutes.transactions,
+        name: 'transactions',
+        builder:
+            (context, state) =>
+                const SessionGate(child: TransactionsListScreen()),
+        routes: <RouteBase>[
+          // Declared before `:id` so "new" is never read as a movement id.
+          GoRoute(
+            path: 'new',
+            name: 'transaction-new',
+            builder:
+                (context, state) => SessionGate(
+                  child: TransactionFormScreen(
+                    initialType:
+                        state.uri.queryParameters['type'] == 'INCOME'
+                            ? TransactionType.income
+                            : TransactionType.expense,
+                  ),
+                ),
+          ),
+          GoRoute(
+            path: ':id',
+            name: 'transaction-detail',
+            builder:
+                (context, state) => SessionGate(
+                  child: TransactionDetailScreen(
+                    transactionId: state.pathParameters['id']!,
+                  ),
+                ),
+            routes: <RouteBase>[
+              GoRoute(
+                path: 'edit',
+                name: 'transaction-edit',
+                builder:
+                    (context, state) => SessionGate(
+                      child: TransactionFormScreen(
+                        transactionId: state.pathParameters['id']!,
+                      ),
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: AppRoutes.categories,
+        name: 'categories',
+        builder:
+            (context, state) => const SessionGate(child: CategoriesScreen()),
+      ),
+      GoRoute(
+        path: AppRoutes.paymentSources,
+        name: 'payment-sources',
+        builder:
+            (context, state) =>
+                const SessionGate(child: PaymentSourcesScreen()),
+      ),
+      // Legacy Expo URLs. Each redirects to its canonical route, carrying the
+      // query string so a link that encoded filters keeps them.
+      GoRoute(
+        path: '/movimientos',
+        redirect: (context, state) => _withQuery(AppRoutes.transactions, state),
+      ),
+      GoRoute(
+        path: '/nuevo-gasto',
+        redirect:
+            (context, state) => _withQuery(AppRoutes.transactionNew, state),
+      ),
+      GoRoute(
+        path: '/movimiento/:id',
+        redirect:
+            (context, state) => _withQuery(
+              AppRoutes.transactionDetail(state.pathParameters['id']!),
+              state,
+            ),
+      ),
     ],
   );
+}
+
+String _withQuery(String path, GoRouterState state) {
+  final query = state.uri.query;
+  return query.isEmpty ? path : '$path?$query';
 }
 
 /// Explicit 404 / Unknown Route Screen.
