@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_radii.dart';
 import '../../app/theme/app_spacing.dart';
 import '../errors/error_messages.dart';
+import 'action_button.dart';
 import 'inline_notice.dart';
 
 /// Confirmation for an action that cannot be undone.
 ///
-/// Destructive confirmations are their own widget because they have to say
-/// three things every time — what will be removed, that it affects both
-/// members, and that it is irreversible — and a dialog that omits any of them
-/// is the one people tap through.
+/// A bottom sheet rather than an `AlertDialog`: the two buttons land where the
+/// thumb already is, and the panel matches every other sheet in the app. It
+/// has to say three things every time — what will be removed, that it affects
+/// both members, and that it is irreversible — because a dialog that omits any
+/// of them is the one people tap through.
 ///
-/// Returns `true` only when the user confirms and the action succeeded; the
-/// dialog stays open, showing [onConfirm]'s error, when it did not.
+/// Returns `true` only when the user confirms *and* the action succeeded; the
+/// sheet stays open, showing [onConfirm]'s error, when it did not — the row is
+/// still there and the user has to know the deletion never happened.
 Future<bool> showDestructiveConfirmDialog({
   required BuildContext context,
   required String title,
@@ -23,10 +27,15 @@ Future<bool> showDestructiveConfirmDialog({
   String cancelLabel = 'Cancelar',
   Key? dialogKey,
 }) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showModalBottomSheet<bool>(
     context: context,
+    isScrollControlled: true,
+    isDismissible: false,
+    enableDrag: false,
+    backgroundColor: Colors.transparent,
+    barrierColor: const Color(0x8C141C19),
     builder:
-        (context) => _DestructiveConfirmDialog(
+        (context) => _DestructiveConfirmSheet(
           key: dialogKey,
           title: title,
           message: message,
@@ -38,8 +47,8 @@ Future<bool> showDestructiveConfirmDialog({
   return confirmed ?? false;
 }
 
-class _DestructiveConfirmDialog extends StatefulWidget {
-  const _DestructiveConfirmDialog({
+class _DestructiveConfirmSheet extends StatefulWidget {
+  const _DestructiveConfirmSheet({
     super.key,
     required this.title,
     required this.message,
@@ -55,11 +64,11 @@ class _DestructiveConfirmDialog extends StatefulWidget {
   final Future<void> Function() onConfirm;
 
   @override
-  State<_DestructiveConfirmDialog> createState() =>
-      _DestructiveConfirmDialogState();
+  State<_DestructiveConfirmSheet> createState() =>
+      _DestructiveConfirmSheetState();
 }
 
-class _DestructiveConfirmDialogState extends State<_DestructiveConfirmDialog> {
+class _DestructiveConfirmSheetState extends State<_DestructiveConfirmSheet> {
   bool _running = false;
   String? _error;
 
@@ -77,8 +86,6 @@ class _DestructiveConfirmDialogState extends State<_DestructiveConfirmDialog> {
       if (!mounted) {
         return;
       }
-      // Reported in place rather than by closing and toasting: the row is
-      // still there, and the user has to know the deletion did not happen.
       setState(() {
         _running = false;
         _error = messageForActionError(error);
@@ -89,40 +96,63 @@ class _DestructiveConfirmDialogState extends State<_DestructiveConfirmDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    return AlertDialog(
-      title: Text(widget.title, style: theme.textTheme.titleMedium),
-      content: Column(
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(AppRadii.modal),
+          topRight: Radius.circular(AppRadii.modal),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.screen,
+        AppSpacing.lg,
+        AppSpacing.screen,
+        AppSpacing.screen + bottomInset,
+      ),
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Semantics(
+            header: true,
+            child: Text(widget.title, style: theme.textTheme.titleMedium),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Text(widget.message, style: theme.textTheme.bodyMedium),
           if (_error case final message?) ...[
             const SizedBox(height: AppSpacing.cardGap),
             InlineNotice(message: message, tone: NoticeTone.error),
           ],
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: ActionButton(
+                  key: const Key('confirm_dialog_cancel'),
+                  label: widget.cancelLabel,
+                  variant: ActionButtonVariant.secondary,
+                  onPressed:
+                      _running ? null : () => Navigator.of(context).pop(false),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.cardGap),
+              Expanded(
+                child: ActionButton(
+                  key: const Key('confirm_dialog_confirm'),
+                  label: widget.confirmLabel,
+                  variant: ActionButtonVariant.danger,
+                  loading: _running,
+                  onPressed: _running ? null : _confirm,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          key: const Key('confirm_dialog_cancel'),
-          onPressed: _running ? null : () => Navigator.of(context).pop(false),
-          child: Text(widget.cancelLabel),
-        ),
-        FilledButton(
-          key: const Key('confirm_dialog_confirm'),
-          style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-          onPressed: _running ? null : _confirm,
-          child:
-              _running
-                  ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : Text(widget.confirmLabel),
-        ),
-      ],
     );
   }
 }

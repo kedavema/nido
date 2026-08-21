@@ -593,3 +593,56 @@ compartido con filtros sigue mostrando lo mismo.
 Un enlace legacy cambia de URL en la barra de direcciones al abrirse. Las rutas legacy restantes
 (`/presupuesto`, `/fijos`, `/pagar-fijo/:id`, `/ingresos`, `/informes`, …) siguen sin resolver
 hasta que sus milestones las porten.
+
+## FLT-021 — Componentes propios sobre tokens, no Material por defecto
+
+**Status:** Accepted
+
+**Decision**  
+Nido construye su propio component set en `apps/flutter/lib/core/widgets/` (shells de
+pantalla/lista/formulario, header, card, action button, chips, campos, amount field, month stepper,
+bottom sheet, sync pill, confirmación destructiva) y lo usa en todas las pantallas. Material 3 queda
+como base de layout, tipografía y accesibilidad, no como la capa visual. Las fuentes de marca
+(Bricolage Grotesque, IBM Plex Sans) se empaquetan en `assets/fonts/` y se registran en el
+`pubspec.yaml`.
+
+**Context**  
+M3 compuso las pantallas con widgets Material estándar (`Card`, `ListTile`, `ChoiceChip`, `AppBar`,
+`FloatingActionButton`, `AlertDialog`) sobre los tokens de M1. La verificación manual del
+2026-08-21 confirmó el comportamiento y descartó el aspecto: las pantallas hacían lo correcto pero
+no se parecían al producto. Dos causas concretas:
+
+1. **Las fuentes de marca no estaban en la app.** `AppTypography` nombraba
+   `'Bricolage Grotesque'` e `'IBM Plex Sans'`, pero el `pubspec.yaml` no declaraba ninguna familia
+   y no había assets. Flutter no falla ante una familia que no resuelve: cae a Roboto en silencio,
+   así que todo el texto del producto se venía renderizando con la tipografía por defecto de
+   Android.
+2. **Los componentes Material traen sus propias decisiones.** Elevaciones tintadas, ripple, formas,
+   densidad y estados deshabilitados propios que pelean con el token set. `ChoiceChip` en
+   particular usa un tinte de bajo contraste en ambos estados, cuando estas filas necesitan que el
+   chip elegido se lea de un vistazo.
+
+**Options considered**
+
+1. Seguir con widgets Material y empujar todo desde `ThemeData`.
+2. Adoptar una librería de componentes de terceros.
+3. Construir el component set propio que `docs/flutter-architecture.md` §Design system ya enumera,
+   sobre Material como base.
+
+**Selected approach**  
+Opción 3.
+
+**Reason**  
+La opción 1 ya se intentó: `ThemeData` no alcanza para las piezas que el producto realmente tiene
+(el monto grande centrado, el chip sólido, la confirmación como sheet, el shell con footer fijo que
+no se esconde bajo el teclado), y cada pantalla terminaba peleando con el default. La opción 2
+contradice la regla de dependencias pequeñas y justificadas de la arquitectura, y ninguna librería
+trae este set. La opción 3 es lo que la arquitectura ya había decidido enumerar; M3 simplemente no
+lo construyó todavía.
+
+**Trade-offs**  
+Más código propio que mantener y menos comportamiento gratis de Material (ripple, estados de foco
+por defecto). Se mitiga concentrándolo en `core/widgets/` con tests propios, y usando Material
+donde sí aporta (`InkWell`, `TextField`, `Divider`, `CircleAvatar`, semántica). Las fuentes suman
+~1,1 MB al bundle Web: es el costo de que el producto se vea como el producto, y son las mismas
+que el runtime legacy ya descarga.

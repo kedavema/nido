@@ -6,6 +6,7 @@ import 'package:nido/core/auth/auth_client.dart';
 import 'package:nido/core/auth/session_controller.dart';
 import 'package:nido/core/contracts/households.dart';
 import 'package:nido/core/errors/app_error.dart';
+import 'package:nido/core/widgets/action_button.dart';
 import 'package:nido/features/household/data/households_api.dart';
 
 import 'package:nido/testing/session_fakes.dart';
@@ -68,14 +69,14 @@ void main() {
       await tester.pumpAndSettle();
 
       final button = find.byKey(const Key('create_household_button'));
-      expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      expect(tester.widget<ActionButton>(button).onPressed, isNull);
 
       await tester.enterText(
         find.byKey(const Key('household_name_field')),
         'Casa Ale & Kevin',
       );
       await tester.pump();
-      expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+      expect(tester.widget<ActionButton>(button).onPressed, isNotNull);
     });
 
     testWidgets('greets by first name and offers sign-out', (tester) async {

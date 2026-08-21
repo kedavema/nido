@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radii.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -8,9 +10,15 @@ import '../../../core/auth/active_household.dart';
 import '../../../core/contracts/categories.dart';
 import '../../../core/contracts/patch.dart';
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/app_screen.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/inline_notice.dart';
 import '../../../core/widgets/loading_content.dart';
+import '../../../core/widgets/nido_card.dart';
+import '../../../core/widgets/nido_chip.dart';
+import '../../../core/widgets/screen_header.dart';
 import '../application/categories_providers.dart';
 import '../domain/category_appearance.dart';
 import '../domain/category_tree.dart';
@@ -25,8 +33,8 @@ const String _rootRuleNotice =
     'ver en tus reportes.';
 
 /// Both defaults must be offerable by the pickers, or a new category would
-/// open with an off-palette value sitting in front of the curated set as if
-/// it were one of them.
+/// open with an off-palette value sitting in front of the curated set as if it
+/// were one of them.
 const String _newRootDefaultIcon = 'pricetag';
 const String _newRootDefaultColor = '#6559C3';
 
@@ -83,34 +91,34 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
     final categories = ref.watch(categoriesProvider(householdId));
 
-    return Scaffold(
-      key: const Key('categories_screen'),
-      appBar: AppBar(
-        title: const Text('Categorías'),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(24),
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: AppSpacing.screen,
-              right: AppSpacing.screen,
-              bottom: AppSpacing.sm,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Categorías y subcategorías del hogar'),
-            ),
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(categoriesProvider(householdId));
-            await ref.read(categoriesProvider(householdId).future);
-          },
-          child: switch (categories) {
-            AsyncData(value: final list) => _CategoryList(
-              categories: list,
+    final header = FormHeader(
+      title: 'Categorías',
+      subtitle: 'Categorías y subcategorías del hogar',
+      onDismiss: () {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(AppRoutes.root);
+        }
+      },
+      dismissIcon: FormDismissIcon.back,
+    );
+
+    Future<void> refresh() async {
+      ref.invalidate(categoriesProvider(householdId));
+      await ref.read(categoriesProvider(householdId).future);
+    }
+
+    return switch (categories) {
+      AsyncData(value: final list) => AppScreen(
+        key: const Key('categories_screen'),
+        header: header,
+        onRefresh: refresh,
+        children: [
+          for (final kind in CategoryKind.values)
+            _KindSection(
+              kind: kind,
+              categories: list.where((c) => c.kind == kind).toList(),
               expandedRoots: _expandedRoots,
               onToggleRoot:
                   (rootId) => setState(() {
@@ -122,49 +130,44 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   (category) =>
                       setState(() => _editing = _EditingExisting(category)),
               onCreateRoot:
-                  (kind) => setState(() => _editing = _CreatingRoot(kind)),
+                  () => setState(() => _editing = _CreatingRoot(kind)),
               onCreateChild:
                   (root) => setState(() => _editing = _CreatingChild(root)),
             ),
-            AsyncError(error: final error) => _RetryBody(
-              message: messageForActionError(error),
-              onRetry: () => ref.invalidate(categoriesProvider(householdId)),
-            ),
-            _ => const Center(
-              child: LoadingContent(label: 'Cargando categorías…'),
-            ),
-          },
-        ),
+          const InlineNotice(
+            message: _rootRuleNotice,
+            tone: NoticeTone.success,
+          ),
+        ],
       ),
-    );
+      AsyncError(error: final error) => AppScreen(
+        key: const Key('categories_screen'),
+        header: header,
+        children: [
+          InlineNotice(
+            message: messageForActionError(error),
+            tone: NoticeTone.error,
+          ),
+          ActionButton(
+            key: const Key('retry_button'),
+            label: 'Reintentar',
+            variant: ActionButtonVariant.secondary,
+            onPressed: () => ref.invalidate(categoriesProvider(householdId)),
+          ),
+        ],
+      ),
+      _ => AppScreen(
+        key: const Key('categories_screen'),
+        header: header,
+        children: const [LoadingContent(label: 'Cargando categorías…')],
+      ),
+    };
   }
 }
 
-class _RetryBody extends StatelessWidget {
-  const _RetryBody({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: AppSpacing.screenPadding,
-      children: [
-        InlineNotice(message: message, tone: NoticeTone.error),
-        const SizedBox(height: AppSpacing.cardGap),
-        OutlinedButton(
-          key: const Key('retry_button'),
-          onPressed: onRetry,
-          child: const Text('Reintentar'),
-        ),
-      ],
-    );
-  }
-}
-
-class _CategoryList extends StatelessWidget {
-  const _CategoryList({
+class _KindSection extends StatelessWidget {
+  const _KindSection({
+    required this.kind,
     required this.categories,
     required this.expandedRoots,
     required this.onToggleRoot,
@@ -173,60 +176,55 @@ class _CategoryList extends StatelessWidget {
     required this.onCreateChild,
   });
 
+  final CategoryKind kind;
   final List<Category> categories;
   final Set<String> expandedRoots;
   final void Function(String rootId) onToggleRoot;
   final void Function(Category category) onEdit;
-  final void Function(CategoryKind kind) onCreateRoot;
+  final VoidCallback onCreateRoot;
   final void Function(Category root) onCreateChild;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final groups = categoryGroups(categories);
 
-    return ListView(
-      padding: AppSpacing.screenPadding,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final kind in CategoryKind.values) ...[
-          Text(
-            kind == CategoryKind.expense ? 'Egresos' : 'Ingresos',
-            style: theme.textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Card(
-            child: Padding(
-              padding: AppSpacing.cardInsets,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final group in categoryGroups(
-                    categories.where((c) => c.kind == kind).toList(),
-                  ))
-                    _RootAccordion(
-                      group: group,
-                      isExpanded: expandedRoots.contains(group.root.id),
-                      onToggle: () => onToggleRoot(group.root.id),
-                      onEditRoot: () => onEdit(group.root),
-                      onEditChild: onEdit,
-                      onAddChild: () => onCreateChild(group.root),
-                    ),
-                  // Rendered even with zero roots of this kind: it carries
-                  // the only affordance that can create the first one.
-                  TextButton(
-                    key: Key('new_root_button_${kind.wire}'),
-                    onPressed: () => onCreateRoot(kind),
-                    child: const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('+ Nueva categoría'),
-                    ),
-                  ),
-                ],
+        Text(
+          kind == CategoryKind.expense ? 'Egresos' : 'Ingresos',
+          style: theme.textTheme.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        NidoCard(
+          gap: 0,
+          children: [
+            for (final group in groups)
+              _RootAccordion(
+                group: group,
+                isExpanded: expandedRoots.contains(group.root.id),
+                onToggle: () => onToggleRoot(group.root.id),
+                onEditRoot: () => onEdit(group.root),
+                onEditChild: onEdit,
+                onAddChild: () => onCreateChild(group.root),
+              ),
+            // Rendered even with zero roots of this kind: it carries the only
+            // affordance that can create the first one.
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: Key('new_root_button_${kind.wire}'),
+                  onPressed: onCreateRoot,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Nueva categoría'),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.cardGap),
-        ],
-        const InlineNotice(message: _rootRuleNotice, tone: NoticeTone.success),
+          ],
+        ),
       ],
     );
   }
@@ -266,13 +264,19 @@ class _RootAccordion extends StatelessWidget {
             child: Row(
               children: [
                 CircleAvatar(
+                  radius: 20,
                   backgroundColor: categoryTint(color),
-                  child: Icon(resolveCategoryIcon(root.icon), color: color),
+                  child: Icon(
+                    resolveCategoryIcon(root.icon),
+                    color: color,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.cardGap),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         root.isActive ? root.name : '${root.name} · Archivada',
@@ -282,21 +286,22 @@ class _RootAccordion extends StatelessWidget {
                         group.children.length == 1
                             ? '1 subcategoría'
                             : '${group.children.length} subcategorías',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.inkSecondary,
-                        ),
+                        style: theme.textTheme.bodySmall,
                       ),
                     ],
                   ),
                 ),
-                Icon(isExpanded ? Icons.expand_more : Icons.chevron_right),
+                Icon(
+                  isExpanded ? Icons.expand_more : Icons.chevron_right,
+                  color: AppColors.inkSecondary,
+                ),
               ],
             ),
           ),
         ),
         if (isExpanded) ...[
-          // Editing the root lives inside the expanded body rather than on
-          // the row: the row is one big tap target that toggles, so a nested
+          // Editing the root lives inside the expanded body rather than on the
+          // row: the row is one big tap target that toggles, so a nested
           // button there would fight it for taps.
           Align(
             alignment: Alignment.centerLeft,
@@ -307,30 +312,69 @@ class _RootAccordion extends StatelessWidget {
               label: const Text('Editar categoría'),
             ),
           ),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (final child in group.children)
-                ActionChip(
-                  key: Key('category_child_${child.id}'),
-                  onPressed: () => onEditChild(child),
-                  label: Text(
-                    child.isActive ? child.name : '${child.name} · Archivada',
+          Padding(
+            padding: const EdgeInsets.only(
+              left: 52,
+              bottom: AppSpacing.cardGap,
+            ),
+            child: ChipRow(
+              children: [
+                for (final child in group.children)
+                  SoftChip(
+                    key: Key('category_child_${child.id}'),
+                    label:
+                        child.isActive
+                            ? child.name
+                            : '${child.name} · Archivada',
+                    selected: false,
+                    onPressed: () => onEditChild(child),
                   ),
+                _DashedChip(
+                  key: Key('add_child_${root.id}'),
+                  label: '+ Nueva',
+                  onPressed: onAddChild,
                 ),
-              ActionChip(
-                key: Key('add_child_${root.id}'),
-                onPressed: onAddChild,
-                avatar: const Icon(Icons.add, size: 16),
-                label: const Text('Nueva'),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
         ],
-        const Divider(height: 1),
+        const Divider(height: 1, color: AppColors.border),
       ],
+    );
+  }
+}
+
+/// The "add one more" affordance inside a chip row: dashed so it reads as an
+/// action rather than one more option to choose from.
+class _DashedChip extends StatelessWidget {
+  const _DashedChip({super.key, required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: AppRadii.chipRadius,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 36),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          borderRadius: AppRadii.chipRadius,
+          border: Border.all(color: AppColors.primary),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -493,9 +537,9 @@ class _CategoryEditorState extends ConsumerState<_CategoryEditor> {
       context: context,
       title: '¿Archivar ${category.name}?',
       message:
-          'Deja de ofrecerse al cargar un movimiento. El historial ya '
-          'cargado con esta categoría queda intacto y sigue contando en los '
-          'totales del mes.',
+          'Deja de ofrecerse al cargar un movimiento. El historial ya cargado '
+          'con esta categoría queda intacto y sigue contando en los totales '
+          'del mes.',
       confirmLabel: 'Archivar',
       onConfirm:
           () => ref
@@ -509,7 +553,6 @@ class _CategoryEditorState extends ConsumerState<_CategoryEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final editing = widget.editing;
     final roots = (ref
                 .watch(categoriesProvider(widget.householdId))
@@ -518,112 +561,79 @@ class _CategoryEditorState extends ConsumerState<_CategoryEditor> {
         .where((category) => category.isRoot && category.kind == _kind)
         .toList(growable: false);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          key: const Key('close_category_editor'),
-          icon: const Icon(Icons.close),
-          onPressed: widget.onDone,
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_title),
-            if (_subtitle case final subtitle?)
-              Text(subtitle, style: theme.textTheme.bodySmall),
-          ],
-        ),
+    return AppFormScreen(
+      header: FormHeader(
+        title: _title,
+        subtitle: _subtitle,
+        onDismiss: widget.onDone,
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: AppSpacing.screenPadding,
-          children: [
-            TextField(
-              key: const Key('category_name_field'),
-              controller: _name,
-              autofocus: _isCreate,
-              maxLength: 100,
-              decoration: const InputDecoration(labelText: 'Nombre'),
-              onChanged: (_) => setState(() {}),
-            ),
-            if (_isRootForm) ...[
-              const SizedBox(height: AppSpacing.cardGap),
-              _IconPicker(
-                selected: _icon,
-                color: categoryColor(_color),
-                onSelect: (icon) => setState(() => _icon = icon),
-              ),
-              const SizedBox(height: AppSpacing.cardGap),
-              _ColorPicker(
-                selected: _color,
-                icon: _icon,
-                onSelect: (color) => setState(() => _color = color),
-              ),
-            ],
-            // A root has no parent to reassign, and offering itself as an
-            // option would let the user create a cycle.
-            if (editing is _EditingExisting && !editing.category.isRoot) ...[
-              const SizedBox(height: AppSpacing.cardGap),
-              _ChoiceRow<String>(
-                label: 'Raíz',
-                options: [for (final root in roots) (root.id, root.name)],
-                selected: _parentId,
-                onSelect: (parentId) {
-                  // Reassigning adopts the new root's appearance, keeping the
-                  // inheritance true after the move rather than leaving the
-                  // old root's icon and colour on a child that left it.
-                  final next = roots.where((r) => r.id == parentId).firstOrNull;
-                  setState(() {
-                    _parentId = parentId;
-                    _icon = next?.icon ?? _icon;
-                    _color = next?.color ?? _color;
-                  });
-                },
-              ),
-            ],
-            if (editing is _EditingExisting) ...[
-              const SizedBox(height: AppSpacing.cardGap),
-              _ChoiceRow<bool>(
-                label: 'Estado',
-                options: const [(true, 'Activa'), (false, 'Archivada')],
-                selected: _isActive,
-                onSelect: (isActive) => setState(() => _isActive = isActive),
-              ),
-            ],
-            if (_error case final message?) ...[
-              const SizedBox(height: AppSpacing.cardGap),
-              InlineNotice(message: message, tone: NoticeTone.error),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              key: const Key('save_category_button'),
-              // Icon and colour come from pickers, so they are valid by
-              // construction and only the name can be empty.
-              onPressed:
-                  _name.text.trim().isEmpty || _saving ? null : () => _save(),
-              child:
-                  _saving
-                      ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Text('Guardar'),
-            ),
-            if (editing is _EditingExisting && editing.category.isActive) ...[
-              const SizedBox(height: AppSpacing.cardGap),
-              OutlinedButton(
-                key: const Key('archive_category_button'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.danger,
-                ),
-                onPressed: _saving ? null : () => _archive(editing.category),
-                child: const Text('Archivar'),
-              ),
-            ],
-          ],
-        ),
+      footer: ActionButton(
+        key: const Key('save_category_button'),
+        label: 'Guardar',
+        loading: _saving,
+        // Icon and colour come from pickers, so they are valid by
+        // construction and only the name can be empty.
+        onPressed: _name.text.trim().isEmpty || _saving ? null : _save,
       ),
+      children: [
+        NidoFormField(
+          label: 'Nombre',
+          child: NidoTextField(
+            key: const Key('category_name_field'),
+            controller: _name,
+            autofocus: _isCreate,
+            maxLength: 100,
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        if (_isRootForm) ...[
+          _IconPicker(
+            selected: _icon,
+            color: categoryColor(_color),
+            onSelect: (icon) => setState(() => _icon = icon),
+          ),
+          _ColorPicker(
+            selected: _color,
+            icon: _icon,
+            onSelect: (color) => setState(() => _color = color),
+          ),
+        ],
+        // A root has no parent to reassign, and offering itself as an option
+        // would let the user create a cycle.
+        if (editing is _EditingExisting && !editing.category.isRoot)
+          _ChoiceRow<String>(
+            label: 'Raíz',
+            options: [for (final root in roots) (root.id, root.name)],
+            selected: _parentId,
+            onSelect: (parentId) {
+              // Reassigning adopts the new root's appearance, keeping the
+              // inheritance true after the move rather than leaving the old
+              // root's icon and colour on a child that left it.
+              final next = roots.where((r) => r.id == parentId).firstOrNull;
+              setState(() {
+                _parentId = parentId;
+                _icon = next?.icon ?? _icon;
+                _color = next?.color ?? _color;
+              });
+            },
+          ),
+        if (editing is _EditingExisting)
+          _ChoiceRow<bool>(
+            label: 'Estado',
+            options: const [(true, 'Activa'), (false, 'Archivada')],
+            selected: _isActive,
+            onSelect: (isActive) => setState(() => _isActive = isActive),
+          ),
+        if (_error case final message?)
+          InlineNotice(message: message, tone: NoticeTone.error),
+        if (editing is _EditingExisting && editing.category.isActive)
+          ActionButton(
+            key: const Key('archive_category_button'),
+            label: 'Archivar',
+            variant: ActionButtonVariant.danger,
+            onPressed: _saving ? null : () => _archive(editing.category),
+          ),
+      ],
     );
   }
 }
@@ -643,39 +653,36 @@ class _IconPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final options = optionsWithCurrent(categoryIconOptions, selected);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Ícono', style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final icon in options)
-              InkWell(
-                key: Key('category_icon_$icon'),
-                onTap: () => onSelect(icon),
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color:
-                        icon == selected
-                            ? categoryTint(color)
-                            : AppColors.surface,
-                    borderRadius: AppRadii.buttonRadius,
-                    border: Border.all(
-                      color: icon == selected ? color : AppColors.borderStrong,
-                      width: icon == selected ? 2 : 1,
-                    ),
+    return NidoFormField(
+      label: 'Ícono',
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (final icon in options)
+            InkWell(
+              key: Key('category_icon_$icon'),
+              onTap: () => onSelect(icon),
+              borderRadius: AppRadii.buttonRadius,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color:
+                      icon == selected
+                          ? categoryTint(color)
+                          : AppColors.surface,
+                  borderRadius: AppRadii.buttonRadius,
+                  border: Border.all(
+                    color: icon == selected ? color : AppColors.borderStrong,
+                    width: icon == selected ? 2 : 1,
                   ),
-                  child: Icon(resolveCategoryIcon(icon), color: color),
                 ),
+                child: Icon(resolveCategoryIcon(icon), color: color),
               ),
-          ],
-        ),
-      ],
+            ),
+        ],
+      ),
     );
   }
 }
@@ -695,43 +702,39 @@ class _ColorPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final options = optionsWithCurrent(categoryColorOptions, selected);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Color', style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final hex in options)
-              InkWell(
-                key: Key('category_color_$hex'),
-                onTap: () => onSelect(hex),
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: categoryTint(categoryColor(hex)),
-                    borderRadius: AppRadii.buttonRadius,
-                    border: Border.all(
-                      color:
-                          hex.toUpperCase() == selected.toUpperCase()
-                              ? categoryColor(hex)
-                              : AppColors.borderStrong,
-                      width:
-                          hex.toUpperCase() == selected.toUpperCase() ? 2 : 1,
-                    ),
-                  ),
-                  child: Icon(
-                    resolveCategoryIcon(icon),
-                    color: categoryColor(hex),
+    return NidoFormField(
+      label: 'Color',
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (final hex in options)
+            InkWell(
+              key: Key('category_color_$hex'),
+              onTap: () => onSelect(hex),
+              borderRadius: AppRadii.buttonRadius,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: categoryTint(categoryColor(hex)),
+                  borderRadius: AppRadii.buttonRadius,
+                  border: Border.all(
+                    color:
+                        hex.toUpperCase() == selected.toUpperCase()
+                            ? categoryColor(hex)
+                            : AppColors.borderStrong,
+                    width: hex.toUpperCase() == selected.toUpperCase() ? 2 : 1,
                   ),
                 ),
+                child: Icon(
+                  resolveCategoryIcon(icon),
+                  color: categoryColor(hex),
+                ),
               ),
-          ],
-        ),
-      ],
+            ),
+        ],
+      ),
     );
   }
 }
@@ -751,25 +754,19 @@ class _ChoiceRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final (value, text) in options)
-              ChoiceChip(
-                key: Key('choice_${label}_$value'),
-                label: Text(text),
-                selected: selected == value,
-                onSelected: (_) => onSelect(value),
-              ),
-          ],
-        ),
-      ],
+    return NidoFormField(
+      label: label,
+      child: ChipRow(
+        children: [
+          for (final (value, text) in options)
+            NidoChip(
+              key: Key('choice_${label}_$value'),
+              label: text,
+              selected: selected == value,
+              onPressed: () => onSelect(value),
+            ),
+        ],
+      ),
     );
   }
 }

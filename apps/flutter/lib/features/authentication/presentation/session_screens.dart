@@ -5,6 +5,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../core/auth/session_controller.dart';
 import '../../../core/auth/session_machine.dart';
 import '../../../core/widgets/inline_notice.dart';
+import '../../../core/widgets/action_button.dart';
 import '../../../core/widgets/loading_content.dart';
 
 /// Full-screen wait while the persisted session resolves (the legacy
@@ -64,19 +65,20 @@ class SessionErrorScreen extends ConsumerWidget {
                   const SizedBox(height: AppSpacing.lg),
                   InlineNotice(message: message, tone: NoticeTone.error),
                   const SizedBox(height: AppSpacing.lg),
-                  FilledButton(
+                  ActionButton(
                     key: const Key('session_retry_button'),
+                    label: 'Reintentar',
                     onPressed: controller.retry,
-                    child: const Text('Reintentar'),
                   ),
                   if (canSignOut) ...[
                     const SizedBox(height: AppSpacing.cardGap),
-                    OutlinedButton(
+                    ActionButton(
                       key: const Key('session_sign_out_button'),
+                      label: 'Cerrar sesión',
+                      variant: ActionButtonVariant.secondary,
                       onPressed: () {
                         controller.signOut();
                       },
-                      child: const Text('Cerrar sesión'),
                     ),
                   ],
                 ],

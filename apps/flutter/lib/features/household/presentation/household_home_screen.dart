@@ -12,12 +12,17 @@ import '../../../core/auth/session_machine.dart';
 import '../../../core/contracts/households.dart';
 import '../../../core/responsive/responsive_layout.dart';
 import '../../../core/time/nido_time_zone.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/app_screen.dart';
+import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/inline_notice.dart';
 import '../../../core/widgets/loading_content.dart';
+import '../../../core/widgets/nido_card.dart';
+import '../../../core/widgets/screen_header.dart';
 
 /// The household's member list, loaded per household id and refreshed by
-/// invalidating this provider (errors surface as safe [Exception]s the UI
-/// maps through `messageForAuthError`).
+/// invalidating this provider (errors surface as safe [Exception]s the UI maps
+/// through `messageForAuthError`).
 final householdMembersProvider = FutureProvider.autoDispose
     .family<List<HouseholdMember>, String>((ref, householdId) async {
       final response = await ref
@@ -26,11 +31,10 @@ final householdMembersProvider = FutureProvider.autoDispose
       return response.members;
     });
 
-/// M2's authenticated-with-household home (the identity/household subset of
-/// the legacy `(tabs)/mas.tsx`): household summary, members with
-/// loading/error/retry, owner-only one-use invitation with the token shown
-/// exactly once for manual delivery, and sign-out. Financial rows arrive
-/// with M3+.
+/// M2's authenticated-with-household home: household summary, the financial
+/// sections M3 added, members with loading/error/retry, owner-only one-use
+/// invitation with the token shown exactly once, and sign-out. The dashboard
+/// itself arrives with M4.
 class HouseholdHomeScreen extends ConsumerWidget {
   const HouseholdHomeScreen({super.key});
 
@@ -48,43 +52,50 @@ class HouseholdHomeScreen extends ConsumerWidget {
 
     final cards = _HomeCards(session: session, household: household);
 
-    return Scaffold(
-      key: const Key('household_home_screen'),
-      body: SafeArea(
-        child: ResponsiveLayout(
-          compact:
-              (context, _) => SingleChildScrollView(
-                key: const Key('household_home_compact'),
-                padding: AppSpacing.screenPadding,
-                child: cards.asSingleColumn(),
-              ),
-          medium:
-              (context, _) => SingleChildScrollView(
-                key: const Key('household_home_medium'),
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
-                    child: cards.asSingleColumn(),
-                  ),
+    return ResponsiveLayout(
+      compact:
+          (context, _) => AppScreen(
+            key: const Key('household_home_screen'),
+            scrollKey: const Key('household_home_compact'),
+            children: cards.asSingleColumn(),
+          ),
+      medium:
+          (context, _) => AppScreen(
+            key: const Key('household_home_screen'),
+            scrollKey: const Key('household_home_medium'),
+            centered: true,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _spaced(cards.asSingleColumn()),
                 ),
               ),
-          expanded:
-              (context, _) => SingleChildScrollView(
-                key: const Key('household_home_expanded'),
-                padding: const EdgeInsets.all(AppSpacing.xxl),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1040),
-                    child: cards.asTwoColumns(),
-                  ),
-                ),
+            ],
+          ),
+      expanded:
+          (context, _) => AppScreen(
+            key: const Key('household_home_screen'),
+            scrollKey: const Key('household_home_expanded'),
+            centered: true,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1040),
+                child: cards.asTwoColumns(),
               ),
-        ),
-      ),
+            ],
+          ),
     );
   }
 }
+
+List<Widget> _spaced(List<Widget> children) => [
+  for (var index = 0; index < children.length; index++) ...[
+    if (index > 0) const SizedBox(height: AppSpacing.cardGap),
+    children[index],
+  ],
+];
 
 class _HomeCards {
   const _HomeCards({required this.session, required this.household});
@@ -102,26 +113,17 @@ class _HomeCards {
           : null;
   Widget _signOut() => const _SignOutButton();
 
-  Widget asSingleColumn() {
+  List<Widget> asSingleColumn() {
     final invite = _invite();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _header(),
-        const SizedBox(height: AppSpacing.cardGap),
-        _summary(),
-        const SizedBox(height: AppSpacing.cardGap),
-        _sections(),
-        const SizedBox(height: AppSpacing.cardGap),
-        _members(),
-        if (invite != null) ...[
-          const SizedBox(height: AppSpacing.cardGap),
-          invite,
-        ],
-        const SizedBox(height: AppSpacing.lg),
-        _signOut(),
-      ],
-    );
+    return [
+      _header(),
+      _summary(),
+      _sections(),
+      _members(),
+      if (invite != null) invite,
+      const SizedBox(height: AppSpacing.sm),
+      _signOut(),
+    ];
   }
 
   Widget asTwoColumns() {
@@ -166,38 +168,21 @@ class _HomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final displayName = session.profile.user.displayName;
     final initial =
         displayName.trim().isEmpty ? '' : displayName.trim()[0].toUpperCase();
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Tu hogar', style: theme.textTheme.headlineMedium),
-              const SizedBox(height: AppSpacing.base),
-              Text(
-                'Identidad, hogar e integrantes.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.inkSecondary,
-                ),
-              ),
-            ],
-          ),
+    return ScreenHeader(
+      title: 'Tu hogar',
+      description: 'Identidad, hogar e integrantes.',
+      trailing: Semantics(
+        label: 'Sesión de $displayName',
+        child: CircleAvatar(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.surface,
+          child: Text(initial),
         ),
-        Semantics(
-          label: 'Sesión de $displayName',
-          child: CircleAvatar(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.surface,
-            child: Text(initial),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -211,34 +196,26 @@ class _HouseholdSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      child: Padding(
-        padding: AppSpacing.cardInsets,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(household.name, style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.cardGap),
-            _DetailRow(
-              label: 'Tu rol',
-              value:
-                  household.role == HouseholdRole.owner
-                      ? 'Propietario/a'
-                      : 'Integrante',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _DetailRow(label: 'Moneda base', value: household.baseCurrency),
-          ],
+    return NidoCard(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(household.name, style: theme.textTheme.titleMedium),
+        _DetailRow(
+          label: 'Tu rol',
+          value:
+              household.role == HouseholdRole.owner
+                  ? 'Propietario/a'
+                  : 'Integrante',
         ),
-      ),
+        _DetailRow(label: 'Moneda base', value: household.baseCurrency),
+      ],
     );
   }
 }
 
-/// The financial sections M3 adds. A plain list of links, not a bottom
+/// The financial sections M3 added. A plain list of links, not a bottom
 /// navigation bar: the shell that decides how these are reached on each
-/// breakpoint is its own piece of work, and one is not needed to make the
-/// screens usable.
+/// breakpoint is M4's work, and one is not needed to make the screens usable.
 class _SectionsCard extends StatelessWidget {
   const _SectionsCard();
 
@@ -246,41 +223,83 @@ class _SectionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
+    return NidoCard(
       key: const Key('sections_card'),
+      gap: 0,
+      children: [
+        Text('Plata del hogar', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        const _SectionLink(
+          navKey: Key('go_transactions'),
+          icon: Icons.receipt_long_outlined,
+          title: 'Movimientos',
+          subtitle: 'Gastos e ingresos del mes',
+          route: AppRoutes.transactions,
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        const _SectionLink(
+          navKey: Key('go_categories'),
+          icon: Icons.sell_outlined,
+          title: 'Categorías',
+          subtitle: 'Categorías y subcategorías del hogar',
+          route: AppRoutes.categories,
+        ),
+        const Divider(height: 1, color: AppColors.border),
+        const _SectionLink(
+          navKey: Key('go_payment_sources'),
+          icon: Icons.credit_card_outlined,
+          title: 'Medios de pago',
+          subtitle: 'Informativos: no calculan saldos',
+          route: AppRoutes.paymentSources,
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionLink extends StatelessWidget {
+  const _SectionLink({
+    required this.navKey,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.route,
+  });
+
+  final Key navKey;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      key: navKey,
+      onTap: () => context.go(route),
       child: Padding(
-        padding: AppSpacing.cardInsets,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.cardGap),
+        child: Row(
           children: [
-            Text('Plata del hogar', style: theme.textTheme.titleMedium),
-            ListTile(
-              key: const Key('go_transactions'),
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: const Text('Movimientos'),
-              subtitle: const Text('Gastos e ingresos del mes'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.go(AppRoutes.transactions),
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: AppColors.primaryTint,
+              child: Icon(icon, size: 20, color: AppColors.primary),
             ),
-            ListTile(
-              key: const Key('go_categories'),
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.sell_outlined),
-              title: const Text('Categorías'),
-              subtitle: const Text('Categorías y subcategorías del hogar'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.go(AppRoutes.categories),
+            const SizedBox(width: AppSpacing.cardGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: theme.textTheme.bodyMedium),
+                  Text(subtitle, style: theme.textTheme.bodySmall),
+                ],
+              ),
             ),
-            ListTile(
-              key: const Key('go_payment_sources'),
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.credit_card_outlined),
-              title: const Text('Medios de pago'),
-              subtitle: const Text('Informativos: no calculan saldos'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.go(AppRoutes.paymentSources),
-            ),
+            const Icon(Icons.chevron_right, color: AppColors.inkSecondary),
           ],
         ),
       ),
@@ -300,13 +319,13 @@ class _DetailRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        Text(label, style: theme.textTheme.bodySmall),
         Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.inkSecondary,
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
           ),
         ),
-        Text(value, style: theme.textTheme.bodyMedium),
       ],
     );
   }
@@ -322,51 +341,40 @@ class _MembersCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final members = ref.watch(householdMembersProvider(householdId));
 
-    return Card(
+    return NidoCard(
       key: const Key('members_card'),
-      child: Padding(
-        padding: AppSpacing.cardInsets,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Integrantes', style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.cardGap),
-            switch (members) {
-              AsyncData(value: final list) when list.isEmpty =>
-                const InlineNotice(
-                  message: 'Todavía no hay integrantes activos.',
-                ),
-              AsyncData(value: final list) => Column(
-                children: [
-                  for (final member in list) _MemberRow(member: member),
-                ],
+      children: [
+        Text('Integrantes', style: theme.textTheme.titleMedium),
+        switch (members) {
+          AsyncData(value: final list) when list.isEmpty => const InlineNotice(
+            message: 'Todavía no hay integrantes activos.',
+          ),
+          AsyncData(value: final list) => Column(
+            children: [for (final member in list) _MemberRow(member: member)],
+          ),
+          AsyncError(error: final error) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              InlineNotice(
+                message: messageForAuthError(error),
+                tone: NoticeTone.error,
               ),
-              AsyncError(error: final error) => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  InlineNotice(
-                    message: messageForAuthError(error),
-                    tone: NoticeTone.error,
-                  ),
-                  const SizedBox(height: AppSpacing.cardGap),
-                  OutlinedButton(
-                    key: const Key('retry_members_button'),
-                    onPressed:
-                        () => ref.invalidate(
-                          householdMembersProvider(householdId),
-                        ),
-                    child: const Text('Reintentar'),
-                  ),
-                ],
+              const SizedBox(height: AppSpacing.cardGap),
+              ActionButton(
+                key: const Key('retry_members_button'),
+                label: 'Reintentar',
+                variant: ActionButtonVariant.secondary,
+                onPressed:
+                    () => ref.invalidate(householdMembersProvider(householdId)),
               ),
-              _ => const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.cardGap),
-                child: LoadingContent(label: 'Cargando integrantes…'),
-              ),
-            },
-          ],
-        ),
-      ),
+            ],
+          ),
+          _ => const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.cardGap),
+            child: LoadingContent(label: 'Cargando integrantes…'),
+          ),
+        },
+      ],
     );
   }
 }
@@ -388,21 +396,20 @@ class _MemberRow extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(member.displayName, style: theme.textTheme.bodyMedium),
                 Text(
                   member.role == HouseholdRole.owner
                       ? 'Propietario/a'
                       : 'Integrante',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.inkSecondary,
-                  ),
+                  style: theme.textTheme.bodySmall,
                 ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color:
                   isActive
@@ -439,8 +446,8 @@ class _InviteCardState extends ConsumerState<_InviteCard> {
   bool _sending = false;
   CreateHouseholdInviteResponse? _created;
 
-  /// Port of `createInvitationRequestGuard`: only the newest request may
-  /// touch this panel's state.
+  /// Port of `createInvitationRequestGuard`: only the newest request may touch
+  /// this panel's state.
   int _generation = 0;
 
   @override
@@ -484,66 +491,50 @@ class _InviteCardState extends ConsumerState<_InviteCard> {
     final theme = Theme.of(context);
     final created = _created;
 
-    return Card(
+    return NidoCard(
       key: const Key('invite_card'),
-      child: Padding(
-        padding: AppSpacing.cardInsets,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Invitar al segundo integrante',
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            if (created == null) ...[
-              Text(
-                'La invitación dura 72 horas y solo funciona con el correo '
-                'indicado.',
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: AppSpacing.cardGap),
-              TextField(
-                key: const Key('invite_email_field'),
-                controller: _email,
-                maxLength: 254,
-                autocorrect: false,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Correo de Google',
-                  hintText: 'persona@example.com',
-                  errorText: _error,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: AppSpacing.cardGap),
-              FilledButton(
-                key: const Key('create_invitation_button'),
-                onPressed:
-                    _email.text.trim().isEmpty || _sending ? null : _invite,
-                child:
-                    _sending
-                        ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Text('Crear invitación'),
-              ),
-            ] else
-              _InviteReceipt(
-                invite: created,
-                onClear:
-                    () => setState(() {
-                      // The token leaves this view for good — it is one-use and
-                      // never persisted on this device.
-                      _created = null;
-                      _error = null;
-                    }),
-              ),
-          ],
+      children: [
+        Text(
+          'Invitar al segundo integrante',
+          style: theme.textTheme.titleMedium,
         ),
-      ),
+        if (created == null) ...[
+          Text(
+            'La invitación dura 72 horas y solo funciona con el correo '
+            'indicado.',
+            style: theme.textTheme.bodySmall,
+          ),
+          NidoFormField(
+            label: 'Correo de Google',
+            error: _error,
+            child: NidoTextField(
+              key: const Key('invite_email_field'),
+              controller: _email,
+              maxLength: 254,
+              hintText: 'persona@example.com',
+              hasError: _error != null,
+              keyboardType: TextInputType.emailAddress,
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          ActionButton(
+            key: const Key('create_invitation_button'),
+            label: 'Crear invitación',
+            loading: _sending,
+            onPressed: _email.text.trim().isEmpty || _sending ? null : _invite,
+          ),
+        ] else
+          _InviteReceipt(
+            invite: created,
+            onClear:
+                () => setState(() {
+                  // The token leaves this view for good — it is one-use and
+                  // never persisted on this device.
+                  _created = null;
+                  _error = null;
+                }),
+          ),
+      ],
     );
   }
 }
@@ -568,8 +559,8 @@ class _InviteReceipt extends StatelessWidget {
         const SizedBox(height: AppSpacing.cardGap),
         Text(
           'Vence el ${formatAsuncionDateTime(invite.invite.expiresAt)}. '
-          'Compartí este token por un canal privado; solo se muestra en '
-          'esta pantalla.',
+          'Compartí este token por un canal privado; solo se muestra en esta '
+          'pantalla.',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.cardGap),
@@ -596,10 +587,11 @@ class _InviteReceipt extends StatelessWidget {
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.cardGap),
-        OutlinedButton(
+        ActionButton(
           key: const Key('clear_invitation_button'),
+          label: 'Crear otra invitación',
+          variant: ActionButtonVariant.secondary,
           onPressed: onClear,
-          child: const Text('Crear otra invitación'),
         ),
       ],
     );
@@ -611,15 +603,15 @@ class _SignOutButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return OutlinedButton(
+    return ActionButton(
       key: const Key('home_sign_out_button'),
-      style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+      label: 'Cerrar sesión',
+      variant: ActionButtonVariant.danger,
       onPressed: () {
-        // The offline queue arrives in M4; until then there is nothing
-        // pending to warn about before signing out.
+        // The offline queue arrives in M4; until then there is nothing pending
+        // to warn about before signing out.
         ref.read(sessionControllerProvider.notifier).signOut();
       },
-      child: const Text('Cerrar sesión'),
     );
   }
 }

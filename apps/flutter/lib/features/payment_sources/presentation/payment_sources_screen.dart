@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/auth/active_household.dart';
@@ -8,9 +10,15 @@ import '../../../core/contracts/households.dart';
 import '../../../core/contracts/patch.dart';
 import '../../../core/contracts/payment_sources.dart';
 import '../../../core/errors/error_messages.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/app_screen.dart';
 import '../../../core/widgets/confirm_dialog.dart';
+import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/inline_notice.dart';
 import '../../../core/widgets/loading_content.dart';
+import '../../../core/widgets/nido_card.dart';
+import '../../../core/widgets/nido_chip.dart';
+import '../../../core/widgets/screen_header.dart';
 import '../../household/presentation/household_home_screen.dart';
 import '../application/payment_sources_providers.dart';
 
@@ -34,8 +42,6 @@ class PaymentSourcesScreen extends ConsumerStatefulWidget {
 }
 
 class _PaymentSourcesScreenState extends ConsumerState<PaymentSourcesScreen> {
-  /// `null` when the list is showing; a source when editing it; a
-  /// [PaymentSource]-less marker when creating one.
   PaymentSource? _editing;
   bool _creating = false;
 
@@ -62,71 +68,81 @@ class _PaymentSourcesScreenState extends ConsumerState<PaymentSourcesScreen> {
     final sources = ref.watch(paymentSourcesProvider(householdId));
     final members = ref.watch(householdMembersProvider(householdId));
 
-    return Scaffold(
-      key: const Key('payment_sources_screen'),
-      appBar: AppBar(
-        title: const Text('Medios de pago'),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(24),
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: AppSpacing.screen,
-              right: AppSpacing.screen,
-              bottom: AppSpacing.sm,
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Son informativos: Nido no calcula saldos por medio.',
-              ),
-            ),
-          ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        key: const Key('add_payment_source_button'),
-        onPressed: () => setState(() => _creating = true),
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar medio'),
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(paymentSourcesProvider(householdId));
-            await ref.read(paymentSourcesProvider(householdId).future);
-          },
-          child: switch (sources) {
-            AsyncData(value: final list) => _SourceList(
+    final header = FormHeader(
+      title: 'Medios de pago',
+      subtitle: 'Son informativos: Nido no calcula saldos por medio.',
+      onDismiss: () {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(AppRoutes.root);
+        }
+      },
+      dismissIcon: FormDismissIcon.back,
+    );
+
+    final floatingAction = ActionPill(
+      key: const Key('add_payment_source_button'),
+      label: 'Agregar medio',
+      icon: Icons.add,
+      onPressed: () => setState(() => _creating = true),
+    );
+
+    Future<void> refresh() async {
+      ref.invalidate(paymentSourcesProvider(householdId));
+      await ref.read(paymentSourcesProvider(householdId).future);
+    }
+
+    return switch (sources) {
+      AsyncData(value: final list) => AppScreen(
+        key: const Key('payment_sources_screen'),
+        header: header,
+        floatingAction: floatingAction,
+        onRefresh: refresh,
+        children: [
+          if (list.isEmpty)
+            const InlineNotice(message: 'Todavía no hay medios de pago.')
+          else
+            _SourceList(
               householdId: householdId,
               sources: list,
               members: members.valueOrNull ?? const [],
               onEdit: (source) => setState(() => _editing = source),
             ),
-            AsyncError(error: final error) => ListView(
-              padding: AppSpacing.screenPadding,
-              children: [
-                InlineNotice(
-                  message: messageForActionError(error),
-                  tone: NoticeTone.error,
-                ),
-                const SizedBox(height: AppSpacing.cardGap),
-                OutlinedButton(
-                  key: const Key('retry_button'),
-                  onPressed:
-                      () => ref.invalidate(paymentSourcesProvider(householdId)),
-                  child: const Text('Reintentar'),
-                ),
-              ],
-            ),
-            _ => const Center(child: LoadingContent(label: 'Cargando medios…')),
-          },
-        ),
+          Text(
+            'Un medio con movimientos no se borra: se archiva (deja de '
+            'ofrecerse al cargar, el historial queda intacto).',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
-    );
+      AsyncError(error: final error) => AppScreen(
+        key: const Key('payment_sources_screen'),
+        header: header,
+        children: [
+          InlineNotice(
+            message: messageForActionError(error),
+            tone: NoticeTone.error,
+          ),
+          ActionButton(
+            key: const Key('retry_button'),
+            label: 'Reintentar',
+            variant: ActionButtonVariant.secondary,
+            onPressed:
+                () => ref.invalidate(paymentSourcesProvider(householdId)),
+          ),
+        ],
+      ),
+      _ => AppScreen(
+        key: const Key('payment_sources_screen'),
+        header: header,
+        children: const [LoadingContent(label: 'Cargando medios…')],
+      ),
+    };
   }
 }
 
-class _SourceList extends ConsumerWidget {
+class _SourceList extends StatelessWidget {
   const _SourceList({
     required this.householdId,
     required this.sources,
@@ -138,58 +154,6 @@ class _SourceList extends ConsumerWidget {
   final List<PaymentSource> sources;
   final List<HouseholdMember> members;
   final void Function(PaymentSource source) onEdit;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    if (sources.isEmpty) {
-      return ListView(
-        padding: AppSpacing.screenPadding,
-        children: const [
-          InlineNotice(message: 'Todavía no hay medios de pago.'),
-        ],
-      );
-    }
-
-    // Active first; within each group the API's own order is kept.
-    final ordered = [
-      ...sources.where((source) => source.isActive),
-      ...sources.where((source) => !source.isActive),
-    ];
-
-    return ListView(
-      padding: AppSpacing.screenPadding,
-      children: [
-        Card(
-          child: Padding(
-            padding: AppSpacing.cardInsets,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final source in ordered)
-                  _SourceRow(
-                    householdId: householdId,
-                    source: source,
-                    ownerName: _ownerName(source),
-                    onEdit: () => onEdit(source),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.cardGap),
-        Text(
-          'Un medio con movimientos no se borra: se archiva (deja de '
-          'ofrecerse al cargar, el historial queda intacto).',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.inkSecondary,
-          ),
-        ),
-        // The FAB overlaps the last rows otherwise.
-        const SizedBox(height: 72),
-      ],
-    );
-  }
 
   String? _ownerName(PaymentSource source) {
     final ownerUserId = source.ownerUserId;
@@ -203,6 +167,29 @@ class _SourceList extends ConsumerWidget {
     }
     return 'Titular';
   }
+
+  @override
+  Widget build(BuildContext context) {
+    // Active first; within each group the API's own order is kept.
+    final ordered = [
+      ...sources.where((source) => source.isActive),
+      ...sources.where((source) => !source.isActive),
+    ];
+
+    return NidoCard(
+      gap: 0,
+      children: [
+        for (var index = 0; index < ordered.length; index++)
+          _SourceRow(
+            householdId: householdId,
+            source: ordered[index],
+            ownerName: _ownerName(ordered[index]),
+            onEdit: () => onEdit(ordered[index]),
+            showDivider: index < ordered.length - 1,
+          ),
+      ],
+    );
+  }
 }
 
 class _SourceRow extends ConsumerWidget {
@@ -211,12 +198,14 @@ class _SourceRow extends ConsumerWidget {
     required this.source,
     required this.ownerName,
     required this.onEdit,
+    required this.showDivider,
   });
 
   final String householdId;
   final PaymentSource source;
   final String? ownerName;
   final VoidCallback onEdit;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -227,51 +216,54 @@ class _SourceRow extends ConsumerWidget {
       if (!source.isActive) 'Archivado',
     ].join(' · ');
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(source.name, style: theme.textTheme.bodyMedium),
-                Text(
-                  subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.inkSecondary,
-                  ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(source.name, style: theme.textTheme.bodyMedium),
+                    Text(subtitle, style: theme.textTheme.bodySmall),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          TextButton(
-            key: Key('edit_payment_source_${source.id}'),
-            onPressed: onEdit,
-            child: const Text('Editar'),
-          ),
-          if (source.isActive)
-            TextButton(
-              key: Key('archive_payment_source_${source.id}'),
-              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-              onPressed:
-                  () => showDestructiveConfirmDialog(
-                    context: context,
-                    title: '¿Archivar ${source.name}?',
-                    message:
-                        'Deja de ofrecerse al cargar un movimiento. Los '
-                        'movimientos ya cargados con este medio lo siguen '
-                        'mostrando y no cambian de monto.',
-                    confirmLabel: 'Archivar',
-                    onConfirm:
-                        () => ref
-                            .read(paymentSourcesControllerProvider)
-                            .archive(householdId, source.id),
+              ),
+              TextButton(
+                key: Key('edit_payment_source_${source.id}'),
+                onPressed: onEdit,
+                child: const Text('Editar'),
+              ),
+              if (source.isActive)
+                TextButton(
+                  key: Key('archive_payment_source_${source.id}'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.danger,
                   ),
-              child: const Text('Archivar'),
-            ),
-        ],
-      ),
+                  onPressed:
+                      () => showDestructiveConfirmDialog(
+                        context: context,
+                        title: '¿Archivar ${source.name}?',
+                        message:
+                            'Deja de ofrecerse al cargar un movimiento. Los '
+                            'movimientos ya cargados con este medio lo siguen '
+                            'mostrando y no cambian de monto.',
+                        confirmLabel: 'Archivar',
+                        onConfirm:
+                            () => ref
+                                .read(paymentSourcesControllerProvider)
+                                .archive(householdId, source.id),
+                      ),
+                  child: const Text('Archivar'),
+                ),
+            ],
+          ),
+        ),
+        if (showDivider) const Divider(height: 1, color: AppColors.border),
+      ],
     );
   }
 }
@@ -361,7 +353,6 @@ class _PaymentSourceEditorState extends ConsumerState<_PaymentSourceEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final members =
         ref
             .watch(householdMembersProvider(widget.householdId))
@@ -370,109 +361,85 @@ class _PaymentSourceEditorState extends ConsumerState<_PaymentSourceEditor> {
             .toList(growable: false) ??
         const <HouseholdMember>[];
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          key: const Key('close_payment_source_editor'),
-          icon: const Icon(Icons.close),
-          onPressed: widget.onDone,
-        ),
-        title: Text(widget.existing == null ? 'Nuevo medio' : 'Editar medio'),
+    return AppFormScreen(
+      header: FormHeader(
+        title: widget.existing == null ? 'Nuevo medio' : 'Editar medio',
+        onDismiss: widget.onDone,
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: AppSpacing.screenPadding,
-          children: [
-            TextField(
-              key: const Key('payment_source_name_field'),
-              controller: _name,
-              autofocus: true,
-              maxLength: 100,
-              decoration: const InputDecoration(labelText: 'Nombre'),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            Text('Tipo', style: theme.textTheme.bodySmall),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                for (final entry in paymentSourceTypeLabels.entries)
-                  ChoiceChip(
-                    key: Key('payment_source_type_${entry.key.wire}'),
-                    label: Text(entry.value),
-                    selected: _type == entry.key,
-                    onSelected: (_) => setState(() => _type = entry.key),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            Text('Titular informativo', style: theme.textTheme.bodySmall),
-            const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                ChoiceChip(
-                  key: const Key('payment_source_owner_none'),
-                  label: const Text('Sin titular'),
-                  selected: _ownerUserId == null,
-                  onSelected: (_) => setState(() => _ownerUserId = null),
+      footer: ActionButton(
+        key: const Key('save_payment_source_button'),
+        label: 'Guardar',
+        loading: _saving,
+        onPressed: _name.text.trim().isEmpty || _saving ? null : _save,
+      ),
+      children: [
+        NidoFormField(
+          label: 'Nombre',
+          child: NidoTextField(
+            key: const Key('payment_source_name_field'),
+            controller: _name,
+            autofocus: true,
+            maxLength: 100,
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        NidoFormField(
+          label: 'Tipo',
+          child: ChipRow(
+            children: [
+              for (final entry in paymentSourceTypeLabels.entries)
+                NidoChip(
+                  key: Key('payment_source_type_${entry.key.wire}'),
+                  label: entry.value,
+                  selected: _type == entry.key,
+                  onPressed: () => setState(() => _type = entry.key),
                 ),
-                for (final member in members)
-                  ChoiceChip(
-                    key: Key('payment_source_owner_${member.userId}'),
-                    label: Text(member.displayName),
-                    selected: _ownerUserId == member.userId,
-                    onSelected:
-                        (_) => setState(() => _ownerUserId = member.userId),
-                  ),
+            ],
+          ),
+        ),
+        NidoFormField(
+          label: 'Titular informativo',
+          child: ChipRow(
+            children: [
+              NidoChip(
+                key: const Key('payment_source_owner_none'),
+                label: 'Sin titular',
+                selected: _ownerUserId == null,
+                onPressed: () => setState(() => _ownerUserId = null),
+              ),
+              for (final member in members)
+                NidoChip(
+                  key: Key('payment_source_owner_${member.userId}'),
+                  label: member.displayName,
+                  selected: _ownerUserId == member.userId,
+                  onPressed: () => setState(() => _ownerUserId = member.userId),
+                ),
+            ],
+          ),
+        ),
+        if (widget.existing != null)
+          NidoFormField(
+            label: 'Estado',
+            child: ChipRow(
+              children: [
+                NidoChip(
+                  key: const Key('payment_source_state_active'),
+                  label: 'Activo',
+                  selected: _isActive,
+                  onPressed: () => setState(() => _isActive = true),
+                ),
+                NidoChip(
+                  key: const Key('payment_source_state_archived'),
+                  label: 'Archivado',
+                  selected: !_isActive,
+                  onPressed: () => setState(() => _isActive = false),
+                ),
               ],
             ),
-            if (widget.existing != null) ...[
-              const SizedBox(height: AppSpacing.cardGap),
-              Text('Estado', style: theme.textTheme.bodySmall),
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                children: [
-                  ChoiceChip(
-                    key: const Key('payment_source_state_active'),
-                    label: const Text('Activo'),
-                    selected: _isActive,
-                    onSelected: (_) => setState(() => _isActive = true),
-                  ),
-                  ChoiceChip(
-                    key: const Key('payment_source_state_archived'),
-                    label: const Text('Archivado'),
-                    selected: !_isActive,
-                    onSelected: (_) => setState(() => _isActive = false),
-                  ),
-                ],
-              ),
-            ],
-            if (_error case final message?) ...[
-              const SizedBox(height: AppSpacing.cardGap),
-              InlineNotice(message: message, tone: NoticeTone.error),
-            ],
-            const SizedBox(height: AppSpacing.lg),
-            FilledButton(
-              key: const Key('save_payment_source_button'),
-              onPressed:
-                  _name.text.trim().isEmpty || _saving ? null : () => _save(),
-              child:
-                  _saving
-                      ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : const Text('Guardar'),
-            ),
-          ],
-        ),
-      ),
+          ),
+        if (_error case final message?)
+          InlineNotice(message: message, tone: NoticeTone.error),
+      ],
     );
   }
 }

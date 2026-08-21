@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/contracts/payment_sources.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
 import '../../../core/widgets/inline_notice.dart';
+import '../../../core/widgets/screen_header.dart';
 import '../../payment_sources/presentation/payment_sources_screen.dart';
 
-/// The result of the payment-source sheet: a source, or the explicit choice
-/// of none.
+/// The result of the payment-source sheet: a source, or the explicit choice of
+/// none.
 ///
 /// A nullable return could not tell "picked «sin medio de pago»" apart from
 /// "dismissed the sheet", and those must do different things to the draft.
@@ -23,12 +25,13 @@ Future<PaymentSourceSelection?> showPaymentSourcePickerSheet({
   required List<String> favoriteIds,
   required String? selectedPaymentSourceId,
 }) {
-  return showModalBottomSheet<PaymentSourceSelection>(
+  return showAppBottomSheet<PaymentSourceSelection>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (context) {
-      final theme = Theme.of(context);
+    title: 'Pagado con',
+    subtitle: 'Para este movimiento',
+    sheetKey: const Key('payment_source_picker_sheet'),
+    initialSize: 0.6,
+    builder: (context, controller) {
       final active = paymentSources.where((source) => source.isActive).toList();
       final favorites = [
         for (final id in favoriteIds)
@@ -39,84 +42,125 @@ Future<PaymentSourceSelection?> showPaymentSourcePickerSheet({
       final others =
           active.where((source) => !favoriteIds.contains(source.id)).toList();
 
-      Widget row(PaymentSource source) => ListTile(
-        key: Key('pick_payment_source_${source.id}'),
-        dense: true,
-        contentPadding: EdgeInsets.zero,
-        onTap:
-            () => Navigator.of(context).pop(PaymentSourceSelection(source.id)),
-        title: Text(source.name),
-        subtitle: Text(paymentSourceTypeLabels[source.type]!),
-        trailing:
-            selectedPaymentSourceId == source.id
-                ? const Icon(Icons.check)
-                : null,
-      );
-
-      Widget sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.cardGap),
-        child: Text(
-          text,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: AppColors.inkSecondary,
-          ),
-        ),
-      );
-
-      return SafeArea(
-        key: const Key('payment_source_picker_sheet'),
-        child: DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.6,
-          maxChildSize: 0.9,
-          builder:
-              (context, scrollController) => ListView(
-                controller: scrollController,
-                padding: AppSpacing.screenPadding,
-                children: [
-                  Text('Pagado con', style: theme.textTheme.titleMedium),
-                  Text(
-                    'Para este movimiento',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.inkSecondary,
-                    ),
-                  ),
-                  if (active.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: AppSpacing.cardGap),
-                      child: InlineNotice(
-                        message:
-                            'Todavía no hay medios de pago activos. Podés '
-                            'guardar el movimiento sin uno.',
-                      ),
-                    ),
-                  if (favorites.isNotEmpty) ...[
-                    sectionLabel('FAVORITOS'),
-                    for (final source in favorites) row(source),
-                  ],
-                  if (others.isNotEmpty) ...[
-                    sectionLabel('OTROS MEDIOS'),
-                    for (final source in others) row(source),
-                  ],
-                  const Divider(),
-                  ListTile(
-                    key: const Key('pick_payment_source_none'),
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    onTap:
-                        () => Navigator.of(
-                          context,
-                        ).pop(const PaymentSourceSelection(null)),
-                    title: const Text('Sin medio de pago'),
-                    trailing:
-                        selectedPaymentSourceId == null
-                            ? const Icon(Icons.check)
-                            : null,
-                  ),
-                ],
+      return ListView(
+        controller: controller,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screen),
+        children: [
+          if (active.isEmpty)
+            const InlineNotice(
+              message:
+                  'Todavía no hay medios de pago activos. Podés guardar el '
+                  'movimiento sin uno.',
+            ),
+          if (favorites.isNotEmpty) ...[
+            const _SectionLabel('Favoritos'),
+            for (final source in favorites)
+              _SourceOption(
+                source: source,
+                isSelected: selectedPaymentSourceId == source.id,
               ),
-        ),
+          ],
+          if (others.isNotEmpty) ...[
+            const _SectionLabel('Otros medios'),
+            for (final source in others)
+              _SourceOption(
+                source: source,
+                isSelected: selectedPaymentSourceId == source.id,
+              ),
+          ],
+          const Divider(height: AppSpacing.lg, color: AppColors.border),
+          _NoneOption(isSelected: selectedPaymentSourceId == null),
+          const SizedBox(height: AppSpacing.screen),
+        ],
       );
     },
   );
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(
+        top: AppSpacing.cardGap,
+        bottom: AppSpacing.base,
+      ),
+      child: SectionEyebrow(label),
+    );
+  }
+}
+
+class _SourceOption extends StatelessWidget {
+  const _SourceOption({required this.source, required this.isSelected});
+
+  final PaymentSource source;
+  final bool isSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      key: Key('pick_payment_source_${source.id}'),
+      onTap: () => Navigator.of(context).pop(PaymentSourceSelection(source.id)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(source.name, style: theme.textTheme.bodyMedium),
+                  Text(
+                    paymentSourceTypeLabels[source.type]!,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check, size: 18, color: AppColors.primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoneOption extends StatelessWidget {
+  const _NoneOption({required this.isSelected});
+
+  final bool isSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      key: const Key('pick_payment_source_none'),
+      onTap:
+          () => Navigator.of(context).pop(const PaymentSourceSelection(null)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Sin medio de pago',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            if (isSelected)
+              const Icon(Icons.check, size: 18, color: AppColors.primary),
+          ],
+        ),
+      ),
+    );
+  }
 }

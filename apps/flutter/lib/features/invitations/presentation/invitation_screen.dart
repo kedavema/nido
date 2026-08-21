@@ -7,7 +7,11 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../core/auth/auth_error_messages.dart';
 import '../../../core/auth/session_controller.dart';
 import '../../../core/contracts/households.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/inline_notice.dart';
+import '../../../core/widgets/nido_card.dart';
+import '../../../core/widgets/screen_header.dart';
 
 /// Accepting a one-use invitation token (port of
 /// `apps/mobile/src/app/invitation.tsx`). The token is pasted, used once,
@@ -58,91 +62,83 @@ class _InvitationScreenState extends ConsumerState<InvitationScreen> {
 
     return Scaffold(
       key: const Key('invitation_screen'),
-      appBar: AppBar(
-        leading: BackButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutes.onboarding);
-            }
-          },
-        ),
-        title: const Text('Entrar a un hogar'),
-      ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: AppSpacing.screenPadding,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Pegá el token que te compartió la persona propietaria '
-                    'del hogar.',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Card(
-                    child: Padding(
-                      padding: AppSpacing.cardInsets,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Iniciá sesión con el mismo correo de Google al '
-                            'que se dirigió la invitación.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: AppSpacing.cardGap),
-                          TextField(
-                            key: const Key('invitation_token_field'),
-                            controller: _token,
-                            maxLength: 43,
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            decoration: InputDecoration(
-                              labelText: 'Token de invitación',
-                              hintText: 'Pegá acá el token de 43 caracteres',
-                              errorText: _error,
+        child: Column(
+          children: [
+            FormHeader(
+              title: 'Entrar a un hogar',
+              dismissIcon: FormDismissIcon.back,
+              onDismiss: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutes.onboarding);
+                }
+              },
+            ),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: AppSpacing.screenPadding,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Pegá el token que te compartió la persona propietaria '
+                          'del hogar.',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        NidoCard(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Iniciá sesión con el mismo correo de Google al que '
+                              'se dirigió la invitación.',
+                              style: theme.textTheme.bodyMedium,
                             ),
-                            onChanged: (_) => setState(() {}),
-                            onSubmitted: (_) {
-                              if (canSubmit) {
-                                _accept();
-                              }
-                            },
-                          ),
-                        ],
-                      ),
+                            NidoFormField(
+                              label: 'Token de invitación',
+                              error: _error,
+                              child: NidoTextField(
+                                key: const Key('invitation_token_field'),
+                                controller: _token,
+                                maxLength: 43,
+                                hintText: 'Pegá acá el token de 43 caracteres',
+                                hasError: _error != null,
+                                onChanged: (_) => setState(() {}),
+                                onSubmitted: (_) {
+                                  if (canSubmit) {
+                                    _accept();
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.cardGap),
+                        const InlineNotice(
+                          message:
+                              'El token es de un solo uso. Nido no lo guarda en '
+                              'este dispositivo ni lo escribe en logs.',
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        ActionButton(
+                          key: const Key('accept_invitation_button'),
+                          label: 'Aceptar invitación',
+                          loading: _submitting,
+                          onPressed: canSubmit ? _accept : null,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.cardGap),
-                  const InlineNotice(
-                    message:
-                        'El token es de un solo uso. Nido no lo guarda en '
-                        'este dispositivo ni lo escribe en logs.',
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  FilledButton(
-                    key: const Key('accept_invitation_button'),
-                    onPressed: canSubmit ? _accept : null,
-                    child:
-                        _submitting
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Text('Aceptar invitación'),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

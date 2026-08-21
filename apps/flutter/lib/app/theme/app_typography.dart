@@ -16,6 +16,11 @@ class AppTypography {
   static const double secondarySize = 13.0;
   static const double labelSize = 11.0;
 
+  /// The oversized amount readout on a money form. Not part of the type scale:
+  /// it is one component's size, and putting it in the scale would invite
+  /// other screens to reach for it.
+  static const double amountSize = 44.0;
+
   /// Builds the canonical [TextTheme] for Nido.
   static TextTheme createTextTheme() {
     return const TextTheme(
@@ -23,7 +28,9 @@ class AppTypography {
       displayLarge: TextStyle(
         fontFamily: displayFontFamily,
         fontSize: heroSize,
-        fontWeight: FontWeight.w700,
+        // The legacy hero is `displaySemibold`; only the amount readout uses
+        // the bold face.
+        fontWeight: FontWeight.w600,
         color: AppColors.ink,
         letterSpacing: -0.5,
         height: 1.2,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nido/app/router/app_routes.dart';
 import 'package:nido/core/errors/app_error.dart';
+import 'package:nido/core/widgets/action_button.dart';
 import 'package:nido/testing/finance_fakes.dart';
 
 import 'pump_app.dart';
@@ -54,7 +55,7 @@ void main() {
       expect(find.text('Editar categoría'), findsOneWidget);
       expect(find.byKey(const Key('category_icon_restaurant')), findsOneWidget);
 
-      await tapAt(tester, find.byKey(const Key('close_category_editor')));
+      await tapAt(tester, find.byKey(const Key('form_header_dismiss')));
       await tapAt(
         tester,
         find.byKey(const Key('category_child_$expenseChildId')),
@@ -104,21 +105,21 @@ void main() {
       await tapAt(tester, find.byKey(const Key('new_root_button_EXPENSE')));
 
       final button = find.byKey(const Key('save_category_button'));
-      expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      expect(tester.widget<ActionButton>(button).onPressed, isNull);
 
       await tester.enterText(
         find.byKey(const Key('category_name_field')),
         '   ',
       );
       await tester.pumpAndSettle();
-      expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      expect(tester.widget<ActionButton>(button).onPressed, isNull);
 
       await tester.enterText(
         find.byKey(const Key('category_name_field')),
         'Mascotas',
       );
       await tester.pumpAndSettle();
-      expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+      expect(tester.widget<ActionButton>(button).onPressed, isNotNull);
     });
 
     testWidgets('a new root is appended past the existing sort order', (

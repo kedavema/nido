@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,8 +16,16 @@ import '../../../core/ids/uuid_v4.dart';
 import '../../../core/money/currency.dart';
 import '../../../core/time/local_date.dart';
 import '../../../core/time/nido_time_zone.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/amount_field.dart';
+import '../../../core/widgets/app_screen.dart';
+import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/inline_notice.dart';
 import '../../../core/widgets/loading_content.dart';
+import '../../../core/widgets/nido_card.dart';
+import '../../../core/widgets/nido_chip.dart';
+import '../../../core/widgets/screen_header.dart';
+import '../../../core/widgets/sync_status_pill.dart';
 import '../../categories/application/categories_providers.dart';
 import '../../categories/domain/category_tree.dart';
 import '../../payment_sources/application/payment_sources_providers.dart';
@@ -33,9 +40,9 @@ import 'transactions_list_screen.dart';
 
 /// The new/edit movement form.
 ///
-/// One screen for both, as in the legacy app: the fields are identical and
-/// the only differences are the title, whether the kind toggle is offered
-/// (an existing movement's kind is not something to flip — see
+/// One screen for both, as in the legacy app: the fields are identical and the
+/// only differences are the title, whether the kind toggle is offered (an
+/// existing movement's kind is not something to flip — see
 /// [TransactionDraft.toUpdateRequest]) and what happens on save.
 class TransactionFormScreen extends ConsumerStatefulWidget {
   const TransactionFormScreen({
@@ -47,8 +54,8 @@ class TransactionFormScreen extends ConsumerStatefulWidget {
   /// `null` creates; an id edits that movement.
   final String? transactionId;
 
-  /// Only the entry point decides the initial kind, and anything
-  /// unrecognised is an expense — the common case and every caller's default.
+  /// Only the entry point decides the initial kind, and anything unrecognised
+  /// is an expense — the common case and every caller's default.
   final TransactionType initialType;
 
   @override
@@ -138,16 +145,14 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
         history.error ??
         original.error;
     if (error != null) {
-      return _errorScaffold(householdId, error);
+      return _errorScreen(householdId, error);
     }
 
     if (!categories.hasValue ||
         !paymentSources.hasValue ||
         !history.hasValue ||
         !original.hasValue) {
-      return const Scaffold(
-        body: SafeArea(child: LoadingContent(label: 'Cargando…')),
-      );
+      return const AppScreen(children: [LoadingContent(label: 'Cargando…')]);
     }
 
     // Seeded once, from the loaded data. Assigning here rather than from a
@@ -186,39 +191,38 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     );
   }
 
-  Widget _errorScaffold(String householdId, Object error) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Movimiento')),
-      body: SafeArea(
-        child: ListView(
-          padding: AppSpacing.screenPadding,
-          children: [
-            InlineNotice(
-              message: messageForActionError(error),
-              tone: NoticeTone.error,
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            OutlinedButton(
-              key: const Key('retry_button'),
-              onPressed: () {
-                ref
-                  ..invalidate(categoriesProvider(householdId))
-                  ..invalidate(paymentSourcesProvider(householdId))
-                  ..invalidate(allTransactionsProvider(householdId));
-                if (widget.transactionId case final id?) {
-                  ref.invalidate(
-                    transactionProvider((
-                      householdId: householdId,
-                      transactionId: id,
-                    )),
-                  );
-                }
-              },
-              child: const Text('Reintentar'),
-            ),
-          ],
-        ),
+  Widget _errorScreen(String householdId, Object error) {
+    return AppScreen(
+      header: FormHeader(
+        title: 'Movimiento',
+        onDismiss: _leave,
+        dismissIcon: FormDismissIcon.back,
       ),
+      children: [
+        InlineNotice(
+          message: messageForActionError(error),
+          tone: NoticeTone.error,
+        ),
+        ActionButton(
+          key: const Key('retry_button'),
+          label: 'Reintentar',
+          variant: ActionButtonVariant.secondary,
+          onPressed: () {
+            ref
+              ..invalidate(categoriesProvider(householdId))
+              ..invalidate(paymentSourcesProvider(householdId))
+              ..invalidate(allTransactionsProvider(householdId));
+            if (widget.transactionId case final id?) {
+              ref.invalidate(
+                transactionProvider((
+                  householdId: householdId,
+                  transactionId: id,
+                )),
+              );
+            }
+          },
+        ),
+      ],
     );
   }
 
@@ -259,35 +263,76 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     ].join(' · ');
     final noun = (_draft?.isIncome ?? false) ? 'ingreso' : 'gasto';
 
-    final discard = await showDialog<bool>(
+    final discard = await showModalBottomSheet<bool>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            key: const Key('discard_dialog'),
-            title: Text('¿Descartar este $noun?'),
-            content: Text(
-              summary.isEmpty
-                  ? 'Tenés cambios sin guardar. Si seguís editando, todo '
-                      'queda como estaba.'
-                  : 'Tenés datos sin guardar: $summary. Si seguís editando, '
-                      'todo queda como estaba.',
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0x8C141C19),
+      builder: (context) {
+        final theme = Theme.of(context);
+        final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+
+        return Container(
+          key: const Key('discard_dialog'),
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(AppRadii.modal),
+              topRight: Radius.circular(AppRadii.modal),
             ),
-            actions: [
-              TextButton(
-                key: const Key('keep_editing_button'),
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Seguir editando'),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.screen,
+            AppSpacing.lg,
+            AppSpacing.screen,
+            AppSpacing.screen + bottomInset,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '¿Descartar este $noun?',
+                style: theme.textTheme.titleMedium,
               ),
-              FilledButton(
-                key: const Key('discard_button'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.danger,
-                ),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Descartar'),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                summary.isEmpty
+                    ? 'Tenés cambios sin guardar. Si seguís editando, todo '
+                        'queda como estaba.'
+                    : 'Tenés datos sin guardar: $summary. Si seguís editando, '
+                        'todo queda como estaba.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Expanded(
+                    child: ActionButton(
+                      key: const Key('keep_editing_button'),
+                      label: 'Seguir editando',
+                      variant: ActionButtonVariant.secondary,
+                      onPressed: () => Navigator.of(context).pop(false),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.cardGap),
+                  Expanded(
+                    child: ActionButton(
+                      key: const Key('discard_button'),
+                      label: 'Descartar',
+                      variant: ActionButtonVariant.danger,
+                      onPressed: () => Navigator.of(context).pop(true),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+        );
+      },
     );
     return discard ?? false;
   }
@@ -397,258 +442,233 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           _leave();
         }
       },
-      child: Scaffold(
+      child: AppFormScreen(
         key: const Key('transaction_form_screen'),
-        appBar: AppBar(title: Text(_isEdit ? 'Editar $noun' : 'Nuevo $noun')),
-        bottomNavigationBar: SafeArea(
-          child: Padding(
-            padding: AppSpacing.screenPadding,
-            child: FilledButton(
-              key: const Key('submit_transaction_button'),
-              onPressed:
-                  draft.isSubmittable && !_saving
-                      ? () => _submit(householdId, categories)
-                      : null,
-              child:
-                  _saving
-                      ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : Text(_isEdit ? 'Guardar cambios' : 'Guardar $noun'),
+        header: FormHeader(
+          title: _isEdit ? 'Editar $noun' : 'Nuevo $noun',
+          onDismiss: () async {
+            if (!_dirty || await _confirmDiscard()) {
+              if (mounted) {
+                setState(() => _dirty = false);
+                _leave();
+              }
+            }
+          },
+          // The kind toggle rides the header so it stays reachable while the
+          // keyboard is up — it decides what the number below means.
+          trailing:
+              _isEdit
+                  ? null
+                  : _SegmentedRow<TransactionType>(
+                    keyPrefix: 'kind',
+                    options: const [
+                      (TransactionType.expense, 'Gasto'),
+                      (TransactionType.income, 'Ingreso'),
+                    ],
+                    selected: draft.type,
+                    onSelect: (type) => _update(draft.withType(type)),
+                  ),
+        ),
+        footer: ActionButton(
+          key: const Key('submit_transaction_button'),
+          label: _isEdit ? 'Guardar cambios' : 'Guardar $noun',
+          loading: _saving,
+          onPressed:
+              draft.isSubmittable && !_saving
+                  ? () => _submit(householdId, categories)
+                  : null,
+        ),
+        children: [
+          AmountField(
+            controller: _amount,
+            prefix: draft.currency == Currency.pyg ? 'Gs.' : 'USD',
+            autofocus: true,
+            decimal: draft.currency == Currency.usd,
+            onChanged: (raw) {
+              final next = draft.copyWith(amount: draft.amount.withRaw(raw));
+              _syncController(_amount, next.amount.display);
+              _update(next);
+            },
+          ),
+          // FLT-016: the currency selector the legacy form never had. The
+          // contract accepts USD movements and the edit form rendered their
+          // fields, but nothing could ever create one.
+          Center(
+            child: _SegmentedRow<Currency>(
+              keyPrefix: 'currency',
+              options: const [
+                (Currency.pyg, 'Guaraníes'),
+                (Currency.usd, 'Dólares'),
+              ],
+              selected: draft.currency,
+              onSelect: (currency) {
+                final next = draft.withCurrency(currency);
+                _syncController(_amount, next.amount.display);
+                _syncController(_fxRate, next.fxRate.display);
+                _update(next);
+              },
             ),
           ),
-        ),
-        body: SafeArea(
-          child: ListView(
-            padding: AppSpacing.screenPadding,
-            children: [
-              if (!_isEdit)
-                _SegmentedRow<TransactionType>(
-                  keyPrefix: 'kind',
-                  options: const [
-                    (TransactionType.expense, 'Gasto'),
-                    (TransactionType.income, 'Ingreso'),
-                  ],
-                  selected: draft.type,
-                  onSelect: (type) => _update(draft.withType(type)),
-                ),
-              const SizedBox(height: AppSpacing.cardGap),
-              // FLT-016: the currency selector the legacy form never had.
-              // The contract accepts USD movements and the edit form rendered
-              // their fields, but nothing could ever create one.
-              _SegmentedRow<Currency>(
-                keyPrefix: 'currency',
-                options: const [
-                  (Currency.pyg, 'Guaraníes'),
-                  (Currency.usd, 'Dólares'),
-                ],
-                selected: draft.currency,
-                onSelect: (currency) {
-                  final next = draft.withCurrency(currency);
-                  _syncController(_amount, next.amount.display);
-                  _syncController(_fxRate, next.fxRate.display);
-                  _update(next);
-                },
-              ),
-              const SizedBox(height: AppSpacing.cardGap),
-              _AmountField(
-                controller: _amount,
-                currency: draft.currency,
-                onChanged: (raw) {
-                  final next = draft.copyWith(
-                    amount: draft.amount.withRaw(raw),
-                  );
-                  _syncController(_amount, next.amount.display);
-                  _update(next);
-                },
-              ),
-              if (draft.currency == Currency.usd) ...[
-                const SizedBox(height: AppSpacing.cardGap),
-                _FxRateCard(
-                  controller: _fxRate,
-                  draft: draft,
-                  lastUsed: mostRecentUsdRate(history),
-                  onChanged: (raw) {
-                    final next = draft.copyWith(
-                      fxRate: draft.fxRate.withRaw(raw),
-                    );
-                    _syncController(_fxRate, next.fxRate.display);
-                    _update(next);
-                  },
-                  onUseLastRate: (wire) {
-                    final next = draft.copyWith(
-                      fxRate: const FxRateInput.empty().withRaw(
-                        wire.replaceFirst('.', ','),
-                      ),
-                    );
-                    _syncController(_fxRate, next.fxRate.display);
-                    _update(next);
-                  },
-                ),
+          if (draft.currency == Currency.usd)
+            _FxRateCard(
+              controller: _fxRate,
+              draft: draft,
+              lastUsed: mostRecentUsdRate(history),
+              onChanged: (raw) {
+                final next = draft.copyWith(fxRate: draft.fxRate.withRaw(raw));
+                _syncController(_fxRate, next.fxRate.display);
+                _update(next);
+              },
+              onUseLastRate: (wire) {
+                final next = draft.copyWith(
+                  fxRate: const FxRateInput.empty().withRaw(
+                    wire.replaceFirst('.', ','),
+                  ),
+                );
+                _syncController(_fxRate, next.fxRate.display);
+                _update(next);
+              },
+            ),
+          FormSection(
+            label: 'Categoría',
+            sublabel: recentRoots.isEmpty ? null : 'recientes',
+            onSeeAll: () => _pickCategory(householdId, kindCategories, noun),
+            child: ChipRow(
+              children: [
+                for (final category in rootChips)
+                  NidoChip(
+                    key: Key('category_chip_${category.id}'),
+                    label: category.name,
+                    selected: selectedRootId == category.id,
+                    onPressed:
+                        () => _update(
+                          draft.copyWith(
+                            categoryId: nextRequiredCategoryId(
+                              draft.categoryId,
+                              category,
+                            ),
+                          ),
+                        ),
+                  ),
               ],
-              const SizedBox(height: AppSpacing.cardGap),
-              _ChipSection(
-                label: 'Categoría',
-                sublabel: recentRoots.isEmpty ? null : 'recientes',
-                onSeeAll:
-                    () => _pickCategory(householdId, kindCategories, noun),
+            ),
+          ),
+          if (childChips.isNotEmpty)
+            FormSection(
+              label: 'Subcategoría (opcional)',
+              child: ChipRow(
                 children: [
-                  for (final category in rootChips)
-                    ChoiceChip(
-                      key: Key('category_chip_${category.id}'),
-                      label: Text(category.name),
-                      selected: selectedRootId == category.id,
-                      onSelected:
-                          (_) => _update(
+                  for (final child in childChips)
+                    NidoChip(
+                      key: Key('subcategory_chip_${child.id}'),
+                      label: child.name,
+                      selected: draft.categoryId == child.id,
+                      onPressed:
+                          () => _update(
                             draft.copyWith(
                               categoryId: nextRequiredCategoryId(
                                 draft.categoryId,
-                                category,
+                                child,
                               ),
                             ),
                           ),
                     ),
                 ],
               ),
-              if (childChips.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.cardGap),
-                _ChipSection(
-                  label: 'Subcategoría (opcional)',
-                  children: [
-                    for (final child in childChips)
-                      ChoiceChip(
-                        key: Key('subcategory_chip_${child.id}'),
-                        label: Text(child.name),
-                        selected: draft.categoryId == child.id,
-                        onSelected:
-                            (_) => _update(
-                              draft.copyWith(
-                                categoryId: nextRequiredCategoryId(
-                                  draft.categoryId,
-                                  child,
-                                ),
-                              ),
+            ),
+          // An income asks neither expense question: money did not go out
+          // through an account, and it did not go to a merchant.
+          if (!draft.isIncome)
+            FormSection(
+              label: 'Pagado con',
+              sublabel: favoriteIds.isEmpty ? null : 'favoritos',
+              onSeeAll: () => _pickPaymentSource(paymentSources, favoriteIds),
+              child: ChipRow(
+                children: [
+                  for (final source in sourceChips)
+                    NidoChip(
+                      key: Key('payment_source_chip_${source.id}'),
+                      label: source.name,
+                      selected: draft.paymentSourceId == source.id,
+                      // Tapping the selected one clears it: "sin medio de
+                      // pago" is a legal answer and this is the only place the
+                      // chip row can express it.
+                      onPressed:
+                          () => _update(
+                            draft.copyWith(
+                              paymentSourceId:
+                                  draft.paymentSourceId == source.id
+                                      ? null
+                                      : source.id,
                             ),
-                      ),
-                  ],
-                ),
-              ],
-              // An income asks neither expense question: money did not go out
-              // through an account, and it did not go to a merchant.
-              if (!draft.isIncome) ...[
-                const SizedBox(height: AppSpacing.cardGap),
-                _ChipSection(
-                  label: 'Pagado con',
-                  sublabel: favoriteIds.isEmpty ? null : 'favoritos',
-                  onSeeAll:
-                      () => _pickPaymentSource(paymentSources, favoriteIds),
-                  children: [
-                    for (final source in sourceChips)
-                      ChoiceChip(
-                        key: Key('payment_source_chip_${source.id}'),
-                        label: Text(source.name),
-                        selected: draft.paymentSourceId == source.id,
-                        // Tapping the selected one clears it: "sin medio de
-                        // pago" is a legal answer and this is the only place
-                        // the chips row can express it.
-                        onSelected:
-                            (_) => _update(
-                              draft.copyWith(
-                                paymentSourceId:
-                                    draft.paymentSourceId == source.id
-                                        ? null
-                                        : source.id,
-                              ),
-                            ),
-                      ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: AppSpacing.cardGap),
-              const _FieldLabel(label: 'Fecha'),
-              const SizedBox(height: AppSpacing.sm),
-              OutlinedButton(
-                key: const Key('pick_date_button'),
-                onPressed: () => _pickDate(),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      draft.localDate == _todayLocal
-                          ? 'Hoy · ${formatFullLocalDate(draft.localDate)}'
-                          : formatFullLocalDate(draft.localDate),
+                          ),
                     ),
-                    const Icon(Icons.expand_more, size: 18),
-                  ],
-                ),
+                ],
               ),
-              if (!draft.isIncome) ...[
-                const SizedBox(height: AppSpacing.cardGap),
-                TextField(
-                  key: const Key('description_field'),
-                  controller: _description,
-                  maxLength: 200,
-                  decoration: const InputDecoration(
-                    labelText: 'Comercio',
-                    hintText: '¿Dónde fue?',
-                    counterText: '',
-                  ),
-                  onChanged:
-                      (value) => _update(draft.copyWith(description: value)),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.cardGap),
-              if (_notesExpanded)
-                TextField(
-                  key: const Key('notes_field'),
-                  controller: _notes,
-                  maxLength: 2000,
-                  maxLines: null,
-                  decoration: const InputDecoration(
-                    labelText: 'Nota (opcional)',
-                    counterText: '',
-                  ),
-                  onChanged: (value) => _update(draft.copyWith(notes: value)),
-                )
-              else
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    key: const Key('add_note_button'),
-                    onPressed: () => setState(() => _notesExpanded = true),
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('Agregar nota (opcional)'),
-                  ),
-                ),
-              if (_problemsMessage(draft) case final message?) ...[
-                const SizedBox(height: AppSpacing.cardGap),
-                InlineNotice(
-                  key: const Key('draft_problems_notice'),
-                  message: message,
-                  tone: NoticeTone.warning,
-                ),
-              ],
-              if (_submitError case final message?) ...[
-                const SizedBox(height: AppSpacing.cardGap),
-                InlineNotice(
-                  key: const Key('submit_error_notice'),
-                  message: message,
-                  tone: NoticeTone.error,
-                ),
-              ],
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'El monto en guaraníes que Nido guarda lo calcula el servidor '
-                'con el tipo de cambio que cargaste.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.inkSecondary,
-                ),
-              ),
-            ],
+            ),
+          NidoFormField(
+            label: 'Fecha',
+            child: PickerField(
+              key: const Key('pick_date_button'),
+              value:
+                  draft.localDate == _todayLocal
+                      ? 'Hoy · ${formatFullLocalDate(draft.localDate)}'
+                      : formatFullLocalDate(draft.localDate),
+              onPressed: _pickDate,
+            ),
           ),
-        ),
+          if (!draft.isIncome)
+            NidoFormField(
+              label: 'Comercio',
+              child: NidoTextField(
+                key: const Key('description_field'),
+                controller: _description,
+                hintText: '¿Dónde fue?',
+                maxLength: 200,
+                onChanged:
+                    (value) => _update(draft.copyWith(description: value)),
+              ),
+            ),
+          if (_notesExpanded)
+            NidoFormField(
+              label: 'Nota (opcional)',
+              child: NidoTextField(
+                key: const Key('notes_field'),
+                controller: _notes,
+                maxLength: 2000,
+                maxLines: null,
+                onChanged: (value) => _update(draft.copyWith(notes: value)),
+              ),
+            )
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('add_note_button'),
+                onPressed: () => setState(() => _notesExpanded = true),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Agregar nota (opcional)'),
+              ),
+            ),
+          if (_problemsMessage(draft) case final message?)
+            InlineNotice(
+              key: const Key('draft_problems_notice'),
+              message: message,
+              tone: NoticeTone.warning,
+            ),
+          if (_submitError case final message?)
+            InlineNotice(
+              key: const Key('submit_error_notice'),
+              message: message,
+              tone: NoticeTone.error,
+            ),
+          Text(
+            'El monto en guaraníes que Nido guarda lo calcula el servidor con '
+            'el tipo de cambio que cargaste.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }
@@ -743,72 +763,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   }
 }
 
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.label, this.sublabel});
-
-  final String label;
-  final String? sublabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Text(label, style: theme.textTheme.bodySmall),
-        if (sublabel case final text?) ...[
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '· $text',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.inkSecondary,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _ChipSection extends StatelessWidget {
-  const _ChipSection({
-    required this.label,
-    required this.children,
-    this.sublabel,
-    this.onSeeAll,
-  });
-
-  final String label;
-  final String? sublabel;
-  final VoidCallback? onSeeAll;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _FieldLabel(label: label, sublabel: sublabel),
-            if (onSeeAll case final callback?)
-              TextButton(
-                key: Key('see_all_$label'),
-                onPressed: callback,
-                child: const Text('Ver todas'),
-              ),
-          ],
-        ),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: children,
-        ),
-      ],
-    );
-  }
-}
-
+/// A compact two-option switch, for kind and currency.
 class _SegmentedRow<T> extends StatelessWidget {
   const _SegmentedRow({
     required this.keyPrefix,
@@ -824,59 +779,55 @@ class _SegmentedRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      children: [
-        for (final (value, label) in options)
-          ChoiceChip(
-            key: Key('${keyPrefix}_option_$value'),
-            label: Text(label),
-            selected: selected == value,
-            onSelected: (_) => onSelect(value),
-          ),
-      ],
-    );
-  }
-}
-
-class _AmountField extends StatelessWidget {
-  const _AmountField({
-    required this.controller,
-    required this.currency,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final Currency currency;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return TextField(
-      key: const Key('amount_field'),
-      controller: controller,
-      autofocus: true,
-      textAlign: TextAlign.center,
-      style: theme.textTheme.headlineLarge,
-      // The platform's own numeric keyboard: locale-correct layout,
-      // backspace, and no caret-management bugs a custom keypad would add.
-      keyboardType: TextInputType.numberWithOptions(
-        decimal: currency == Currency.usd,
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: AppRadii.chipRadius,
       ),
-      inputFormatters: [
-        // Belt to the sanitizer's braces: keeps an IME from inserting
-        // characters the draft would silently drop.
-        FilteringTextInputFormatter.allow(
-          currency == Currency.pyg ? RegExp(r'[\d.]') : RegExp(r'[\d.,]'),
-        ),
-      ],
-      decoration: InputDecoration(
-        labelText: 'Monto',
-        prefixText: currency == Currency.pyg ? 'Gs. ' : r'USD $ ',
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (value, label) in options)
+            GestureDetector(
+              key: Key('${keyPrefix}_option_$value'),
+              onTap: () => onSelect(value),
+              child: Semantics(
+                button: true,
+                selected: selected == value,
+                label: label,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  constraints: const BoxConstraints(
+                    minHeight: 36,
+                    minWidth: 56,
+                  ),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color:
+                        selected == value
+                            ? AppColors.surface
+                            : Colors.transparent,
+                    borderRadius: AppRadii.chipRadius,
+                  ),
+                  child: Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color:
+                          selected == value
+                              ? AppColors.ink
+                              : AppColors.inkSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      onChanged: onChanged,
     );
   }
 }
@@ -901,60 +852,41 @@ class _FxRateCard extends StatelessWidget {
     final theme = Theme.of(context);
     final preview = draft.previewBaseAmountPyg();
 
-    return Container(
+    return NidoCard(
       key: const Key('fx_rate_card'),
-      padding: AppSpacing.cardInsets,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadii.cardRadius,
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Tipo de cambio (manual)', style: theme.textTheme.bodyMedium),
-          const SizedBox(height: AppSpacing.sm),
-          TextField(
-            key: const Key('fx_rate_field'),
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
-            ],
-            decoration: const InputDecoration(
-              prefixText: 'Gs. ',
-              labelText: 'Guaraníes por dólar',
+      gap: AppSpacing.sm,
+      children: [
+        const FieldLabel('Tipo de cambio (manual)'),
+        NidoTextField(
+          key: const Key('fx_rate_field'),
+          controller: controller,
+          hintText: 'Guaraníes por dólar',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textAlign: TextAlign.end,
+          onChanged: onChanged,
+        ),
+        if (lastUsed case final last?)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const Key('use_last_fx_rate_button'),
+              onPressed: () => onUseLastRate(last.wire),
+              child: Text(
+                'Último usado: ${formatDecimalEs(last.wire, 0)} · '
+                '${formatLocalDateWithoutYear(last.localDate)}',
+              ),
             ),
-            onChanged: onChanged,
           ),
-          if (lastUsed case final last?) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const Key('use_last_fx_rate_button'),
-                onPressed: () => onUseLastRate(last.wire),
-                child: Text(
-                  'Último usado: ${formatDecimalEs(last.wire, 0)} · '
-                  '${formatLocalDateWithoutYear(last.localDate)}',
-                ),
-              ),
+        if (preview != null)
+          Text(
+            '≈ Gs. ${formatPygMagnitude(preview.toWire())}',
+            key: const Key('fx_preview'),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: AppColors.primary,
             ),
-          ],
-          if (preview != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '≈ Gs. ${formatPygMagnitude(preview.toWire())}',
-              key: const Key('fx_preview'),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
@@ -983,67 +915,64 @@ class _SavedConfirmation extends StatelessWidget {
     final noun =
         transaction.type == TransactionType.income ? 'Ingreso' : 'Gasto';
 
-    return Scaffold(
+    return AppFormScreen(
       key: const Key('transaction_saved_screen'),
-      body: SafeArea(
-        child: ListView(
-          padding: AppSpacing.screenPadding,
-          children: [
-            const SizedBox(height: AppSpacing.xxl),
-            const Center(
-              child: CircleAvatar(
-                radius: 36,
-                backgroundColor: AppColors.successBackground,
-                child: Icon(Icons.check, size: 32, color: AppColors.success),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            Text(
-              '$noun guardado',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineMedium,
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.cardPadding,
-                ),
-                child: MovementRow(
-                  transaction: transaction,
-                  categories: categories,
-                  paymentSources: paymentSources,
-                  // Tapping the receipt would push a detail screen on top of
-                  // a confirmation the user has not dismissed yet.
-                  onTap: () {},
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            Text(
-              'Ya se sincronizó. Los totales de '
-              '${formatRecentMovementDateLabel(transaction.localDate, today)} '
-              'se actualizaron para los dos.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.inkSecondary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            FilledButton(
-              key: const Key('load_another_button'),
-              onPressed: onAnother,
-              child: Text('Cargar otro ${noun.toLowerCase()}'),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextButton(
-              key: const Key('done_button'),
-              onPressed: onDone,
-              child: const Text('Listo'),
-            ),
-          ],
-        ),
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ActionButton(
+            key: const Key('load_another_button'),
+            label: 'Cargar otro ${noun.toLowerCase()}',
+            onPressed: onAnother,
+          ),
+          const SizedBox(height: AppSpacing.base),
+          TextButton(
+            key: const Key('done_button'),
+            onPressed: onDone,
+            child: const Text('Listo'),
+          ),
+        ],
       ),
+      children: [
+        const SizedBox(height: AppSpacing.lg),
+        const Center(
+          child: CircleAvatar(
+            radius: 36,
+            backgroundColor: AppColors.successBackground,
+            child: Icon(Icons.check, size: 32, color: AppColors.success),
+          ),
+        ),
+        Text(
+          '$noun guardado',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.displayLarge,
+        ),
+        NidoCard.single(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.cardPadding,
+            vertical: AppSpacing.base,
+          ),
+          child: MovementRow(
+            transaction: transaction,
+            categories: categories,
+            paymentSources: paymentSources,
+            // Tapping the receipt would push a detail screen on top of a
+            // confirmation the user has not dismissed yet.
+            onTap: () {},
+          ),
+        ),
+        const Center(child: SyncStatusPill(tone: SyncStatusTone.synced)),
+        Text(
+          'Ya se sincronizó. Los totales de '
+          '${formatRecentMovementDateLabel(transaction.localDate, today)} se '
+          'actualizaron para los dos.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: AppColors.inkSecondary,
+          ),
+        ),
+      ],
     );
   }
 }
