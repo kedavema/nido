@@ -53,14 +53,20 @@ apps/flutter/
         authenticated_identity.dart # Firebase-side identity value type
       contracts/
         json_reader.dart           # Strict JSON boundary reader (no loose Map<String, dynamic>)
+        patch.dart                 # Patch<T>: absent vs explicit-null for PATCH requests
         wire_codecs.dart           # Wire codecs for instants, local dates, months, emails
         health.dart                # Health contract DTO
         identity.dart              # AuthenticatedUser DTO
         households.dart            # GetMe/households/members/invites DTOs (M2)
-        transactions.dart          # Transaction DTOs + enums + fx cross-field rules
+        categories.dart            # Category DTOs + kind/colour/icon rules (M3)
+        payment_sources.dart       # PaymentSource DTOs + type enum (M3)
+        transactions.dart          # Transaction DTOs, update patch, list query (M3)
         monthly_summary.dart       # Monthly summary / budget DTOs
       errors/
         app_error.dart             # Sealed AppError hierarchy with Spanish UI copy
+        error_messages.dart        # messageForActionError for failed screen actions
+      ids/
+        uuid_v4.dart               # Injected UUID generator (clientMutationId, ADR 0003)
       money/
         currency.dart              # PYG (scale 0) / USD (scale 2)
         money.dart                 # Money value type (BigInt minor units, FLT-006)
@@ -76,6 +82,23 @@ apps/flutter/
         year_month.dart            # YearMonth (yyyy-MM, ranges, last-day clamp)
         wire_instant.dart          # UTC instant codec + legacy 15:00Z occurredAt rule
         nido_time_zone.dart        # America/Asuncion (fixed UTC-3 since DST abolition)
+      widgets/
+        confirm_dialog.dart        # Destructive confirmation (reports failure in place)
+        inline_notice.dart         # Tinted inline feedback box
+        loading_content.dart       # Centered progress indicator
+    features/
+      categories/                  # Categories & subcategories CRUD (M3)
+        domain/category_tree.dart        # Root/child tree, search, chip selection
+        domain/category_appearance.dart  # Icon/colour resolution and palette
+      payment_sources/             # Payment sources CRUD (M3)
+      transactions/                # Movements CRUD, filters and form (M3)
+        domain/amount_input.dart         # Partial money/FX input, separate from Money
+        domain/transaction_draft.dart    # Form state, validation, request building
+        domain/transaction_filters.dart  # Kind/category filters and chips
+        domain/movement_format.dart      # Day grouping, signed amounts, Spanish dates
+    testing/
+      session_fakes.dart           # Auth/household doubles (importable from integration_test)
+      finance_fakes.dart           # Catalog/transaction doubles and builders (M3)
   test/
     app/
       app_test.dart                # App bootstrap test
@@ -88,6 +111,7 @@ apps/flutter/
         responsive_layout_test.dart # Breakpoint switching tests
   integration_test/
     app_startup_test.dart          # E2E foundation startup test
+    transactions_flow_test.dart    # E2E M3: create a movement, legacy URL redirects
   test_driver/
     integration_test.dart          # Host-side driver (flutter drive -d web-server)
   android/                         # Android native project (package: com.nido.mobile)
@@ -101,8 +125,8 @@ Dart DTOs mirror the Zod schemas in `packages/contracts`. Both sides parse the
 same versioned fixtures:
 
 - `packages/contracts/fixtures/*.json` — validated by
-  `packages/contracts/test/fixtures.spec.ts` (Zod) and parsed by
-  `test/core/contracts/contracts_test.dart` (Dart).
+  `packages/contracts/test/fixtures.spec.ts` (Zod) and parsed by the Dart
+  tests under `test/core/contracts/`.
 - A contract change that edits a fixture forces both clients to move in the
   same change.
 
@@ -144,6 +168,40 @@ Invite tokens are never logged: `/v1/invites/:token/accept` is observed only
 as its route template, and the one-use token is shown exactly once for manual
 delivery.
 
+## Core Financial Flows (M3)
+
+Catalogs (`/categories`, `/payment-sources`) and movements (`/transactions`,
+`/transactions/new`, `/transactions/:id`, `/transactions/:id/edit`). Online
+only — the offline queue is M4 ([`FLT-019`](../../docs/flutter-migration-decisions.md)).
+
+- **Money-safe forms.** A half-typed amount is an `AmountInput`, not a `Money`:
+  it becomes one only when it parses. PYG accepts digits only (scale 0), USD a
+  single comma capped at two decimals (scale 2), and the FX rate its own four.
+  USD requires a rate; PYG must not carry one. The live `≈ Gs.` preview runs
+  the same single half-up step the server applies (ADR 0001), so it matches
+  what gets persisted. `double` appears nowhere.
+- **Idempotency from the start.** Every create sends a `clientMutationId` with
+  a matching `Idempotency-Key` (ADR 0003). M3 has no queue, but a create whose
+  response was lost is unsafe to retry without one.
+- **Cancellation.** Month, kind and search are the family key of
+  `transactionsProvider`; changing any of them disposes the previous provider
+  and its `CancelToken` aborts the request in flight, so a slow earlier
+  response cannot land after a faster later one. The category filter is
+  deliberately _not_ in the key — the endpoint matches `categoryId` exactly, so
+  selecting a root is resolved over the response instead of refetching.
+- **No pagination, stated.** `GET /transactions` has no page parameter: a query
+  returns every matching row. The list says so under the last group rather than
+  implying a boundary that does not exist.
+- **Legacy URLs.** `/movimientos`, `/nuevo-gasto` and `/movimiento/:id` redirect
+  to their canonical routes, carrying `:id` and the query string
+  ([`FLT-020`](../../docs/flutter-migration-decisions.md)).
+- **Deliberate differences from legacy**, each with its own decision: the
+  currency selector that makes USD creation reachable
+  ([`FLT-016`](../../docs/flutter-migration-decisions.md)), uniform rejection of
+  a zero amount ([`FLT-017`](../../docs/flutter-migration-decisions.md)), and a
+  detail screen labelled by the movement's actual type
+  ([`FLT-018`](../../docs/flutter-migration-decisions.md)).
+
 ## Validation Commands
 
 ```bash
@@ -162,8 +220,13 @@ against chromedriver:
 
 ```bash
 chromedriver --port=4444 &
-flutter drive \
-  --driver=test_driver/integration_test.dart \
-  --target=integration_test/app_startup_test.dart \
-  -d web-server --headless
+for target in \
+  integration_test/app_startup_test.dart \
+  integration_test/transactions_flow_test.dart
+do
+  flutter drive \
+    --driver=test_driver/integration_test.dart \
+    --target="$target" \
+    -d web-server --headless
+done
 ```

@@ -138,18 +138,26 @@ jobs:
 
       # `flutter test` does not run `integration_test/`; it needs a real
       # runtime. The ubuntu runner image ships Chrome plus a matching
-      # chromedriver (exposed via $CHROMEWEBDRIVER), so the startup test runs
-      # headless against the web build without extra actions or devices.
+      # chromedriver (exposed via $CHROMEWEBDRIVER), so these run headless
+      # against the web build without extra actions or devices.
+      #
+      # `flutter drive` takes one target at a time, so each suite is its own
+      # invocation under a single chromedriver.
       - name: Run integration tests (web)
         working-directory: apps/flutter
         run: |
           "$CHROMEWEBDRIVER/chromedriver" --port=4444 &
           CHROMEDRIVER_PID=$!
           trap 'kill "$CHROMEDRIVER_PID"' EXIT
-          flutter drive \
-            --driver=test_driver/integration_test.dart \
-            --target=integration_test/app_startup_test.dart \
-            -d web-server --headless
+          for target in \
+            integration_test/app_startup_test.dart \
+            integration_test/transactions_flow_test.dart
+          do
+            flutter drive \
+              --driver=test_driver/integration_test.dart \
+              --target="$target" \
+              -d web-server --headless
+          done
 
       # From a clean clone: the runner image provides the Android SDK; the
       # Flutter Gradle plugin fetches the wrapper and remaining components.

@@ -8,13 +8,21 @@ import type { z } from 'zod';
 import {
   AcceptHouseholdInviteResponseSchema,
   AuthenticatedUserSchema,
+  CreateCategoryRequestSchema,
   CreateHouseholdInviteResponseSchema,
   CreateHouseholdResponseSchema,
+  CreatePaymentSourceRequestSchema,
   CreateTransactionRequestSchema,
   GetHouseholdMembersResponseSchema,
   GetMeResponseSchema,
+  ListCategoriesResponseSchema,
+  ListPaymentSourcesResponseSchema,
+  ListTransactionsQuerySchema,
+  ListTransactionsResponseSchema,
   MonthlySummaryResponseSchema,
   TransactionSchema,
+  UpdateCategoryRequestSchema,
+  UpdateTransactionRequestSchema,
 } from '../src/index.js';
 
 /**
@@ -45,6 +53,15 @@ const cases: readonly { readonly file: string; readonly schema: z.ZodType }[] = 
     file: 'accept-household-invite-response.json',
     schema: AcceptHouseholdInviteResponseSchema,
   },
+  // M3 catalogs and transaction CRUD/filters.
+  { file: 'categories-list.json', schema: ListCategoriesResponseSchema },
+  { file: 'create-category-request.json', schema: CreateCategoryRequestSchema },
+  { file: 'update-category-request.json', schema: UpdateCategoryRequestSchema },
+  { file: 'payment-sources-list.json', schema: ListPaymentSourcesResponseSchema },
+  { file: 'create-payment-source-request.json', schema: CreatePaymentSourceRequestSchema },
+  { file: 'transactions-list.json', schema: ListTransactionsResponseSchema },
+  { file: 'update-transaction-request.json', schema: UpdateTransactionRequestSchema },
+  { file: 'list-transactions-query.json', schema: ListTransactionsQuerySchema },
 ];
 
 describe('shared contract fixtures', () => {

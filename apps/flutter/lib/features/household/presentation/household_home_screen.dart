@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/app_routes.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radii.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -92,6 +94,7 @@ class _HomeCards {
 
   Widget _header() => _HomeHeader(session: session);
   Widget _summary() => _HouseholdSummaryCard(household: household);
+  Widget _sections() => const _SectionsCard();
   Widget _members() => _MembersCard(householdId: household.id);
   Widget? _invite() =>
       household.role == HouseholdRole.owner
@@ -107,6 +110,8 @@ class _HomeCards {
         _header(),
         const SizedBox(height: AppSpacing.cardGap),
         _summary(),
+        const SizedBox(height: AppSpacing.cardGap),
+        _sections(),
         const SizedBox(height: AppSpacing.cardGap),
         _members(),
         if (invite != null) ...[
@@ -134,6 +139,8 @@ class _HomeCards {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _summary(),
+                  const SizedBox(height: AppSpacing.lg),
+                  _sections(),
                   if (invite != null) ...[
                     const SizedBox(height: AppSpacing.lg),
                     invite,
@@ -221,6 +228,59 @@ class _HouseholdSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.sm),
             _DetailRow(label: 'Moneda base', value: household.baseCurrency),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The financial sections M3 adds. A plain list of links, not a bottom
+/// navigation bar: the shell that decides how these are reached on each
+/// breakpoint is its own piece of work, and one is not needed to make the
+/// screens usable.
+class _SectionsCard extends StatelessWidget {
+  const _SectionsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      key: const Key('sections_card'),
+      child: Padding(
+        padding: AppSpacing.cardInsets,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Plata del hogar', style: theme.textTheme.titleMedium),
+            ListTile(
+              key: const Key('go_transactions'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.receipt_long_outlined),
+              title: const Text('Movimientos'),
+              subtitle: const Text('Gastos e ingresos del mes'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go(AppRoutes.transactions),
+            ),
+            ListTile(
+              key: const Key('go_categories'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.sell_outlined),
+              title: const Text('Categorías'),
+              subtitle: const Text('Categorías y subcategorías del hogar'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go(AppRoutes.categories),
+            ),
+            ListTile(
+              key: const Key('go_payment_sources'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.credit_card_outlined),
+              title: const Text('Medios de pago'),
+              subtitle: const Text('Informativos: no calculan saldos'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go(AppRoutes.paymentSources),
+            ),
           ],
         ),
       ),

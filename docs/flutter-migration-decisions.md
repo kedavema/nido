@@ -1,6 +1,6 @@
 # Decisiones de la migración Flutter
 
-Última actualización: 2026-08-20
+Última actualización: 2026-08-21
 
 Estados: `Proposed`, `Accepted`, `Superseded`, `Rejected`.
 
@@ -428,3 +428,168 @@ funcionalidad y capacidad de rollback del frontend, no preservar datos locales l
 **Trade-offs**  
 Ninguno para producción (los datos son de prueba). Se descartan colas locales de prueba no
 sincronizadas del frontend legacy.
+
+## FLT-016 — El alta de movimientos ofrece selector de moneda
+
+**Status:** Accepted
+
+**Decision**  
+El formulario de movimiento Flutter ofrece un selector PYG/USD tanto al crear como al editar. Se
+corrige el bug legacy en lugar de portarlo.
+
+**Context**  
+`CreateTransactionRequestSchema` acepta `currency: USD` con `fxRateToBase`, y el formulario legacy
+(`apps/mobile/src/app/nuevo-gasto.tsx`) renderiza la tarjeta de tipo de cambio cuando
+`draft.currency === 'USD'` — pero ese valor solo puede llegar cargando un movimiento existente:
+`buildDraft(null, ...)` fija `'PYG'` y no existe control que lo cambie. El resultado es que un
+movimiento en dólares no puede crearse desde la app, solo editarse si ya existía. Es uno de los
+casos que FLT-014 exige decidir explícitamente.
+
+**Options considered**
+
+1. Portar la ausencia del selector tal cual, por regla de paridad.
+2. Agregar el selector solo en edición.
+3. Ofrecer el selector en alta y edición.
+
+**Selected approach**  
+Opción 3.
+
+**Reason**  
+La opción 1 institucionaliza un bug: preserva una pantalla que dibuja campos inalcanzables. La
+opción 2 deja la contradicción intacta (se puede cambiar la moneda de un movimiento pero no
+elegirla al crearlo). El contrato, el cálculo `baseAmountPyg` y los tipos de dinero ya soportan USD
+extremo a extremo; lo único que faltaba era el control.
+
+**Trade-offs**  
+La comparación contra legacy deja de ser 1:1 en esta pantalla y debe registrarse como diferencia
+intencional en la matriz de paridad. Agrega superficie a validar (alta USD, half-up, preview).
+
+## FLT-017 — El monto cero se rechaza de forma uniforme
+
+**Status:** Accepted
+
+**Decision**  
+Un movimiento con monto cero — o con tipo de cambio cero — no es enviable desde ningún formulario
+Flutter. La verificación es sobre el value type (`Money.isZero`), no sobre el texto tipeado.
+
+**Context**  
+El legacy es inconsistente: `nuevo-fijo`, `nuevo-ingreso`, `pagar-fijo/[id]` y
+`recibir-ingreso/[id]` exigen `amount !== '' && amount !== '0'`, mientras que `nuevo-gasto.tsx`
+solo exige `amount !== ''`. Además esa comparación es contra el string literal `'0'`, así que
+`'00'` y `'0,00'` pasan en todos los casos. El backend no acota el mínimo (`AmountSchema` acepta
+`"0"`), así que la única barrera es el cliente.
+
+**Options considered**
+
+1. Copiar la inconsistencia formulario por formulario.
+2. Aceptar cero en todos lados (el contrato lo permite).
+3. Rechazar cero en todos lados, comparando el monto parseado y no su texto.
+
+**Selected approach**  
+Opción 3.
+
+**Reason**  
+Un movimiento de cero guaraníes no describe nada que haya pasado y ensucia listados, subtotales e
+informes sin aportar información. La comparación sobre `Money` cierra además el agujero de `'0,00'`
+que la comparación textual dejaba abierto en los cinco formularios.
+
+**Trade-offs**  
+Es una restricción más estricta que la del backend; si alguna vez existe un caso legítimo de monto
+cero, hay que relajarla en un solo lugar (`TransactionDraft.validate`).
+
+## FLT-018 — El detalle rotula el movimiento por su tipo
+
+**Status:** Accepted
+
+**Decision**  
+La pantalla de detalle titula "Detalle del ingreso" o "Detalle del gasto" según `transaction.type`,
+y la fila "Categoría" muestra siempre la categoría real del movimiento.
+
+**Context**  
+`apps/mobile/src/app/movimiento/[id].tsx` titula "Detalle del gasto" para todo movimiento, y para
+`type === 'INCOME'` imprime la palabra literal `'Ingreso'` en lugar de
+`categoryLabel(...)`. Un ingreso aparece entonces rotulado como gasto en la única pantalla que
+muestra su signo completo, y su categoría queda oculta.
+
+**Options considered**
+
+1. Portar los rótulos tal cual.
+2. Corregir solo el título.
+3. Corregir título y fila de categoría.
+
+**Selected approach**  
+Opción 3.
+
+**Reason**  
+Ambos defectos son del mismo tipo — la pantalla afirma algo que contradice el dato que está
+mostrando — y la fila de categoría es precisamente la pregunta que esa fila existe para responder.
+
+**Trade-offs**  
+Ninguno funcional. La comparación visual contra legacy mostrará textos distintos en esta pantalla y
+debe leerse como corrección, no como regresión.
+
+## FLT-019 — Los pendientes fuera de contexto se resuelven con la cola offline (M4)
+
+**Status:** Accepted
+
+**Decision**  
+M3 no muestra sección "Pendientes" en el listado de movimientos. El bug legacy de pendientes
+mostrados fuera del contexto de mes, filtros y hogar se decide y corrige junto con la cola offline
+en M4.
+
+**Context**  
+El listado legacy renderiza `pending` de `sync-queue` sobre cualquier mes y con cualquier filtro
+aplicado, porque una mutación encolada todavía no tiene `localDate` ni `baseAmountPyg` asignados
+por el servidor. M3 es explícitamente online-only: la cola offline pertenece a M4.
+
+**Options considered**
+
+1. Construir una sección de pendientes en M3 sin cola que la alimente.
+2. Portar el comportamiento legacy cuando llegue M4, sin decidir.
+3. Dejar el listado sin pendientes en M3 y decidir el comportamiento correcto al implementar la
+   cola.
+
+**Selected approach**  
+Opción 3.
+
+**Reason**  
+No hay nada que mostrar sin cola, y decidir la semántica ahora sería decidirla sin la información
+que M4 va a producir (qué contexto conserva una mutación encolada). Queda registrado para que la
+ausencia no se lea como olvido.
+
+**Trade-offs**  
+La feature "Offline transaction creation" no puede pasar de `NOT_STARTED` hasta M4, y la
+comparación de listado contra legacy debe hacerse con la cola vacía.
+
+## FLT-020 — Las URLs legacy se resuelven por redirect, no por alias permanente
+
+**Status:** Accepted
+
+**Decision**  
+`/movimientos`, `/nuevo-gasto` y `/movimiento/:id` redirigen a `/transactions`,
+`/transactions/new` y `/transactions/:id`, conservando query string e `:id`. No quedan como alias
+permanentes. La edición de un movimiento es `/transactions/:id/edit`, ruta propia y no un query
+parameter sobre el alta.
+
+**Context**  
+`docs/flutter-architecture.md` deja abierta la elección entre alias y redirect hasta construir la
+tabla de compatibilidad. El runtime legacy expone paths españoles y su service worker los cachea.
+
+**Options considered**
+
+1. Alias permanente: ambas URLs sirven la misma pantalla.
+2. Redirect a la ruta canónica.
+
+**Selected approach**  
+Opción 2.
+
+**Reason**  
+Un alias deja dos URLs vivas para una pantalla: dos entradas de historial, dos rutas que testear en
+cada cambio y dos claves posibles de cache para el service worker. El redirect conserva los enlaces
+existentes sin ninguno de esos costos. El `id` y el query string se transportan, así que un enlace
+compartido con filtros sigue mostrando lo mismo.
+
+**Trade-offs**  
+Un enlace legacy cambia de URL en la barra de direcciones al abrirse. Las rutas legacy restantes
+(`/presupuesto`, `/fijos`, `/pagar-fijo/:id`, `/ingresos`, `/informes`, …) siguen sin resolver
+hasta que sus milestones las porten.

@@ -1,0 +1,56 @@
+{
+  "categories": [
+    {
+      "id": "0f7a1c2d-3b4e-4f5a-8b6c-7d8e9f0a1b2c",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "kind": "EXPENSE",
+      "parentId": null,
+      "name": "Alimentación",
+      "icon": "restaurant",
+      "color": "#3E6B34",
+      "sortOrder": 0,
+      "isActive": true,
+      "createdAt": "2026-07-16T12:05:00.000Z",
+      "updatedAt": "2026-07-16T12:05:00.000Z"
+    },
+    {
+      "id": "1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "kind": "EXPENSE",
+      "parentId": "0f7a1c2d-3b4e-4f5a-8b6c-7d8e9f0a1b2c",
+      "name": "Supermercado",
+      "icon": "restaurant",
+      "color": "#3E6B34",
+      "sortOrder": 0,
+      "isActive": true,
+      "createdAt": "2026-07-16T12:05:00.000Z",
+      "updatedAt": "2026-07-16T12:05:00.000Z"
+    },
+    {
+      "id": "3c4d5e6f-7a8b-4c9d-a0e1-f2a3b4c5d6e7",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "kind": "EXPENSE",
+      "parentId": "0f7a1c2d-3b4e-4f5a-8b6c-7d8e9f0a1b2c",
+      "name": "Delivery",
+      "icon": "restaurant",
+      "color": "#3E6B34",
+      "sortOrder": 1,
+      "isActive": false,
+      "createdAt": "2026-07-16T12:05:00.000Z",
+      "updatedAt": "2026-08-01T09:00:00.000Z"
+    },
+    {
+      "id": "2b3c4d5e-6f7a-4b8c-8d9e-0f1a2b3c4d5e",
+      "householdId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "kind": "INCOME",
+      "parentId": null,
+      "name": "Salario",
+      "icon": "briefcase",
+      "color": "#3E5C76",
+      "sortOrder": 0,
+      "isActive": true,
+      "createdAt": "2026-07-16T12:05:00.000Z",
+      "updatedAt": "2026-07-16T12:05:00.000Z"
+    }
+  ]
+}
