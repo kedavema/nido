@@ -17,6 +17,7 @@ import '../../../core/time/nido_time_zone.dart';
 import '../../../core/time/year_month.dart';
 import '../../../core/widgets/action_button.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../../core/widgets/filters_button.dart';
 import '../../../core/widgets/form_fields.dart';
 import '../../../core/widgets/inline_notice.dart';
 import '../../../core/widgets/loading_content.dart';
@@ -250,13 +251,9 @@ class _ListHeader extends ConsumerWidget {
           const SizedBox(height: AppSpacing.cardGap),
           ChipRow(
             children: [
-              SoftChip(
+              FiltersButton(
                 key: const Key('open_filters_button'),
-                label:
-                    filters.activeCount == 0
-                        ? 'Filtros'
-                        : 'Filtros (${filters.activeCount})',
-                selected: filters.activeCount > 0,
+                count: filters.activeCount,
                 onPressed: () async {
                   final applied = await showMovementFiltersSheet(
                     context: context,

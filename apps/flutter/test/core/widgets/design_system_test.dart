@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nido/app/theme/app_colors.dart';
+import 'package:nido/app/theme/app_spacing.dart';
 import 'package:nido/app/theme/app_theme.dart';
 import 'package:nido/app/theme/app_typography.dart';
 import 'package:nido/core/errors/app_error.dart';
@@ -9,6 +10,7 @@ import 'package:nido/core/widgets/action_button.dart';
 import 'package:nido/core/widgets/amount_field.dart';
 import 'package:nido/core/widgets/app_screen.dart';
 import 'package:nido/core/widgets/confirm_dialog.dart';
+import 'package:nido/core/widgets/filters_button.dart';
 import 'package:nido/core/widgets/form_fields.dart';
 import 'package:nido/core/widgets/inline_notice.dart';
 import 'package:nido/core/widgets/month_stepper.dart';
@@ -136,6 +138,117 @@ void main() {
       await tester.tap(find.byKey(const Key('remove')));
       await tester.pump();
       expect(removed, 1);
+    });
+  });
+
+  group('FiltersButton', () {
+    testWidgets('names the count only once a filter is applied', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host(FiltersButton(count: 0, onPressed: () {})));
+      expect(find.text('Filtros'), findsOneWidget);
+
+      await tester.pumpWidget(host(FiltersButton(count: 2, onPressed: () {})));
+      expect(find.text('Filtros · 2'), findsOneWidget);
+    });
+
+    testWidgets('tints only while the list is actually narrowed', (
+      tester,
+    ) async {
+      BoxDecoration decorationOf() =>
+          tester.widget<Container>(find.byType(Container)).decoration!
+              as BoxDecoration;
+
+      await tester.pumpWidget(host(FiltersButton(count: 0, onPressed: () {})));
+      expect(decorationOf().color, AppColors.surface);
+
+      await tester.pumpWidget(host(FiltersButton(count: 1, onPressed: () {})));
+      expect(decorationOf().color, AppColors.primaryTint);
+    });
+
+    testWidgets('stands at the full touch target, unlike the chips', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host(FiltersButton(count: 0, onPressed: () {})));
+
+      expect(
+        tester.getSize(find.byType(FiltersButton)).height,
+        greaterThanOrEqualTo(AppSpacing.touchTarget),
+      );
+    });
+  });
+
+  group('chips size to their content', () {
+    // A `Container` with an `alignment` expands to fill bounded constraints,
+    // and a `Wrap` hands its children exactly that — which stretched every
+    // chip and the filters button across the whole row.
+    Future<double> widthIn(WidgetTester tester, Widget chip) async {
+      await tester.pumpWidget(
+        host(SizedBox(width: 800, child: ChipRow(children: [chip]))),
+      );
+      return tester.getSize(find.byWidget(chip)).width;
+    }
+
+    testWidgets('a NidoChip is as wide as its label, not the row', (
+      tester,
+    ) async {
+      final width = await widthIn(
+        tester,
+        NidoChip(label: 'Alimentación', selected: true, onPressed: () {}),
+      );
+
+      expect(width, lessThan(300));
+    });
+
+    testWidgets('a SoftChip is as wide as its label', (tester) async {
+      final width = await widthIn(
+        tester,
+        SoftChip(label: 'Gastos', selected: false, onPressed: () {}),
+      );
+
+      expect(width, lessThan(300));
+    });
+
+    testWidgets('the filters button is as wide as its label', (tester) async {
+      final width = await widthIn(
+        tester,
+        FiltersButton(count: 2, onPressed: () {}),
+      );
+
+      expect(width, lessThan(300));
+    });
+
+    testWidgets('several chips share one row instead of stacking', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          SizedBox(
+            width: 800,
+            child: ChipRow(
+              children: [
+                NidoChip(
+                  key: const Key('a'),
+                  label: 'Uno',
+                  selected: false,
+                  onPressed: () {},
+                ),
+                NidoChip(
+                  key: const Key('b'),
+                  label: 'Dos',
+                  selected: false,
+                  onPressed: () {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final first = tester.getRect(find.byKey(const Key('a')));
+      final second = tester.getRect(find.byKey(const Key('b')));
+      expect(second.left, greaterThan(first.right - 1));
+      expect(second.top, first.top);
     });
   });
 

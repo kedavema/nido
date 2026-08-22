@@ -60,10 +60,54 @@ void main() {
       expect(selectedRootCategoryId(null, categories), isNull);
     });
 
-    test('root chips lead with the preferred ids and pad with the rest', () {
-      final chips = rootCategoryChips(categories, [incomeRootId], 3);
+    test('the most-used roots lead, and the rest pad the row', () {
+      final chips = rootCategoryChips(
+        categories,
+        recentRootIds: [incomeRootId],
+        selectedRootId: null,
+        limit: 3,
+      );
 
       expect(chips.map((c) => c.id), [incomeRootId, expenseRootId]);
+    });
+
+    test('selecting a root does not reshuffle the row under your finger', () {
+      // The legacy behaviour led with the selection, so every tap moved the
+      // next chip somewhere else.
+      final unselected = rootCategoryChips(
+        categories,
+        recentRootIds: const [],
+        selectedRootId: null,
+        limit: 3,
+      );
+      final selected = rootCategoryChips(
+        categories,
+        recentRootIds: const [],
+        selectedRootId: incomeRootId,
+        limit: 3,
+      );
+
+      expect(selected.map((c) => c.id), unselected.map((c) => c.id));
+    });
+
+    test('a root picked from "ver todas" is promoted so it stays visible', () {
+      final many = [
+        for (var index = 0; index < 5; index++)
+          buildCategory(
+            id: '00000000-0000-4000-8000-00000000002$index',
+            name: 'Raíz $index',
+          ),
+      ];
+      final chips = rootCategoryChips(
+        many,
+        recentRootIds: const [],
+        selectedRootId: '00000000-0000-4000-8000-000000000024',
+        limit: 3,
+      );
+
+      // A selection you cannot see reads as no selection at all.
+      expect(chips.first.id, '00000000-0000-4000-8000-000000000024');
+      expect(chips, hasLength(3));
     });
 
     test('root chips never include an archived root', () {
@@ -77,7 +121,12 @@ void main() {
       ];
 
       expect(
-        rootCategoryChips(withArchivedRoot, const [], 5).map((c) => c.id),
+        rootCategoryChips(
+          withArchivedRoot,
+          recentRootIds: const [],
+          selectedRootId: null,
+          limit: 5,
+        ).map((c) => c.id),
         isNot(contains('00000000-0000-4000-8000-0000000000aa')),
       );
     });
@@ -97,7 +146,19 @@ void main() {
       expect(subcategoryChips(categories, null, null, 3), isEmpty);
     });
 
-    test('the selected child is pulled to the front past the limit', () {
+    test('selecting a child leaves the row where it was', () {
+      final chips = subcategoryChips(
+        categories,
+        expenseRootId,
+        expenseChildId,
+        3,
+      );
+      final unselected = subcategoryChips(categories, expenseRootId, null, 3);
+
+      expect(chips.map((c) => c.id), unselected.map((c) => c.id));
+    });
+
+    test('a child past the limit is promoted so it stays visible', () {
       final many = [
         buildCategory(id: expenseRootId, name: 'Alimentación'),
         for (var index = 0; index < 5; index++)

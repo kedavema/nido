@@ -405,10 +405,12 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       todayLocal: _todayLocal,
     );
     final selectedRootId = selectedRootCategoryId(draft.categoryId, categories);
-    final rootChips = rootCategoryChips(kindCategories, [
-      selectedRootId,
-      ...recentRoots,
-    ], quickChipLimit);
+    final rootChips = rootCategoryChips(
+      kindCategories,
+      recentRootIds: recentRoots,
+      selectedRootId: selectedRootId,
+      limit: quickChipLimit,
+    );
     final childChips = subcategoryChips(
       kindCategories,
       selectedRootId,

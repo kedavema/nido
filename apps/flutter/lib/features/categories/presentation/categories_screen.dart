@@ -361,18 +361,24 @@ class _DashedChip extends StatelessWidget {
       borderRadius: AppRadii.chipRadius,
       child: Container(
         constraints: const BoxConstraints(minHeight: 36),
-        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           borderRadius: AppRadii.chipRadius,
           border: Border.all(color: AppColors.primary),
         ),
-        child: Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w600,
-          ),
+        // A Row, not a bare Text: the container's `minHeight` would otherwise
+        // stretch the paragraph and paint the label against its top edge.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -34,8 +34,10 @@ class NidoChip extends StatelessWidget {
       selected: selected,
       onPressed: onPressed,
       child: Container(
+        // No `alignment`: a Container with one expands to fill the bounded
+        // constraints a Wrap hands it, which made every chip full-width. The
+        // Row below centres the content instead.
         constraints: const BoxConstraints(minHeight: AppSpacing.touchTarget),
-        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: selected ? AppColors.primary : AppColors.surface,
@@ -108,7 +110,6 @@ class SoftChip extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(minHeight: 36),
         padding: EdgeInsets.only(left: 14, right: onRemove == null ? 14 : 6),
-        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? AppColors.primaryTint : AppColors.surface,
           borderRadius: AppRadii.chipRadius,

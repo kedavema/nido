@@ -418,18 +418,36 @@ void main() {
       expect(chips.map((source) => source.id), [cashSourceId, bankSourceId]);
     });
 
-    test(
-      'the selected source leads the row even when it is not a favourite',
-      () {
-        final chips = paymentSourceChips(
-          paymentSources: buildPaymentSources(),
-          favoriteIds: const [cashSourceId],
-          selectedId: bankSourceId,
-        );
+    test('selecting a source does not reshuffle the row', () {
+      // Tapping a chip used to pull it to the front, moving the next one
+      // under the finger that was about to tap it.
+      final chips = paymentSourceChips(
+        paymentSources: buildPaymentSources(),
+        favoriteIds: const [cashSourceId],
+        selectedId: bankSourceId,
+      );
 
-        expect(chips.first.id, bankSourceId);
-      },
-    );
+      expect(chips.map((source) => source.id), [cashSourceId, bankSourceId]);
+    });
+
+    test('a source past the limit is promoted so it stays visible', () {
+      final many = [
+        for (var index = 0; index < 5; index++)
+          buildPaymentSource(
+            id: '00000000-0000-4000-8000-00000000003$index',
+            name: 'Medio $index',
+          ),
+      ];
+      final chips = paymentSourceChips(
+        paymentSources: many,
+        favoriteIds: const [],
+        selectedId: '00000000-0000-4000-8000-000000000034',
+      );
+
+      // A selection you cannot see reads as no selection at all.
+      expect(chips.first.id, '00000000-0000-4000-8000-000000000034');
+      expect(chips, hasLength(quickChipLimit));
+    });
   });
 
   group('mostRecentUsdRate', () {
