@@ -88,41 +88,71 @@ String? selectedRootCategoryId(
   return selected?.parentId ?? selected?.id;
 }
 
-/// Resolves ids to categories in preference order, deduplicated, dropping
-/// unknowns.
-List<Category> _orderedByPreference(
-  List<Category> pool,
-  List<String?> preferred,
-  List<String> rest,
-) {
-  final ids = <String>{...preferred.whereType<String>(), ...rest};
-  return [
-    for (final id in ids)
-      if (_findById(pool, id) case final category?) category,
+/// Orders [pool] for a quick-chip row and cuts it to [limit].
+///
+/// [ranked] is a stable ordering derived from history (most-used first); the
+/// rest follow in the order the API returned. The selected id is deliberately
+/// NOT promoted to the front: a row that rearranges itself the instant you tap
+/// it moves the next chip under your finger, and the legacy behaviour of
+/// always leading with the selection made every pick feel like the list had
+/// shuffled.
+///
+/// It IS promoted when it would otherwise fall outside the visible window,
+/// because a selection you cannot see reads as no selection at all. That
+/// happens once, when something is picked from "Ver todas" that was not among
+/// the quick chips, and the row then stays put while you keep tapping.
+List<T> orderedChips<T>({
+  required List<T> pool,
+  required String Function(T item) idOf,
+  required List<String> ranked,
+  required String? selectedId,
+  required int limit,
+}) {
+  final byId = {for (final item in pool) idOf(item): item};
+  final ordered = <T>[
+    for (final id in ranked)
+      if (byId[id] case final item?) item,
+    for (final item in pool)
+      if (!ranked.contains(idOf(item))) item,
   ];
+
+  final visible = ordered.take(limit).toList(growable: false);
+  if (selectedId == null || visible.any((item) => idOf(item) == selectedId)) {
+    return visible;
+  }
+  final selected = byId[selectedId];
+  if (selected == null) {
+    return visible;
+  }
+  return [
+    selected,
+    ...ordered.where((item) => idOf(item) != selectedId),
+  ].take(limit).toList(growable: false);
 }
 
-/// The root chips a form shows above the picker: preferred roots first (the
-/// selected one, then whatever the caller ranks as recent), padded with the
-/// remaining active roots so selecting a category never collapses the row to
-/// a single chip.
+/// The root chips a form shows above the picker: the household's most-used
+/// roots first, padded with the remaining active ones so the row never
+/// collapses to a single chip. See [orderedChips] for why the selected root
+/// does not jump to the front.
 List<Category> rootCategoryChips(
-  List<Category> categories,
-  List<String?> preferredRootIds,
-  int limit,
-) {
-  final roots = categories
-      .where((category) => category.isRoot && category.isActive)
-      .toList(growable: false);
-  final ordered = _orderedByPreference(roots, preferredRootIds, [
-    for (final root in roots) root.id,
-  ]);
-  return ordered.take(limit).toList(growable: false);
+  List<Category> categories, {
+  required List<String> recentRootIds,
+  required String? selectedRootId,
+  required int limit,
+}) {
+  return orderedChips(
+    pool: categories
+        .where((category) => category.isRoot && category.isActive)
+        .toList(growable: false),
+    idOf: (category) => category.id,
+    ranked: recentRootIds,
+    selectedId: selectedRootId,
+    limit: limit,
+  );
 }
 
-/// The child chips for the selected root, with the selected child pulled to
-/// the front so it stays visible even when the root has more children than
-/// [limit].
+/// The child chips for the selected root, in the catalog's own order. The
+/// selected child only moves when it would otherwise be past [limit].
 List<Category> subcategoryChips(
   List<Category> categories,
   String? selectedRootId,
@@ -132,18 +162,18 @@ List<Category> subcategoryChips(
   if (selectedRootId == null) {
     return const [];
   }
-  final children = categories
-      .where(
-        (category) => category.parentId == selectedRootId && category.isActive,
-      )
-      .toList(growable: false);
-  final selectedChild = _findById(children, selectedCategoryId);
-  final ordered = _orderedByPreference(
-    children,
-    [selectedChild?.id],
-    [for (final child in children) child.id],
+  return orderedChips(
+    pool: categories
+        .where(
+          (category) =>
+              category.parentId == selectedRootId && category.isActive,
+        )
+        .toList(growable: false),
+    idOf: (category) => category.id,
+    ranked: const [],
+    selectedId: selectedCategoryId,
+    limit: limit,
   );
-  return ordered.take(limit).toList(growable: false);
 }
 
 /// Categories are required, subcategories are optional. Tapping an already

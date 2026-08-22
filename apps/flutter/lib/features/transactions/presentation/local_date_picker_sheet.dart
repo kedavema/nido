@@ -4,24 +4,33 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/time/local_date.dart';
 import '../../../core/time/year_month.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/app_bottom_sheet.dart';
+import '../../../core/widgets/month_stepper.dart';
 import '../domain/movement_format.dart';
 
 /// Picks the [LocalDate] a movement happened on.
 ///
 /// Hand-rolled rather than Material's `showDatePicker`: that one needs
-/// `flutter_localizations` to speak Spanish, and it works in `DateTime`,
-/// which is exactly the ambiguous type [LocalDate] exists to keep out of
-/// financial dates (FLT-007). The grid is Monday-first, like the legacy
-/// calendar.
+/// `flutter_localizations` to speak Spanish, and it works in `DateTime`, which
+/// is exactly the ambiguous type [LocalDate] exists to keep out of financial
+/// dates (FLT-007). The grid is Monday-first, like the legacy calendar.
 Future<LocalDate?> showLocalDatePickerSheet({
   required BuildContext context,
   required LocalDate value,
   required LocalDate today,
 }) {
-  return showModalBottomSheet<LocalDate>(
+  return showAppBottomSheet<LocalDate>(
     context: context,
-    showDragHandle: true,
-    builder: (context) => _LocalDatePickerSheet(value: value, today: today),
+    title: 'Elegir fecha',
+    sheetKey: const Key('local_date_picker_sheet'),
+    initialSize: 0.7,
+    builder:
+        (context, controller) => _LocalDatePickerBody(
+          scrollController: controller,
+          value: value,
+          today: today,
+        ),
   );
 }
 
@@ -35,17 +44,22 @@ const List<String> _weekdayLabels = [
   'Dom',
 ];
 
-class _LocalDatePickerSheet extends StatefulWidget {
-  const _LocalDatePickerSheet({required this.value, required this.today});
+class _LocalDatePickerBody extends StatefulWidget {
+  const _LocalDatePickerBody({
+    required this.scrollController,
+    required this.value,
+    required this.today,
+  });
 
+  final ScrollController scrollController;
   final LocalDate value;
   final LocalDate today;
 
   @override
-  State<_LocalDatePickerSheet> createState() => _LocalDatePickerSheetState();
+  State<_LocalDatePickerBody> createState() => _LocalDatePickerBodyState();
 }
 
-class _LocalDatePickerSheetState extends State<_LocalDatePickerSheet> {
+class _LocalDatePickerBodyState extends State<_LocalDatePickerBody> {
   late YearMonth _month = YearMonth.of(widget.value);
 
   @override
@@ -56,101 +70,81 @@ class _LocalDatePickerSheetState extends State<_LocalDatePickerSheet> {
     final leading = DateTime.utc(_month.year, _month.month, 1).weekday - 1;
     final dayCount = LocalDate.daysInMonth(_month.year, _month.month);
 
-    return SafeArea(
-      key: const Key('local_date_picker_sheet'),
-      child: Padding(
-        padding: AppSpacing.screenPadding,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return ListView(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screen),
+      children: [
+        Row(
           children: [
-            Text('Elegir fecha', style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.cardGap),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    key: const Key('date_today_button'),
-                    onPressed: () => Navigator.of(context).pop(widget.today),
-                    child: const Text('Hoy'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.cardGap),
-                Expanded(
-                  child: OutlinedButton(
-                    key: const Key('date_yesterday_button'),
-                    onPressed: () => Navigator.of(context).pop(yesterday),
-                    child: const Text('Ayer'),
-                  ),
-                ),
-              ],
+            Expanded(
+              child: ActionButton(
+                key: const Key('date_today_button'),
+                label: 'Hoy',
+                variant: ActionButtonVariant.secondary,
+                onPressed: () => Navigator.of(context).pop(widget.today),
+              ),
             ),
-            const SizedBox(height: AppSpacing.cardGap),
-            Row(
-              children: [
-                IconButton(
-                  key: const Key('calendar_previous_month'),
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => setState(() => _month = _month.previous),
-                ),
-                Expanded(
-                  child: Text(
-                    formatMonthLabel(_month),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-                IconButton(
-                  key: const Key('calendar_next_month'),
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => setState(() => _month = _month.next),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                for (final label in _weekdayLabels)
-                  Expanded(
-                    child: Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.inkSecondary,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            GridView.count(
-              crossAxisCount: 7,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                for (var index = 0; index < leading; index++)
-                  const SizedBox.shrink(),
-                for (var day = 1; day <= dayCount; day++)
-                  _DayCell(
-                    date: LocalDate(_month.year, _month.month, day),
-                    isSelected:
-                        LocalDate(_month.year, _month.month, day) ==
-                        widget.value,
-                    isToday:
-                        LocalDate(_month.year, _month.month, day) ==
-                        widget.today,
-                    onTap: (date) => Navigator.of(context).pop(date),
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.cardGap),
-            TextButton(
-              key: const Key('date_cancel_button'),
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
+            const SizedBox(width: AppSpacing.cardGap),
+            Expanded(
+              child: ActionButton(
+                key: const Key('date_yesterday_button'),
+                label: 'Ayer',
+                variant: ActionButtonVariant.secondary,
+                onPressed: () => Navigator.of(context).pop(yesterday),
+              ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: AppSpacing.cardGap),
+        Center(
+          child: MonthStepper(
+            key: const Key('calendar_month_stepper'),
+            label: formatMonthLabel(_month),
+            onPrevious: () => setState(() => _month = _month.previous),
+            onNext: () => setState(() => _month = _month.next),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.cardGap),
+        Row(
+          children: [
+            for (final label in _weekdayLabels)
+              Expanded(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        GridView.count(
+          crossAxisCount: 7,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            for (var index = 0; index < leading; index++)
+              const SizedBox.shrink(),
+            for (var day = 1; day <= dayCount; day++)
+              _DayCell(
+                date: LocalDate(_month.year, _month.month, day),
+                isSelected:
+                    LocalDate(_month.year, _month.month, day) == widget.value,
+                isToday:
+                    LocalDate(_month.year, _month.month, day) == widget.today,
+                onTap: (date) => Navigator.of(context).pop(date),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.cardGap),
+        ActionButton(
+          key: const Key('date_cancel_button'),
+          label: 'Cancelar',
+          variant: ActionButtonVariant.secondary,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        const SizedBox(height: AppSpacing.screen),
+      ],
     );
   }
 }
@@ -193,6 +187,7 @@ class _DayCell extends StatelessWidget {
             '${date.day}',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: isSelected ? AppColors.surface : AppColors.ink,
+              fontWeight: isSelected ? FontWeight.w600 : null,
             ),
           ),
         ),

@@ -15,6 +15,8 @@ import '../../features/payment_sources/presentation/payment_sources_screen.dart'
 import '../../features/transactions/presentation/transaction_detail_screen.dart';
 import '../../features/transactions/presentation/transaction_form_screen.dart';
 import '../../features/transactions/presentation/transactions_list_screen.dart';
+import '../../core/widgets/action_button.dart';
+import '../../core/widgets/nido_card.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import 'app_routes.dart';
@@ -210,43 +212,36 @@ class NotFoundScreen extends StatelessWidget {
 
     return Scaffold(
       key: const Key('not_found_screen'),
-      appBar: AppBar(title: const Text('Página no encontrada')),
-      body: Center(
-        child: Padding(
-          padding: AppSpacing.screenPadding,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Card(
-              child: Padding(
-                padding: AppSpacing.cardInsets,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: AppColors.danger,
-                      size: 48,
-                    ),
-                    const SizedBox(height: AppSpacing.screen),
-                    Text(
-                      '404 — Ruta desconocida',
-                      style: theme.textTheme.titleMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'La ruta "$path" no existe o no está disponible.',
-                      style: theme.textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    FilledButton(
-                      key: const Key('return_home_button'),
-                      onPressed: () => context.go(AppRoutes.root),
-                      child: const Text('Volver al Inicio'),
-                    ),
-                  ],
-                ),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: AppSpacing.screenPadding,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: NidoCard(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: AppColors.danger,
+                    size: 48,
+                  ),
+                  Text(
+                    '404 — Ruta desconocida',
+                    style: theme.textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  Text(
+                    'La ruta "$path" no existe o no está disponible.',
+                    style: theme.textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  ActionButton(
+                    key: const Key('return_home_button'),
+                    label: 'Volver al Inicio',
+                    onPressed: () => context.go(AppRoutes.root),
+                  ),
+                ],
               ),
             ),
           ),

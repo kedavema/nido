@@ -9,6 +9,9 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../core/auth/auth_error_messages.dart';
 import '../../../core/auth/session_controller.dart';
 import '../../../core/auth/session_machine.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/form_fields.dart';
+import '../../../core/widgets/nido_card.dart';
 
 String? _firstNameFrom(String? displayName) {
   final trimmed = displayName?.trim() ?? '';
@@ -97,31 +100,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   const SizedBox(height: AppSpacing.base),
                   Text(subtitle, style: theme.textTheme.bodyMedium),
                   const SizedBox(height: AppSpacing.lg),
-                  Card(
-                    child: Padding(
-                      padding: AppSpacing.cardInsets,
-                      child: Column(
+                  NidoCard(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      NidoFormField(
+                        label: 'Nombre del hogar',
+                        error: _error,
+                        child: NidoTextField(
+                          key: const Key('household_name_field'),
+                          controller: _name,
+                          maxLength: 100,
+                          hintText: 'Ej. Casa Ale & Kevin',
+                          hasError: _error != null,
+                          onChanged: (_) => setState(() {}),
+                          onSubmitted: (_) => _submit(),
+                        ),
+                      ),
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextField(
-                            key: const Key('household_name_field'),
-                            controller: _name,
-                            maxLength: 100,
-                            textCapitalization: TextCapitalization.words,
-                            decoration: InputDecoration(
-                              labelText: 'Nombre del hogar',
-                              hintText: 'Ej. Casa Ale & Kevin',
-                              errorText: _error,
-                            ),
-                            onChanged: (_) => setState(() {}),
-                            onSubmitted: (_) => _submit(),
-                          ),
-                          const SizedBox(height: AppSpacing.cardGap),
-                          Text(
-                            'Moneda principal',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: AppSpacing.base),
+                          const FieldLabel('Moneda principal'),
+                          const SizedBox(height: AppSpacing.sm),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
@@ -139,7 +138,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: AppSpacing.base),
+                          const SizedBox(height: AppSpacing.sm),
                           Text(
                             'Los gastos en USD se convierten con un tipo de '
                             'cambio que cargás vos.',
@@ -147,20 +146,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  FilledButton(
+                  ActionButton(
                     key: const Key('create_household_button'),
+                    label: 'Crear hogar',
+                    loading: _submitting,
                     onPressed: canSubmit ? _submit : null,
-                    child:
-                        _submitting
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Text('Crear hogar'),
                   ),
                   const SizedBox(height: AppSpacing.screen),
                   TextButton(
@@ -171,12 +164,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.base),
-                  OutlinedButton(
+                  ActionButton(
                     key: const Key('onboarding_sign_out_button'),
+                    label: 'Cerrar sesión',
+                    variant: ActionButtonVariant.secondary,
                     onPressed: () {
                       ref.read(sessionControllerProvider.notifier).signOut();
                     },
-                    child: const Text('Cerrar sesión'),
                   ),
                 ],
               ),

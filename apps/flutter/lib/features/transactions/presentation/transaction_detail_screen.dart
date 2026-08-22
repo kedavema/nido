@@ -14,9 +14,15 @@ import '../../../core/contracts/transactions.dart';
 import '../../../core/errors/error_messages.dart';
 import '../../../core/money/currency.dart';
 import '../../../core/time/nido_time_zone.dart';
+import '../../../core/time/year_month.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/app_screen.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/inline_notice.dart';
 import '../../../core/widgets/loading_content.dart';
+import '../../../core/widgets/nido_card.dart';
+import '../../../core/widgets/screen_header.dart';
+import '../../../core/widgets/sync_status_pill.dart';
 import '../../categories/application/categories_providers.dart';
 import '../../categories/domain/category_appearance.dart';
 import '../../categories/domain/category_tree.dart';
@@ -41,53 +47,74 @@ class TransactionDetailScreen extends ConsumerWidget {
     final key = (householdId: householdId, transactionId: transactionId);
     final transaction = ref.watch(transactionProvider(key));
 
-    return Scaffold(
-      key: const Key('transaction_detail_screen'),
-      appBar: AppBar(
-        // FLT-018: titled by what it actually is. The legacy screen said
-        // "Detalle del gasto" over every movement, so an income read as an
-        // expense on the one screen that shows its sign in full.
-        title: Text(switch (transaction) {
-          AsyncData(value: final value) =>
-            value.type == TransactionType.income
-                ? 'Detalle del ingreso'
-                : 'Detalle del gasto',
-          _ => 'Detalle del movimiento',
-        }),
-      ),
-      body: SafeArea(
-        child: switch (transaction) {
-          AsyncData(value: final value) => _DetailBody(
-            householdId: householdId,
-            transaction: value,
-          ),
-          AsyncError(error: final error) => ListView(
-            padding: AppSpacing.screenPadding,
-            children: [
-              InlineNotice(
-                message: messageForActionError(error),
-                tone: NoticeTone.error,
-              ),
-              const SizedBox(height: AppSpacing.cardGap),
-              OutlinedButton(
-                key: const Key('retry_button'),
-                onPressed: () => ref.invalidate(transactionProvider(key)),
-                child: const Text('Reintentar'),
-              ),
-            ],
-          ),
-          _ => const Center(
-            child: LoadingContent(label: 'Cargando movimiento…'),
-          ),
-        },
-      ),
+    void leave() {
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(AppRoutes.transactions);
+      }
+    }
+
+    // FLT-018: titled by what it actually is. The legacy screen said "Detalle
+    // del gasto" over every movement, so an income read as an expense on the
+    // one screen that shows its sign in full.
+    final header = FormHeader(
+      title: switch (transaction) {
+        AsyncData(value: final value) =>
+          value.type == TransactionType.income
+              ? 'Detalle del ingreso'
+              : 'Detalle del gasto',
+        _ => 'Detalle del movimiento',
+      },
+      subtitle: switch (transaction) {
+        AsyncData(value: final value) => formatMonthLabel(
+          YearMonth.of(value.localDate),
+        ),
+        _ => null,
+      },
+      onDismiss: leave,
+      dismissIcon: FormDismissIcon.back,
     );
+
+    return switch (transaction) {
+      AsyncData(value: final value) => _DetailBody(
+        header: header,
+        householdId: householdId,
+        transaction: value,
+      ),
+      AsyncError(error: final error) => AppScreen(
+        key: const Key('transaction_detail_screen'),
+        header: header,
+        children: [
+          InlineNotice(
+            message: messageForActionError(error),
+            tone: NoticeTone.error,
+          ),
+          ActionButton(
+            key: const Key('retry_button'),
+            label: 'Reintentar',
+            variant: ActionButtonVariant.secondary,
+            onPressed: () => ref.invalidate(transactionProvider(key)),
+          ),
+        ],
+      ),
+      _ => AppScreen(
+        key: const Key('transaction_detail_screen'),
+        header: header,
+        children: const [LoadingContent(label: 'Cargando movimiento…')],
+      ),
+    };
   }
 }
 
 class _DetailBody extends ConsumerWidget {
-  const _DetailBody({required this.householdId, required this.transaction});
+  const _DetailBody({
+    required this.header,
+    required this.householdId,
+    required this.transaction,
+  });
 
+  final Widget header;
   final String householdId;
   final Transaction transaction;
 
@@ -133,135 +160,120 @@ class _DetailBody extends ConsumerWidget {
         'Alguien';
     final isUsd = transaction.amount.currency == Currency.usd;
 
-    return ListView(
-      padding: AppSpacing.screenPadding,
+    return AppScreen(
+      key: const Key('transaction_detail_screen'),
+      header: header,
       children: [
-        Card(
-          child: Padding(
-            padding: AppSpacing.cardInsets,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        NidoCard(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: categoryTint(accent),
-                      child: Text(
-                        initial,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: accent,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.cardGap),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            transaction.description,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                          Text(
-                            formatMovementTimestamp(transaction, today),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.inkSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.cardGap),
-                Text(
-                  amount.text,
-                  key: const Key('detail_amount'),
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    color:
-                        amount.isPositive ? AppColors.success : AppColors.ink,
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: categoryTint(accent),
+                  child: Text(
+                    initial,
+                    style: theme.textTheme.titleMedium?.copyWith(color: accent),
                   ),
                 ),
-                Text(
-                  '${transaction.type == TransactionType.income ? 'Ingreso' : 'Gasto'}'
-                  ' en ${isUsd ? 'dólares' : 'guaraníes'}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.inkSecondary,
+                const SizedBox(width: AppSpacing.cardGap),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        transaction.description,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      Text(
+                        formatMovementTimestamp(transaction, today),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.cardGap),
-        Card(
-          child: Padding(
-            padding: AppSpacing.cardInsets,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'DATOS DEL MOVIMIENTO',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: AppColors.inkSecondary,
-                  ),
-                ),
-                // FLT-018: the real category, for an income too. The legacy
-                // screen printed the literal word "Ingreso" here, hiding
-                // which income category the movement was actually filed
-                // under — the one thing this row exists to answer.
-                _DetailRow(
-                  label: 'Categoría',
-                  value:
-                      categoryLabel(transaction.categoryId, categories) ??
-                      'Categoría no disponible',
-                ),
-                if (transaction.type == TransactionType.expense)
-                  _DetailRow(label: 'Pagado con', value: paymentSourceName),
-                if (isUsd)
-                  _DetailRow(
-                    label: 'Monto original',
-                    value:
-                        'USD ${formatDecimalEs(transaction.amount.toWire(), 2)}'
-                        ' · TC Gs. '
-                        '${formatDecimalEs(transaction.fxRateToPyg?.toWire() ?? '0', 0)}',
-                  ),
-                _DetailRow(
-                  label: 'Fecha',
-                  value: formatFullLocalDate(transaction.localDate),
-                ),
-                _DetailRow(
-                  label: 'Cargado por',
-                  value:
-                      '$createdByName · '
-                      '${formatOccurredAtTime(transaction.createdAt)}',
-                ),
-                _DetailRow(label: 'Nota', value: transaction.notes ?? '—'),
-              ],
+            Text(
+              amount.text,
+              key: const Key('detail_amount'),
+              style: theme.textTheme.displayLarge?.copyWith(
+                color: amount.isPositive ? AppColors.success : AppColors.ink,
+              ),
             ),
-          ),
+            Text(
+              '${transaction.type == TransactionType.income ? 'Ingreso' : 'Gasto'}'
+              ' en ${isUsd ? 'dólares' : 'guaraníes'}',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.lg),
+        NidoCard(
+          gap: 0,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionEyebrow('Datos del movimiento'),
+            // FLT-018: the real category, for an income too. The legacy screen
+            // printed the literal word "Ingreso" here, hiding which income
+            // category the movement was filed under — the one thing this row
+            // exists to answer.
+            _DetailRow(
+              label: 'Categoría',
+              value:
+                  categoryLabel(transaction.categoryId, categories) ??
+                  'Categoría no disponible',
+            ),
+            if (transaction.type == TransactionType.expense)
+              _DetailRow(label: 'Pagado con', value: paymentSourceName),
+            if (isUsd)
+              _DetailRow(
+                label: 'Monto original',
+                value:
+                    'USD ${formatDecimalEs(transaction.amount.toWire(), 2)}'
+                    ' · TC Gs. '
+                    '${formatDecimalEs(transaction.fxRateToPyg?.toWire() ?? '0', 0)}',
+              ),
+            _DetailRow(
+              label: 'Fecha',
+              value: formatFullLocalDate(transaction.localDate),
+            ),
+            _DetailRow(
+              label: 'Cargado por',
+              value:
+                  '$createdByName · '
+                  '${formatOccurredAtTime(transaction.createdAt)}',
+            ),
+            // Anything that loads here came back from `GET /transactions/:id`,
+            // so it is synced by definition; the pill exists so the row reads
+            // the same once M4 can show a queued one.
+            const _DetailRow(
+              label: 'Sincronización',
+              trailing: SyncStatusPill(tone: SyncStatusTone.synced),
+            ),
+            _DetailRow(label: 'Nota', value: transaction.notes ?? '—'),
+          ],
+        ),
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
+              child: ActionButton(
                 key: const Key('edit_transaction_button'),
+                label: 'Editar',
+                variant: ActionButtonVariant.secondary,
                 onPressed:
                     () =>
                         context.push(AppRoutes.transactionEdit(transaction.id)),
-                child: const Text('Editar'),
               ),
             ),
             const SizedBox(width: AppSpacing.cardGap),
             Expanded(
-              child: OutlinedButton(
+              child: ActionButton(
                 key: const Key('delete_transaction_button'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.danger,
-                ),
+                label: 'Eliminar',
+                variant: ActionButtonVariant.danger,
                 onPressed: () => _confirmDelete(context, ref, amount.text),
-                child: const Text('Eliminar'),
               ),
             ),
           ],
@@ -291,8 +303,8 @@ class _DetailBody extends ConsumerWidget {
               .delete(householdId, transaction.id),
     );
     if (deleted && context.mounted) {
-      // Back to wherever the movement was opened from — the list, or a
-      // direct link, in which case this is the movements screen.
+      // Back to wherever the movement was opened from — the list, or a direct
+      // link, in which case this is the movements screen.
       if (context.canPop()) {
         context.pop();
       } else {
@@ -303,10 +315,11 @@ class _DetailBody extends ConsumerWidget {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+  const _DetailRow({required this.label, this.value, this.trailing});
 
   final String label;
-  final String value;
+  final String? value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -317,24 +330,27 @@ class _DetailRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Divider(height: 1),
+          const Divider(height: 1, color: AppColors.border),
           const SizedBox(height: AppSpacing.cardGap),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.inkSecondary,
-                ),
-              ),
+              Text(label, style: theme.textTheme.bodySmall),
               const SizedBox(width: AppSpacing.cardGap),
               Expanded(
-                child: Text(
-                  value,
-                  textAlign: TextAlign.right,
-                  style: theme.textTheme.bodyMedium,
-                ),
+                child:
+                    trailing == null
+                        ? Text(
+                          value!,
+                          textAlign: TextAlign.right,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                        : Align(
+                          alignment: Alignment.centerRight,
+                          child: trailing,
+                        ),
               ),
             ],
           ),

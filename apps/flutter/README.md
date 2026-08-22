@@ -17,6 +17,7 @@ Universal Flutter application for Android, iOS, and Web/PWA, targeting household
 - **Visual Design & Material 3**: Design tokens matching Nido canonical theme (`#1C4F47`, `#F6F4EF`, etc.).
 - **Constraint-based Responsive System** ([`FLT-012`](../../docs/flutter-migration-decisions.md)): `compact` (<600dp), `medium` (600..839dp), and `expanded` (>=840dp) based on available space rather than `kIsWeb`.
 - **Clean Disposable Data** ([`FLT-015`](../../docs/flutter-migration-decisions.md)): Starts with clean local stores; no legacy SQLite/IndexedDB migration/drain required.
+- **Own component set over tokens** ([`FLT-021`](../../docs/flutter-migration-decisions.md)): Material 3 is the base for layout, typography and accessibility; the visual layer is Nido's own, in `lib/core/widgets/`. Brand fonts are bundled — a family Flutter cannot resolve falls back to Roboto in silence.
 
 ## Directory Structure
 
@@ -82,10 +83,21 @@ apps/flutter/
         year_month.dart            # YearMonth (yyyy-MM, ranges, last-day clamp)
         wire_instant.dart          # UTC instant codec + legacy 15:00Z occurredAt rule
         nido_time_zone.dart        # America/Asuncion (fixed UTC-3 since DST abolition)
-      widgets/
-        confirm_dialog.dart        # Destructive confirmation (reports failure in place)
-        inline_notice.dart         # Tinted inline feedback box
-        loading_content.dart       # Centered progress indicator
+      widgets/                     # The design system (FLT-021)
+        app_screen.dart            # AppScreen / AppListScreen / AppFormScreen shells
+        screen_header.dart         # ScreenHeader, FormHeader, SectionEyebrow
+        nido_card.dart             # The one raised surface (single elevation)
+        action_button.dart         # ActionButton primary/secondary/danger + ActionPill
+        pressable_scale.dart       # Press-scale feedback shared by every CTA
+        nido_chip.dart             # NidoChip (solid select), SoftChip, ChipRow
+        form_fields.dart           # NidoFormField, FormSection, NidoTextField, PickerField
+        amount_field.dart          # The 44pt centred money readout
+        month_stepper.dart         # Month back/forward pill
+        app_bottom_sheet.dart      # Titled picker sheet with an explicit close
+        confirm_dialog.dart        # Destructive confirmation sheet (fails in place)
+        sync_status_pill.dart      # "Did this reach the server" — one language
+        inline_notice.dart         # Tinted inline feedback box (live region)
+        loading_content.dart       # Centered progress indicator + SkeletonBlock
     features/
       categories/                  # Categories & subcategories CRUD (M3)
         domain/category_tree.dart        # Root/child tree, search, chip selection
@@ -114,6 +126,8 @@ apps/flutter/
     transactions_flow_test.dart    # E2E M3: create a movement, legacy URL redirects
   test_driver/
     integration_test.dart          # Host-side driver (flutter drive -d web-server)
+  assets/
+    fonts/                         # Bricolage Grotesque + IBM Plex Sans (OFL 1.1)
   android/                         # Android native project (package: com.nido.mobile)
   ios/                             # iOS native project (bundle ID: com.nido.mobile)
   web/                             # Web target (index.html, manifest.json, Nido icons)
@@ -167,6 +181,29 @@ oscillation); unresolved states render in place through `SessionGate`.
 Invite tokens are never logged: `/v1/invites/:token/accept` is observed only
 as its route template, and the one-use token is shown exactly once for manual
 delivery.
+
+## Design System
+
+`lib/core/widgets/` holds the components `docs/flutter-architecture.md` §Design system enumerates,
+and every screen composes from them rather than from stock Material widgets
+([`FLT-021`](../../docs/flutter-migration-decisions.md)).
+
+Two things were wrong before it existed, and both are worth remembering:
+
+- **The brand fonts were not in the app.** `AppTypography` named `Bricolage Grotesque` and
+  `IBM Plex Sans`, but `pubspec.yaml` declared no families and there were no assets. Flutter does
+  not fail on a family it cannot resolve — it falls back to Roboto silently, so every screen
+  rendered in the platform default. The faces now live in `assets/fonts/` (the same ones
+  `apps/mobile` loads through `@expo-google-fonts/*`, SIL OFL 1.1, licences beside them) and a
+  widget test asserts the theme still resolves them.
+- **Material components bring their own decisions.** Tinted elevations, ripples, shapes, densities
+  and disabled states that fight the token set. `ChoiceChip` in particular tints both states at low
+  contrast, where these rows need the chosen chip to read at a glance.
+
+Material still does the work it is good at underneath: `InkWell`, `TextField`, `Divider`,
+`CircleAvatar`, semantics and focus. What the design system owns is the _look_: one elevation, one
+button with three roles, one chip, one sheet, one screen shell with a footer that never hides under
+the keyboard.
 
 ## Core Financial Flows (M3)
 

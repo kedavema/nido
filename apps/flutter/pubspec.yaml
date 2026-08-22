@@ -46,3 +46,30 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # The brand faces, byte-identical to the ones `apps/mobile` loads through
+  # `@expo-google-fonts/*` — both runtimes have to render the same text at the
+  # same weight, and a family name Flutter cannot resolve silently falls back
+  # to Roboto, which is what made every screen look generic.
+  #
+  # Only the weights the tokens actually name are bundled. Both families are
+  # SIL Open Font License 1.1; the licences ship beside them.
+  fonts:
+    - family: Bricolage Grotesque
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque_500Medium.ttf
+          weight: 500
+        - asset: assets/fonts/BricolageGrotesque_600SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BricolageGrotesque_700Bold.ttf
+          weight: 700
+    - family: IBM Plex Sans
+      fonts:
+        - asset: assets/fonts/IBMPlexSans_400Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexSans_500Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexSans_600SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/IBMPlexSans_700Bold.ttf
+          weight: 700

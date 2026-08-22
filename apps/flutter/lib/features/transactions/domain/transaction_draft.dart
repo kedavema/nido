@@ -6,6 +6,7 @@ import '../../../core/money/base_amount_pyg.dart';
 import '../../../core/money/currency.dart';
 import '../../../core/time/local_date.dart';
 import '../../../core/time/wire_instant.dart';
+import '../../categories/domain/category_tree.dart';
 import 'amount_input.dart';
 
 /// Recency window for the "recientes" category chips, per the design's own
@@ -445,36 +446,25 @@ List<String> _rankedByFrequency(Map<String, int> frequency) {
   return [for (final entry in entries.take(quickChipLimit)) entry.key];
 }
 
-/// The active payment sources a form offers as chips: the selected one and
-/// the household's favourites first, padded with whatever else is active so
-/// the row is never empty while sources exist.
+/// The active payment sources a form offers as chips: the household's
+/// favourites first, padded with whatever else is active so the row is never
+/// empty while sources exist.
+///
+/// Like the category chips, the selected source does not jump to the front —
+/// it is only promoted when it would otherwise be past the limit. See
+/// [orderedChips].
 List<PaymentSource> paymentSourceChips({
   required List<PaymentSource> paymentSources,
   required List<String> favoriteIds,
   required String? selectedId,
 }) {
-  final active = paymentSources
-      .where((source) => source.isActive)
-      .toList(growable: false);
-  PaymentSource? byId(String id) {
-    for (final source in active) {
-      if (source.id == id) {
-        return source;
-      }
-    }
-    return null;
-  }
-
-  final preferred = <String>{
-    if (selectedId != null) selectedId,
-    ...favoriteIds,
-  };
-  final chips = [
-    for (final id in preferred)
-      if (byId(id) case final source?) source,
-  ];
-  if (chips.isNotEmpty) {
-    return chips.take(quickChipLimit).toList(growable: false);
-  }
-  return active.take(quickChipLimit).toList(growable: false);
+  return orderedChips(
+    pool: paymentSources
+        .where((source) => source.isActive)
+        .toList(growable: false),
+    idOf: (source) => source.id,
+    ranked: favoriteIds,
+    selectedId: selectedId,
+    limit: quickChipLimit,
+  );
 }

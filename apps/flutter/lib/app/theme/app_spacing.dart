@@ -13,6 +13,10 @@ class AppSpacing {
   static const double xl = 24.0;
   static const double xxl = 32.0;
 
+  /// Smallest tappable dimension, from `touchTargetMinimum`. Every control the
+  /// design system builds is at least this tall.
+  static const double touchTarget = 44.0;
+
   // Common EdgeInsets
   static const EdgeInsets screenPadding = EdgeInsets.all(screen);
   static const EdgeInsets cardInsets = EdgeInsets.all(cardPadding);

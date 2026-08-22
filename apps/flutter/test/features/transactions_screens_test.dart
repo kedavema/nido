@@ -4,6 +4,7 @@ import 'package:nido/app/router/app_routes.dart';
 import 'package:nido/core/contracts/transactions.dart';
 import 'package:nido/core/errors/app_error.dart';
 import 'package:nido/core/money/currency.dart';
+import 'package:nido/core/widgets/action_button.dart';
 import 'package:nido/testing/finance_fakes.dart';
 
 import 'pump_app.dart';
@@ -299,11 +300,11 @@ void main() {
     ) async {
       await harness.pump(tester, AppRoutes.transactionNew);
       final submit = find.byKey(const Key('submit_transaction_button'));
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      expect(tester.widget<ActionButton>(submit).onPressed, isNull);
 
       await tester.enterText(find.byKey(const Key('amount_field')), '150000');
       await tester.pumpAndSettle();
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      expect(tester.widget<ActionButton>(submit).onPressed, isNull);
 
       await tapAt(
         tester,
@@ -315,7 +316,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      expect(tester.widget<ActionButton>(submit).onPressed, isNotNull);
     });
 
     // FLT-017: only some legacy forms rejected zero, and they did it with a
@@ -339,7 +340,7 @@ void main() {
       );
       expect(
         tester
-            .widget<FilledButton>(
+            .widget<ActionButton>(
               find.byKey(const Key('submit_transaction_button')),
             )
             .onPressed,
@@ -367,14 +368,14 @@ void main() {
       await tester.pumpAndSettle();
 
       final submit = find.byKey(const Key('submit_transaction_button'));
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      expect(tester.widget<ActionButton>(submit).onPressed, isNull);
 
       await tester.enterText(find.byKey(const Key('fx_rate_field')), '7350');
       await tester.pumpAndSettle();
 
       // The preview uses the same single half-up rounding the server applies.
       expect(find.text('≈ Gs. 337.365'), findsOneWidget);
-      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      expect(tester.widget<ActionButton>(submit).onPressed, isNotNull);
     });
 
     testWidgets('the amount field groups thousands as it is typed', (
@@ -435,7 +436,7 @@ void main() {
       // A fresh draft, not the one just saved.
       expect(
         tester
-            .widget<FilledButton>(
+            .widget<ActionButton>(
               find.byKey(const Key('submit_transaction_button')),
             )
             .onPressed,

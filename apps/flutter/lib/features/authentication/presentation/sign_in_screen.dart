@@ -5,6 +5,8 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_radii.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/auth/session_controller.dart';
+import '../../../core/widgets/action_button.dart';
+import '../../../core/widgets/nido_card.dart';
 
 /// The sign-in screen (port of `apps/mobile/src/app/sign-in.tsx`): brand,
 /// value checklist, the single Google CTA and the shared-household legal
@@ -31,41 +33,30 @@ class SignInScreen extends ConsumerWidget {
                 children: [
                   const _Brand(),
                   const SizedBox(height: AppSpacing.lg),
-                  const Card(
-                    child: Padding(
-                      padding: AppSpacing.cardInsets,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _ChecklistRow(
-                            text:
-                                'Un solo hogar compartido: los dos ven todo, '
-                                'siempre.',
-                          ),
-                          SizedBox(height: AppSpacing.cardGap),
-                          _ChecklistRow(
-                            text:
-                                'Cargá un gasto en segundos, incluso sin '
-                                'señal.',
-                          ),
-                          SizedBox(height: AppSpacing.cardGap),
-                          _ChecklistRow(
-                            text:
-                                'Presupuesto mensual en guaraníes, sin '
-                                'vueltas.',
-                          ),
-                        ],
+                  const NidoCard(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ChecklistRow(
+                        text:
+                            'Un solo hogar compartido: los dos ven todo, '
+                            'siempre.',
                       ),
-                    ),
+                      _ChecklistRow(
+                        text: 'Cargá un gasto en segundos, incluso sin señal.',
+                      ),
+                      _ChecklistRow(
+                        text: 'Presupuesto mensual en guaraníes, sin vueltas.',
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  OutlinedButton.icon(
+                  ActionButton(
                     key: const Key('google_sign_in_button'),
+                    label: 'Continuar con Google',
+                    icon: Icons.account_circle_outlined,
                     onPressed: () {
                       ref.read(sessionControllerProvider.notifier).signIn();
                     },
-                    icon: const Icon(Icons.account_circle_outlined),
-                    label: const Text('Continuar con Google'),
                   ),
                   const SizedBox(height: AppSpacing.screen),
                   Text(
